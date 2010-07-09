@@ -1,0 +1,32 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x0c\x00g\x00a\x00l\x00f\x00i\x00t)
+
+[CMake]
+BuildDirs=/home/mjuric/projects/galfit/build
+CMakeDir=/usr/share/cmake-2.8/Modules
+Current CMake Binary=file:///usr/bin/cmake
+CurrentBuildDir=file:///home/mjuric/projects/galfit/build
+CurrentBuildType=Release
+CurrentInstallDir=file:///usr/local
+ProjectRootRelative=./
+
+[Launch]
+Launch Configurations=Launch Configuration 0
+
+[Launch][Launch Configuration 0]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=galfit run
+Type=Native Application
+
+[Launch][Launch Configuration 0][Data]
+Arguments=
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=file:///home/mjuric/projects/galfit/build/galfit
+Working Directory=file:///home/mjuric/projects/galfit
+isExecutable=true
+
+[MakeBuilder]
+Number Of Jobs=1

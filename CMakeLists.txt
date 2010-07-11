@@ -21,12 +21,12 @@ find_package(GSL REQUIRED)
 include_directories(${GSL_INCLUDE_DIR})
 
 ### Boost
-find_package(Boost REQUIRED COMPONENTS regex iostreams thread)
+find_package(Boost REQUIRED COMPONENTS regex iostreams thread program_options)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
 
-ADD_EXECUTABLE(galfit src/main.cpp)
+ADD_EXECUTABLE(galfit src/main.cpp src/sampler.cpp)
 
 target_link_libraries(galfit dl)
 

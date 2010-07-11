@@ -1,234 +1,187 @@
-#include <iostream>
-#include <string>
-#include <map>
-#include <fstream>
+#include "sampler.h"
+#include "marginalize.h"
 #include <sstream>
-#include <cstdlib>
-#include <vector>
+#include <fstream>
 
-#include <astro/util.h>
-#include <astro/math.h>
+#include <boost/shared_ptr.hpp>
+#include <boost/make_shared.hpp>
+#include <boost/regex.hpp>
+#include <boost/program_options.hpp>
+
+#include <gsl/gsl_randist.h>
+#include <gsl/gsl_rng.h>
+
 #include <astro/useall.h>
 
-static const int NBANDS = 5;
+using namespace boost;
+using namespace std;
 
-struct TSED
+void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &par, const double err[NBANDS])
 {
-	float Mr, FeH;
-	float v[NBANDS];	// Mu, Mg, Mr, Mi, Mz
-};
-typedef std::map<float, std::map<float, TSED> > TSEDs;	// map from (Mr, FeH) -> SED
-
-void load_seds(TSEDs &seds, const std::string &fn)
-{
-	std::ifstream in(fn.c_str());
-	if(!in) { abort(); }
-
-	std::string line;
-	int nSEDs = 0;
-	while(std::getline(in, line))
-	{
-		if(!line.size()) { continue; }		// empty line
-		if(line[0] == '#') { continue; }	// comment
-
-		TSED sed;
-		std::istringstream ss(line);
-		ss >> sed.Mr >> sed.FeH >> sed.v[0] >> sed.v[1] >> sed.v[3] >> sed.v[4];
-
-		// playing with thinning the SED library
-		//{float k = sed.Mr * 20; if(k - int(k) != 0) { continue; } }
-		//{float k = sed.FeH * 20; if(k - int(k) != 0) { continue; } }
-
-		sed.v[2] = sed.Mr;			// Mr
-		sed.v[1] += sed.v[2];			// Mg
-		sed.v[0] += sed.v[1];			// Mu
-		sed.v[3] = sed.v[2] - sed.v[3];		// Mi
-		sed.v[4] = sed.v[3] - sed.v[4];		// Mz
-
-		seds[sed.Mr][sed.FeH] = sed;
-		nSEDs++;
-	}
-
-	std::cerr << "Loaded SEDs: " << nSEDs << " SEDs total, for " << seds.size() << " distinct absolute magnitudes.\n";
-}
-
-struct TLF	// the luminosity function
-{
-	float Mr0, dMr;
-	std::vector<float> lf;
-
-	float operator()(float Mr) const	// return the LF at position Mr (nearest neighbor interp.)
-	{
-		int idx = (int)floor((Mr - Mr0) / dMr + 0.5);
-		if(idx < 0) { return lf.front(); }
-		if(idx >= lf.size()) { return lf.back(); }
-		return lf[idx];
-	}
-
-	void load(const std::string &fn)
-	{
-		std::ifstream in(fn.c_str());
-		if(!in) { abort(); }
-
-		dMr = -1;
-		lf.clear();
-
-		std::string line;
-		float Mr, Phi;
-		while(std::getline(in, line))
-		{
-			if(!line.size()) { continue; }		// empty line
-			if(line[0] == '#') { continue; }	// comment
-
-			std::istringstream ss(line);
-			ss >> Mr >> Phi;
-
-				if(dMr == -1) { Mr0 = Mr; dMr = 0; }
-			else	if(dMr == 0)  { dMr = Mr - Mr0; }
-
-			lf.push_back(Phi);
-		}
-
-		std::cerr << "Loaded LF: " << Mr0 << " <= Mr <= " <<  Mr0 + dMr*(lf.size()-1) << "\n";
-	}
-};
-
-struct TModel
-{
-	// Model parameters: galactic ctr. distance, solar offset, disk scale height & length
-	float R0, Z0, H0, L0;
-
-	TModel(float R0_, float Z0_, float L0_, float H0_) : R0(R0_), Z0(Z0_), L0(L0_), H0(H0_) {}
-
-	// XYZ are assumed to be Galactocentric
-	inline float expdisk(float X, float Y, float Z)
-	{
-		float R = sqrt(X*X + Y*Y);
-		float rho = exp(-(fabs(Z + Z0) - fabs(Z0))/H0 + -(R-R0)/L0);
-
-		return rho;
-	}
-
-	// returns Galactocentric XYZ given l,b,d
-	inline void computeCartesianPositions(float &X, float &Y, float &Z, double ldeg, double bdeg, double d)
-	{
-		Radians l = rad(ldeg), b = rad(bdeg);
-
-		X = R0 - cos(l)*cos(b)*d;
-		Y = -sin(l)*cos(b)*d;
-		Z = sin(b)*d;
-	}
-
-	// the number of stars per unit solid area and unit distance modulus,
-	// in direction l,b at distance modulus DM
-	inline float dn(double l, double b, float DM)
-	{
-		float X, Y, Z;
-		float D = pow10(DM/5.+1.);
-		computeCartesianPositions(X, Y, Z, l, b, D);
-
-		float rho = expdisk(X, Y, Z);
-		float dn = rho * log(10.)/5 * pow(D, 3);
-
-		return dn;
-	}
-};
-
-// Computing the marginalized log-likelihood (up to an additive constant!)
-// of the SED sed given the observed SED M[] and its errors sigma[]
-double log_likelihood(float M[NBANDS], float sigma[NBANDS], const TSED &sed)
-{
-	// likelihoods are independent gaussians
-	static const float sqrt2 = sqrt(2);
-	//static const float logSqrtTwoPi = -0.5f * log(ctn::twopi);
-
-	float logLtotal = 0;
+	double mtrue[NBANDS], mext[NBANDS];
 	FOR(0, NBANDS)
 	{
-		float x = (M[i] - sed.v[i]) / (sqrt2*sigma[i]);
-		//if(fabs(x) > 10) { x = 10; } // widen the tails of the Gaussian (to allow for outliers)
-
-		#if 0
-		float logN = logSqrtTwoPi - log(sigma[i]);
-		float logL = logN - x*x;
-		#else
-		float logL = -x*x;
-		#endif
-		logLtotal += logL;
-
-		// optimization: stop immediately if very unlikely
-		if(logLtotal < -100) { return logLtotal; }
+		mtrue[i] = par.SED->v[i] + par.get_DM();
+		mext[i]  = mtrue[i] + par.get_Ar() * TModel::Acoef[i];
+		m[i]     = mext[i] + gsl_ran_gaussian(rng, err[i]);
 	}
 
-	return logLtotal;
+	cerr << "# MOCK:    input: " << "Ar=" << par.get_Ar() << ", DM=" << par.get_DM() << ", Mr=" << par.get_Mr() << ", FeH=" << par.get_FeH() << "\n";
+	cerr << "# MOCK:   m_true:"; FOR(0, NBANDS) { cerr << " " << mtrue[i]; }; cerr << "\n";
+	cerr << "# MOCK:   m_ext :"; FOR(0, NBANDS) { cerr << " " <<  mext[i]; }; cerr << "\n";
+	cerr << "# MOCK:   m_obs :"; FOR(0, NBANDS) { cerr << " " <<     m[i]; }; cerr << "\n";
 }
 
-/*
-4.19  -2.50  0.6739  0.2143  0.0633  -0.0241  -0.0339
-             ug      gr      ri      iz       zy
+// Parse text such as output.txt:Mr,FeH,Ar and construct the requested marginalizer
+bool construct_marginalizers(map<string, shared_ptr<TModel::Marginalizer> > &margs, const vector<string> &output_pdfs)
+{
+	#define G(name)         TModel::Params::varname2getter(name)
+	static const regex e("([^:]+):([^,]+)(?:,([^,]+))?(?:,([^,]+))?");
+	FOREACH(output_pdfs)
+	{
+		ostringstream msg;
+		msg << "# Outputing P(";
 
-M=          5.0782  4.4043  4.19  4.2141 4.248
-DM=15
+		// check overal format
+		const std::string &pdfspec = *i;
+		cmatch what;
+		if(!regex_match(pdfspec.c_str(), what, e))
+		{
+			cerr << "Incorrect parameter format ('" << pdfspec << "')\n";
+			return false;
+		}
 
-20.0782 19.4043 19.1900 19.2141 19.2480
-*/
+		// deduce size and check variables
+		int ndim = 0;
+		for(int i = 2; i != what.size() && what[i] != ""; ndim++, i++)
+		{
+			if(!G(what[i]))
+			{
+				cerr << "Unrecognized model parameter '" << what[i] << "'\n";
+				return false;
+			}
+			msg << (i > 2 ? ", " : "") << what[i];
+		}
+		msg << ")";
 
+		// construct marginalizer
+		string fn = what[1];
+		switch(ndim)
+		{
+			case 1: margs[fn].reset( new Marginalizer<1>(G(what[2])) ); break;
+			case 2: margs[fn].reset( new Marginalizer<2>(G(what[2]), G(what[3])) ); break;
+			case 3: margs[fn].reset( new Marginalizer<3>(G(what[2]), G(what[3]), G(what[4])) ); break;
+		}
+		cerr << msg.str() << " into file " << fn << "\n";
+	}
+	#undef G
+	return true;
+}
+
+// Output
 int main(int argc, char **argv)
 {
-	TSEDs seds;
-	load_seds(seds, "MSandRGBcolors_v1.3.dat");
+	vector<string> output_pdfs;
+	string lf_fn = "MrLF.MSandRGB_v1.0.dat";
+	string seds_fn = "MSandRGBcolors_v1.3.dat";
+	string solar_pos = "8000 25";
+	string par_thin = "2150 245";
+	string par_thick = "0.13 3261 743";
+	string par_halo = "0.0028 0.64 -2.77";
+	bool test = false;
+	interval<double> Mr_range(ALL), FeH_range(ALL);
+	range<double> DM_range(5,20,0.02), Ar_range(0,1,0.02);
 
-	TLF lf;
-	lf.load("MrLF.MSandRGB_v1.0.dat");
+	// parse command line arguments
+	namespace po = boost::program_options;
+	po::options_description desc(std::string("Usage: ") + argv[0] + " <outfile1.txt:X1[,Y1]> [outfile2.txt:X2[,Y2] [...]]\n\nOptions");
+	desc.add_options()
+		("help", "produce this help message")
+		("pdfs", po::value<vector<string> >(&output_pdfs)->multitoken(), "marginalized PDF to produce (can be given as the command line argument)")
+		("lf", po::value<string>(&lf_fn), "luminosity function file")
+		("seds", po::value<string>(&seds_fn), "SEDs file")
+		("thindisk", po::value<string>(&par_thin), "Thin disk model parameters (l1 h1)")
+		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
+		("halo", po::value<string>(&par_halo), "Thick disk model parameters, (f_halo q n)")
+		("test", po::value<bool>(&test)->zero_tokens()->implicit_value(true, "true"), "Assume the input contains (l b Ar DM Mr FeH uErr gErr rErr iErr zErr) and generate test data")
+		("range-M",   po::value<interval<double> >(&Mr_range),  "Range of absolute magnitudes to sample")
+		("range-FeH", po::value<interval<double> >(&FeH_range), "Range of Fe/H to consider")
+		("range-DM",   po::value<range<double> >(&DM_range), "DM grid to sample")
+		("range-Ar",   po::value<range<double> >(&Ar_range), "Ar grid to sample")
+	;
+	po::positional_options_description pd;
+	pd.add("pdfs", -1);
 
-	TModel model(8000, 25, 2150, 245);
+	po::variables_map vm;
+	po::store(po::command_line_parser(argc, argv).options(desc).positional(pd).run(), vm);
+	po::notify(vm);
 
-	// read observation from stdin
-	float m[NBANDS], sigma[NBANDS];
-//	std::istringstream ss("20.0782 19.4043 19.1900 19.2141 19.2480  0.1 0.03 0.03 0.03 0.03");
-	std::istringstream ss("17.4115 15.6745 15.0000 14.7138 14.5678  0.1 0.03 0.03 0.03 0.03");
-	FOR(0, NBANDS) { ss >> m[i]; }
-	FOR(0, NBANDS) { ss >> sigma[i]; }
-	FOR(0, NBANDS)
+	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
+
+
+	map<string, shared_ptr<TModel::Marginalizer> > margs;
+	if(!construct_marginalizers(margs, output_pdfs)) { return -1; }
+
+	////////////// Construct Model
+	TModel model(lf_fn, seds_fn);
+	#define PARSE(from, to) if(!(  istringstream(from) >> to  )) { std::cerr << "Error parsing " #from " (" << from << ")\n"; return -1; }
+	PARSE(solar_pos,  model.R0 >> model.Z0);
+	PARSE(par_thin,   model.L1 >> model.H1);
+	PARSE(par_thick,  model.f  >> model.L2 >> model.H2);
+	PARSE(par_halo,   model.fh >> model.q  >> model.n);
+	#undef PARSE
+
+	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.q << " " << model.n << "\n";
+
+	double m[NBANDS], err[NBANDS];
+	double l, b;
+	if(test)
 	{
-		std::cerr << m[i] << " +/- " << sigma[i] << "; ";
+		////////////// Load Test Params and generate test data
+		gsl_rng_env_setup();
+		gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+		TModel::Params par;
+		double Mr, FeH;
+		cin >> l >> b >> par.Ar >> par.DM >> Mr >> FeH;
+		FOR(0, NBANDS) { cin >> err[i]; }
+		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
+
+		par.SED = &*get_closest_SED(model.seds, Mr, FeH);
+		generate_test_data(m, rng, par, err);
+
+		gsl_rng_free(rng);
 	}
-	std::cerr << "\n";
-
-	double l = 0, b = 90;
-//	for(double l = 0; l < 360; l += 1)
+	else
 	{
-		double Ltot = 0;
-		for(float DM=5; DM <= 20; DM += 0.1)
-		{
-			double pDM__G = model.dn(l, b, DM);
+		////////////// Load Data
+		cin >> l >> b;
+		FOR(0, NBANDS) { cin >> m[i]; }
+		FOR(0, NBANDS) { cin >> err[i]; }
+		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
+	}
 
-			float M[NBANDS];
-			FOR(0, NBANDS) { M[i] = m[i] - DM; }
+	////////////// Sample Posterior Distributions
+	TModel::MarginalizerArray out;
+	FOREACH(margs) { out.push_back(i->second.get()); }
 
-			FOREACH(seds)
-			{
-				float Mr = i->first;
-				double pMr__DM_G = lf(Mr);
+	model.DM_range = DM_range;
+	model.Ar_range = Ar_range;
+	model.Mr_range = Mr_range;
+	model.FeH_range = FeH_range;
+	cerr << "# Sampler:" 	<< " DM=[" << model.DM_range << "]" << " Ar=[" << model.Ar_range << "]"
+				<< " Mr=[" << model.Mr_range << "]" << " FeH=[" << model.FeH_range << "]\n";
 
-				float logPrior = log(pDM__G) + log(pMr__DM_G);
-				FOREACHj(j, i->second)
-				{
-					TSED &sed = j->second;
-					float logL = log_likelihood(M, sigma, sed);
-					if(logL <= -100) { continue; }
+	model.sample(out, l, b, m, err);
 
-					float logP = logL + logPrior;
-					#if 1
-						std::cout << DM << "\t" << sed.Mr << "\t" << sed.FeH << "\t" << logL << "\t" << logP << "\n";
-					#endif
-					Ltot += expf(logL);
-				}
-			}
+	////////////// Write out the results
+	FOREACH(margs)
+	{
+		IMarginalizer &pdf = dynamic_cast<IMarginalizer&>(*(i->second));
+		pdf.normalize_to_peak();
 
-	//		std::cerr << "DM=" << DM << "\n";
-		}
-		std::cerr << "Total likelihood: " << Ltot << "\n";
+		ofstream out(i->first.c_str());
+		pdf.output(out);
 	}
 
 	return 0;

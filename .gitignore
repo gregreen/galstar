@@ -1,0 +1,22 @@
+# Files that will not show up in git status listings
+#
+*.[oa]
+*~
+# For Joe editor lovers
+DEADJOE
+# For SM users
+.smhist
+# staging subdirectory
+/staging
+# Other stuff
+workspace/*
+# CMake build system directories/files
+/Makefile
+/optimized
+/debug
+/build
+/.cpackignore
+/.version
+/.version.fn
+/Debug
+/Release

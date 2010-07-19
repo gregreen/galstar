@@ -1,0 +1,13 @@
+galstar
+=======
+
+Setup and Build
+===============
+
+  ./configure --with-libpeyton=../libpeyton/optimized --optimized --prefix=`pwd`/staging
+  make -j install
+
+This will configure and build an optimized version of galstar in
+./optimized and install it in directory ./staging linking against 
+an optimized version of libpeyton from ../libpeyton/optimized
+

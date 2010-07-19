@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.6)
-PROJECT(galfit)
+PROJECT(galstar)
 
 # cmake -Dlibpeyton_ROOT=/home/mjuric/projects/libpeyton/debug  ..
 
@@ -25,12 +25,40 @@ find_package(Boost REQUIRED COMPONENTS regex iostreams thread program_options)
 include_directories(${Boost_INCLUDE_DIRS})
 
 
+#
+# Data Directories
+#
+set(DATADIRSUFFIX "share/${CMAKE_PROJECT_NAME}")
+set(DATADIR "${CMAKE_INSTALL_PREFIX}/${DATADIRSUFFIX}")
 
-ADD_EXECUTABLE(galfit src/main.cpp src/sampler.cpp)
+#
+# configure a header file to pass some of the CMake settings to the source
+# code
+#
+configure_file(   
+	"${PROJECT_SOURCE_DIR}/src/galstar_config.h.in"
+	"${PROJECT_BINARY_DIR}/src/galstar_config.h"  
+	ESCAPE_QUOTES
+)
+include_directories("${PROJECT_BINARY_DIR}/src")
 
-target_link_libraries(galfit dl)
+#
+# galstar executable
+#
+add_executable(galstar src/main.cpp src/sampler.cpp)
 
-target_link_libraries(galfit ${Boost_LIBRARIES})
-target_link_libraries(galfit ${CFITSIO_LIBRARIES})
-target_link_libraries(galfit ${GSL_LIBRARIES})
-target_link_libraries(galfit ${libpeyton_LIBRARIES})
+target_link_libraries(galstar dl)
+target_link_libraries(galstar ${Boost_LIBRARIES})
+target_link_libraries(galstar ${CFITSIO_LIBRARIES})
+target_link_libraries(galstar ${GSL_LIBRARIES})
+target_link_libraries(galstar ${libpeyton_LIBRARIES})
+
+#
+# install info
+#
+install (TARGETS galstar DESTINATION bin)
+install(FILES
+	data/MrLF.MSandRGB_v1.0.dat
+	data/MSandRGBcolors_v1.3.dat
+DESTINATION ${DATADIRSUFFIX})
+

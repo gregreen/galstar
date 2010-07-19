@@ -1,0 +1,3 @@
+/* Default: $PREFIX/share/galstar */
+
+#define DATADIR "${DATADIR}"

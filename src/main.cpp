@@ -1,3 +1,5 @@
+#include "galstar_config.h"
+
 #include "sampler.h"
 #include "marginalize.h"
 #include <sstream>
@@ -77,12 +79,33 @@ bool construct_marginalizers(map<string, shared_ptr<TModel::Marginalizer> > &mar
 	return true;
 }
 
+#if 0
+#include <omp.h>
+void omptest()
+{
+	int threadId, nthreads;
+	#pragma omp parallel private(threadId)
+	{
+		threadId = omp_get_thread_num();
+		std::ostringstream ss;
+		ss << "Thread = " << threadId << "\n";
+		std::cout << ss.str();
+		#pragma omp barrier
+		#pragma omp master
+		{
+			nthreads = omp_get_num_threads();
+			std::cout << "There are " << nthreads << " threads.\n";
+		}
+	}
+}
+#endif
+
 // Output
 int main(int argc, char **argv)
 {
 	vector<string> output_pdfs;
-	string lf_fn = "MrLF.MSandRGB_v1.0.dat";
-	string seds_fn = "MSandRGBcolors_v1.3.dat";
+	string lf_fn = DATADIR "/MrLF.MSandRGB_v1.0.dat";
+	string seds_fn = DATADIR "/MSandRGBcolors_v1.3.dat";
 	string solar_pos = "8000 25";
 	string par_thin = "2150 245";
 	string par_thick = "0.13 3261 743";

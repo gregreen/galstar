@@ -11,3 +11,70 @@ This will configure and build an optimized version of galstar in
 ./optimized and install it in directory ./staging linking against 
 an optimized version of libpeyton from ../libpeyton/optimized
 
+Quick Test
+==========
+
+  [mjuric@nebel galstar]$ ./optimized/galstar 
+  Usage: ./optimized/galstar <outfile1.txt:X1[,Y1]> [outfile2.txt:X2[,Y2] [...]]
+
+  Options:
+    --help                produce this help message
+    --pdfs arg            marginalized PDF to produce (can be given as the 
+                        command line argument)
+    --lf arg              luminosity function file
+    --seds arg            SEDs file
+    --thindisk arg        Thin disk model parameters (l1 h1)
+    --thickdisk arg       Thick disk model parameters, (f_thin l2 h2)
+    --halo arg            Thick disk model parameters, (f_halo q n)
+    --test                Assume the input contains (l b Ar DM Mr FeH uErr gErr 
+                        rErr iErr zErr) and generate test data
+    --range-M arg         Range of absolute magnitudes to sample
+    --range-FeH arg       Range of Fe/H to consider
+    --range-DM arg        DM grid to sample
+    --range-Ar arg        Ar grid to sample
+
+Quick Demo
+==========
+
+See above (the explanation of --test option) for what the echoed numbers below mean.
+
+  [mjuric@nebel galstar]$ echo "0 90 .1 10 4.5 -0.3 0.1 0.05 0.05 0.05 0.05" | time ./optimized/galstar --test prob_MrFeH.txt:Mr,FeH prob_Ar.txt:Ar prob_DMAr.txt:DM,Ar prob_ArMr.txt:Ar,Mr
+  # Outputing P(Mr, FeH) into file prob_MrFeH.txt
+  # Outputing P(Ar) into file prob_Ar.txt
+  # Outputing P(DM, Ar) into file prob_DMAr.txt
+  # Outputing P(Ar, Mr) into file prob_ArMr.txt
+  # Loaded Phi(-1 <= Mr <= 28) LF from /raid14/home/mjuric/projects/galstar/staging/share/galstar/MrLF.MSandRGB_v1.0.dat
+  # Loaded 147951 SEDs from /raid14/home/mjuric/projects/galstar/staging/share/galstar/MSandRGBcolors_v1.3.dat
+  # Galactic structure: 8000 25 | 2150 245 | 0.13 3261 743 | 0.0028 0.64 -2.77
+  # MOCK:    input: Ar=0.1, DM=10, Mr=4.5, FeH=-0.3
+  # MOCK:   m_true: 16.2119 14.892 14.5 14.3658 14.3505
+  # MOCK:   m_ext : 16.3993 15.0299 14.6 14.4416 14.4043
+  # MOCK:   m_obs : 16.4127 15.0255 14.6837 14.4783 14.4541
+  # Sampler: DM=[5..20..0.02] Ar=[0..1..0.02] Mr=[ALL] FeH=[ALL]
+  # OpenMP: 16 threads.
+  718125461132141501391003152517413141112691087311550247152143051291114613108711524035115724035131214961110871204351591412136118105012371549131112146810501237154613911121481050123715961141312148105012376911813121410415501692831112131410741569851101312141102374156985111312141002137154698511121310140123715469851110121314012371549685111014131201237154968115121413100123715496851112141310012371545698111412131001237154596801114121310123715450698111412131102371545069811121411323107154501298612143111371015450123891261411137151045021371491281511136104502137151412913118610450213157141213119861045021315714121391186104502131571412139118645100215137141213911546801015213714512134119608101521375414131201196815123710540141512139112136871050415141131223711968105041512314713121198651004151237141213119685100415127314131211986510041512731412139116851004151723141213911685100415172314121391168510041517231412131198650104151723141312911685010415172314131291168504101517231413121196850410*172314131211986**410****141312119*861210148139116121014813911610********
+  127.69user 0.22system 0:09.39elapsed 1361%CPU (0avgtext+0avgdata 0maxresident)k
+  0inputs+0outputs (0major+25961minor)pagefaults 0swaps
+  [mjuric@nebel galstar]$ 
+
+If --test is not specified, galstar will expect 12 numbers, l b u g r i z
+uErr gErr rErr iErr zErr, on the standard input. Example:
+
+  [mjuric@nebel galstar]$ echo "0 90 16.4127 15.0255 14.6837 14.4783 14.4541 0.05 0.05 0.05 0.05 0.05" | ./optimized/galstar prob_MrFeH.txt:Mr,FeH prob_Ar.txt:Ar prob_DMAr.txt:DM,Ar prob_ArMr.txt:Ar,Mr
+  # Outputing P(Mr, FeH) into file prob_MrFeH.txt
+  # Outputing P(Ar) into file prob_Ar.txt
+  # Outputing P(DM, Ar) into file prob_DMAr.txt
+  # Outputing P(Ar, Mr) into file prob_ArMr.txt
+  # Loaded Phi(-1 <= Mr <= 28) LF from /raid14/home/mjuric/projects/galstar/staging/share/galstar/MrLF.MSandRGB_v1.0.dat
+  # Loaded 147951 SEDs from /raid14/home/mjuric/projects/galstar/staging/share/galstar/MSandRGBcolors_v1.3.dat
+  # Galactic structure: 8000 25 | 2150 245 | 0.13 3261 743 | 0.0028 0.64 -2.77
+  # Sampler: DM=[5..20..0.02] Ar=[0..1..0.02] Mr=[ALL] FeH=[ALL]
+  # OpenMP: 16 threads.
+  3291412481511131075016421312113561081091514711121345263451226131131101597814045121121363412521113631810971514045122116313110897151404512211361317915108140542312116131981415710054236112111387109151401452783910141560111213178901014154523612131117809101415452631213111078910141545263121311108791014154523612131110879101415425361213101178910141542536121310117891014154523612131011789101415452361213101187910141545231261311108791014154523126131110879101415452123613111087910141545212361311108971014154521236131110897101415452123613111089107141545212313611109814107415521231361110981410745122153136111984014510127215133611412519148201071513361141252149811007131536111245291410811307315611124521491310810731561112452131491081307156111245213149108310156711124521314910381561071112452131493108156017111245213149108315106711124521314910831510761112452131491083151076111245213149108153107611124521314910815301761112452131491081531071161245213149108153107116124521314910815103711612452131491081510371161245213149108151037116*****14910815*107**100149187********
+
+To make the figures, call:
+
+  ./scripts/plotpdf.py prob_ArMr.txt  A_r M_r      prob_ArMr.png 
+  ./scripts/plotpdf.py prob_MrFeH.txt M_r "[Fe/H]" prob_MrFeH.png 
+  ./scripts/plotpdf.py prob_DMAr.txt  DM  "A_r"    prob_DMAr.png 
+

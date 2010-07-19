@@ -79,27 +79,6 @@ bool construct_marginalizers(map<string, shared_ptr<TModel::Marginalizer> > &mar
 	return true;
 }
 
-#if 0
-#include <omp.h>
-void omptest()
-{
-	int threadId, nthreads;
-	#pragma omp parallel private(threadId)
-	{
-		threadId = omp_get_thread_num();
-		std::ostringstream ss;
-		ss << "Thread = " << threadId << "\n";
-		std::cout << ss.str();
-		#pragma omp barrier
-		#pragma omp master
-		{
-			nthreads = omp_get_num_threads();
-			std::cout << "There are " << nthreads << " threads.\n";
-		}
-	}
-}
-#endif
-
 // Output
 int main(int argc, char **argv)
 {

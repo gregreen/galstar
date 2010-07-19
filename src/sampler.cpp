@@ -1,4 +1,5 @@
 #include "sampler.h"
+#include <omp.h>
 
 #include <iostream>
 #include <string>
@@ -174,11 +175,28 @@ inline double logL_SED(const double M[NBANDS], const double sigma[NBANDS], const
 // probability to the Marginalizer object
 void TModel::sample(Marginalizer &out, double l, double b, const double m[NBANDS], const double err[NBANDS])
 {
+	#pragma omp parallel
+	{
+
+	int nthreads = omp_get_num_threads();
+	int threadId = omp_get_thread_num();
+	#pragma omp master
+	{
+		std::cerr << "# OpenMP: " << nthreads << " threads.\n";
+		out.sampling_begin(nthreads);
+	}
+	#pragma omp barrier
+
 	Params p;
+	int k = 0;
 	FORRANGEj(DM, DM_range)
 	{
-		std::cerr << ".";
+		if(k++ % nthreads != threadId) { continue; }	// skip if not this thread's slice
+
 		p.DM = *DM;
+
+		#pragma omp critical
+		std::cerr << threadId;
 		double logP_DM = log( dn(l, b, p.DM) );	// probability that the star is at DM
 
 		FORRANGEj(Ar, Ar_range)
@@ -215,9 +233,14 @@ void TModel::sample(Marginalizer &out, double l, double b, const double m[NBANDS
 				if(logL <= -100) { continue; }	// optimization
 
 				double logP = logL + logP_SED + logP_DM + logP_Ar;
-				out(p, exp(logP));
+				out(p, exp(logP), threadId);
 			}
 		}
 	}
+	#pragma omp critical
+	std::cerr << "*";
+	}
+
+	out.sampling_end();
 	std::cerr << "\n";
 }

@@ -8,6 +8,7 @@
 #include <boost/format.hpp>
 #include <boost/array.hpp>
 #include <boost/static_assert.hpp>
+
 /*
 	Marginalize the samples over all but two parameters
 */
@@ -55,9 +56,32 @@ public:
 		get[0] = X; get[1] = Y; get[1] = Z;
 	}
 
-	std::map<boost::array<double, DIM>, double> posterior;
 
-	virtual void operator()(const TModel::Params &p, double logP)
+	////////////////////////
+	typedef std::map<boost::array<double, DIM>, double> posterior_t;
+	posterior_t posterior;
+	std::vector<posterior_t> posteriors_tmp;
+
+	virtual void sampling_begin(int nthreads)
+	{
+		posteriors_tmp.resize(nthreads);
+	}
+
+	virtual void sampling_end()
+	{
+		// merge and deallocate temporary maps
+		posterior.clear();
+		FOREACHj(post, posteriors_tmp)
+		{
+			FOREACH(*post)
+			{
+				posterior[i->first] += i->second;
+			}
+		}
+		posteriors_tmp.clear();
+	}
+
+	virtual void operator()(const TModel::Params &p, double logP, int threadId)
 	{
 		boost::array<double, DIM> key;
 
@@ -65,7 +89,7 @@ public:
 		if(DIM > 1) { key[1] = call_memfun(p, get[1])(); }
 		if(DIM > 2) { key[2] = call_memfun(p, get[2])(); }
 
-		posterior[key] += (logP);
+		posteriors_tmp[threadId][key] += (logP);
 	}
 
 	virtual void output(std::ostream &out) const

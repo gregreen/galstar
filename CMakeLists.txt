@@ -8,9 +8,8 @@ PROJECT(galstar)
 #
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/modules)
 
-### fmemopen
-include (${CMAKE_ROOT}/Modules/CheckFunctionExists.cmake)
-check_function_exists(fmemopen HAVE_FMEMOPEN)
+### OpenMP support
+find_package(OpenMP REQUIRED)
 
 ### libpeyton
 find_package(libpeyton REQUIRED)

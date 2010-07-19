@@ -83,14 +83,20 @@ struct TModel
 	struct MarginalizerStack;
 	struct Marginalizer
 	{
-		virtual void operator()(const Params &p, double logL) = 0;
+		virtual void sampling_begin(int nthreads) = 0;
+		virtual void sampling_end() = 0;
+
+		virtual void operator()(const Params &p, double logL, int threadId) = 0;
 		virtual ~Marginalizer() {}
 	};
 	struct MarginalizerArray : public Marginalizer, public std::vector<Marginalizer*>
 	{
-		virtual void operator()(const Params &p, double logL)
+		virtual void sampling_begin(int nthreads) { FOREACH(*this) { (*i)->sampling_begin(nthreads); } }
+		virtual void sampling_end()               { FOREACH(*this) { (*i)->sampling_end(); }           }
+
+		virtual void operator()(const Params &p, double logL, int threadId)
 		{
-			FOREACH(*this) { (**i)(p, logL); }
+			FOREACH(*this) { (**i)(p, logL, threadId); }
 		}
 	};
 

@@ -106,3 +106,4 @@ inline std::ostream &operator <<(std::ostream &out, const Marginalizer<DIM> &m)
 }
 
 #endif // _marginalize_h__
+

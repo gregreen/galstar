@@ -4,7 +4,6 @@
 #include <fstream>
 
 #include <boost/shared_ptr.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/regex.hpp>
 #include <boost/program_options.hpp>
 
@@ -103,7 +102,7 @@ int main(int argc, char **argv)
 		("thindisk", po::value<string>(&par_thin), "Thin disk model parameters (l1 h1)")
 		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
 		("halo", po::value<string>(&par_halo), "Thick disk model parameters, (f_halo q n)")
-		("test", po::value<bool>(&test)->zero_tokens()->implicit_value(true, "true"), "Assume the input contains (l b Ar DM Mr FeH uErr gErr rErr iErr zErr) and generate test data")
+		("test", po::value<bool>(&test)->zero_tokens(), "Assume the input contains (l b Ar DM Mr FeH uErr gErr rErr iErr zErr) and generate test data")
 		("range-M",   po::value<interval<double> >(&Mr_range),  "Range of absolute magnitudes to sample")
 		("range-FeH", po::value<interval<double> >(&FeH_range), "Range of Fe/H to consider")
 		("range-DM",   po::value<range<double> >(&DM_range), "DM grid to sample")
@@ -117,7 +116,7 @@ int main(int argc, char **argv)
 	po::notify(vm);
 
 	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
-
+	test = vm.count("test");
 
 	map<string, shared_ptr<TModel::Marginalizer> > margs;
 	if(!construct_marginalizers(margs, output_pdfs)) { return -1; }

@@ -1,7 +1,10 @@
+// TODO: Do general cleanup of code, eliminating unused parts
+
 #include "galstar_config.h"
 
 #include "sampler.h"
-#include "marginalize.h"
+#include "binner.h"
+
 #include <sstream>
 #include <fstream>
 
@@ -20,30 +23,91 @@ using namespace std;
 void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &par, const double err[NBANDS])
 {
 	double mtrue[NBANDS], mext[NBANDS];
-	FOR(0, NBANDS)
-	{
+	for(unsigned int i=0; i<NBANDS; i++) {
 		mtrue[i] = par.SED->v[i] + par.get_DM();
 		mext[i]  = mtrue[i] + par.get_Ar() * TModel::Acoef[i];
 		m[i]     = mext[i] + gsl_ran_gaussian(rng, err[i]);
 	}
 
 	cerr << "# MOCK:    input: " << "Ar=" << par.get_Ar() << ", DM=" << par.get_DM() << ", Mr=" << par.get_Mr() << ", FeH=" << par.get_FeH() << "\n";
-	cerr << "# MOCK:   m_true:"; FOR(0, NBANDS) { cerr << " " << mtrue[i]; }; cerr << "\n";
-	cerr << "# MOCK:   m_ext :"; FOR(0, NBANDS) { cerr << " " <<  mext[i]; }; cerr << "\n";
-	cerr << "# MOCK:   m_obs :"; FOR(0, NBANDS) { cerr << " " <<     m[i]; }; cerr << "\n";
+	cerr << "# MOCK:   m_true:"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " << mtrue[i]; }; cerr << "\n";
+	cerr << "# MOCK:   m_ext :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<  mext[i]; }; cerr << "\n";
+	cerr << "# MOCK:   m_obs :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<     m[i]; }; cerr << "\n";
 }
 
-// Parse text such as output.txt:Mr,FeH,Ar and construct the requested marginalizer
-bool construct_marginalizers(map<string, shared_ptr<TModel::Marginalizer> > &margs, const vector<string> &output_pdfs)
-{
-	#define G(name)         TModel::Params::varname2getter(name)
-	static const regex e("([^:]+):([^,]+)(?:,([^,]+))?(?:,([^,]+))?");
-	FOREACH(output_pdfs)
-	{
-		ostringstream msg;
-		msg << "# Outputing P(";
+int varname2int(const string &varname) {
+	if(varname == "DM") {
+		return _DM;
+	} else if(varname == "Ar") {
+		return _Ar;
+	} else if(varname == "Mr") {
+		return _Mr;
+	} else if(varname == "FeH") {
+		return _FeH;
+	}
+	return -1;
+}
 
-		// check overal format
+double std_bin_min(const string &varname) {
+	if(varname == "DM") {
+		return 5.;
+	} else if(varname == "Ar") {
+		return 0.;
+	} else if(varname == "Mr") {
+		return -1.;
+	} else if(varname == "FeH") {
+		return -2.5;
+	}
+	return -1.;
+}
+
+double std_bin_max(const string &varname) {
+	if(varname == "DM") {
+		return 20.;
+	} else if(varname == "Ar") {
+		return 5.;
+	} else if(varname == "Mr") {
+		return 28.;
+	} else if(varname == "FeH") {
+		return 0.;
+	}
+	return -1.;
+}
+
+double std_bin_min(unsigned int i) {
+	if(i == _DM) {
+		return 5.;
+	} else if(i == _Ar) {
+		return 0.;
+	} else if(i == _Mr) {
+		return -1.;
+	} else if(i == _FeH) {
+		return -2.5;
+	}
+	return -1.;
+}
+
+double std_bin_max(unsigned int i) {
+	if(i == _DM) {
+		return 20.;
+	} else if(i == _Ar) {
+		return 5.;
+	} else if(i == _Mr) {
+		return 28.;
+	} else if(i == _FeH) {
+		return 0.;
+	}
+	return -1.;
+}
+
+bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs) {
+	#define G(name)         varname2int(name)
+	static const regex e("([^:]+):([^,]+)(?:,([^,]+))?(?:,([^,]+))?");
+	for(vector<string>::const_iterator i = output_pdfs.begin(); i != output_pdfs.end(); ++i) {
+		ostringstream msg;
+		msg << "# Outputting P(";
+		
+		// check overall format
 		const std::string &pdfspec = *i;
 		cmatch what;
 		if(!regex_match(pdfspec.c_str(), what, e))
@@ -51,12 +115,12 @@ bool construct_marginalizers(map<string, shared_ptr<TModel::Marginalizer> > &mar
 			cerr << "Incorrect parameter format ('" << pdfspec << "')\n";
 			return false;
 		}
-
+		
 		// deduce size and check variables
 		int ndim = 0;
 		for(int i = 2; i != what.size() && what[i] != ""; ndim++, i++)
 		{
-			if(!G(what[i]))
+			if(!(G(what[i])+1))
 			{
 				cerr << "Unrecognized model parameter '" << what[i] << "'\n";
 				return false;
@@ -64,16 +128,27 @@ bool construct_marginalizers(map<string, shared_ptr<TModel::Marginalizer> > &mar
 			msg << (i > 2 ? ", " : "") << what[i];
 		}
 		msg << ")";
-
-		// construct marginalizer
-		string fn = what[1];
+		
+		// construct marginalizer. TODO: Add binners for dimensions other than 2
+		output_fns.push_back(what[1]);
 		switch(ndim)
 		{
-			case 1: margs[fn].reset( new Marginalizer<1>(G(what[2])) ); break;
-			case 2: margs[fn].reset( new Marginalizer<2>(G(what[2]), G(what[3])) ); break;
-			case 3: margs[fn].reset( new Marginalizer<3>(G(what[2]), G(what[3]), G(what[4])) ); break;
+			//case 1:
+			case 2:
+				unsigned int bin_dim[2];
+				unsigned int width[2];
+				double min[2];
+				double max[2];
+				for(unsigned int k=0; k<ndim; k++) {
+					bin_dim[k] = G(what[k+2]);
+					width[k] = 100;//std_bin_width(what[k+2]);
+					min[k] = std_bin_min(what[k+2]);
+					max[k] = std_bin_max(what[k+2]);
+				}
+				multibinner.add_binner( new TBinner2D<4>(min, max, width, bin_dim) ); break;
+			//case 3:
 		}
-		cerr << msg.str() << " into file " << fn << "\n";
+		cerr << msg.str() << " into file " << what[1] << "\n";
 	}
 	#undef G
 	return true;
@@ -88,11 +163,14 @@ int main(int argc, char **argv)
 	string solar_pos = "8000 25";
 	string par_thin = "2150 245";
 	string par_thick = "0.13 3261 743";
-	string par_halo = "0.0028 0.64 -2.77";
+	string par_halo = "0.0051 0.70 -2.62 27.8 -3.8";
+	// TODO: Add in option to set metallicity parameters
 	bool test = false;
 	interval<double> Mr_range(ALL), FeH_range(ALL);
-	range<double> DM_range(5,20,0.02), Ar_range(0,1,0.02);
-
+	range<double> DM_range(5,20,0.02), Ar_range(0,5,0.02);
+	string datafn("NONE");
+	string statsfn("NONE");
+	
 	// parse command line arguments
 	namespace po = boost::program_options;
 	po::options_description desc(std::string("Usage: ") + argv[0] + " <outfile1.txt:X1[,Y1]> [outfile2.txt:X2[,Y2] [...]]\n\nOptions");
@@ -103,12 +181,14 @@ int main(int argc, char **argv)
 		("seds", po::value<string>(&seds_fn), "SEDs file")
 		("thindisk", po::value<string>(&par_thin), "Thin disk model parameters (l1 h1)")
 		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
-		("halo", po::value<string>(&par_halo), "Thick disk model parameters, (f_halo q n)")
+		("halo", po::value<string>(&par_halo), "Halo model parameters, (f_halo q n_inner R_br n_outer)")
 		("test", po::value<bool>(&test)->zero_tokens(), "Assume the input contains (l b Ar DM Mr FeH uErr gErr rErr iErr zErr) and generate test data")
 		("range-M",   po::value<interval<double> >(&Mr_range),  "Range of absolute magnitudes to sample")
 		("range-FeH", po::value<interval<double> >(&FeH_range), "Range of Fe/H to consider")
 		("range-DM",   po::value<range<double> >(&DM_range), "DM grid to sample")
 		("range-Ar",   po::value<range<double> >(&Ar_range), "Ar grid to sample")
+		("datafile", po::value<string>(&datafn), "Stellar magnitudes and errors file")
+		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -120,20 +200,24 @@ int main(int argc, char **argv)
 	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
 	test = vm.count("test");
 
-	map<string, shared_ptr<TModel::Marginalizer> > margs;
-	if(!construct_marginalizers(margs, output_pdfs)) { return -1; }
-
+	vector<string> output_fns;
+	TMultiBinner<4> multibinner;
+	if(!construct_binners(multibinner, output_fns, output_pdfs)) { return -1; }
+	
 	////////////// Construct Model
 	TModel model(lf_fn, seds_fn);
 	#define PARSE(from, to) if(!(  istringstream(from) >> to  )) { std::cerr << "Error parsing " #from " (" << from << ")\n"; return -1; }
 	PARSE(solar_pos,  model.R0 >> model.Z0);
 	PARSE(par_thin,   model.L1 >> model.H1);
 	PARSE(par_thick,  model.f  >> model.L2 >> model.H2);
-	PARSE(par_halo,   model.fh >> model.q  >> model.n);
+	PARSE(par_halo,   model.fh >> model.qh  >> model.nh >> model.R_br2 >> model.nh_outer);
+	model.fh_outer = model.fh * pow(1000.*model.R_br2/model.R0, model.nh-model.nh_outer);
+	model.R_br2 = sqr(1000.*model.R_br2);
 	#undef PARSE
-
-	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.q << " " << model.n << "\n";
-
+	
+	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.qh << " " << model.nh << "\n";
+	
+	TStellarData data;
 	double m[NBANDS], err[NBANDS];
 	double l, b;
 	if(test)
@@ -144,46 +228,85 @@ int main(int argc, char **argv)
 
 		TModel::Params par;
 		double Mr, FeH;
+		// For debugging purposes: ///////////////////////
+		/*l = 90.;
+		b = 10.;
+		par.Ar = 0.2;
+		par.DM = 15.;
+		Mr = 18.;
+		FeH = -0.5;
+		FOR(0, NBANDS) { err[i] = 0.05; }*/
+		//////////////////////////////////////////////////
 		cin >> l >> b >> par.Ar >> par.DM >> Mr >> FeH;
-		FOR(0, NBANDS) { cin >> err[i]; }
+		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
 		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
-
-		par.SED = &*get_closest_SED(model.seds, Mr, FeH);
+		
+		par.SED = model.get_sed(Mr, FeH);
 		generate_test_data(m, rng, par, err);
-
+		
+		typename TStellarData::TMagnitudes mag(m, err);
+		data.star.push_back(mag);
+		
 		gsl_rng_free(rng);
-	}
-	else
-	{
+	} else if(datafn != "NONE") {
+		data.load_data(datafn);
+		l = data.l;
+		b = data.b;
+	} else {
 		////////////// Load Data
 		cin >> l >> b;
-		FOR(0, NBANDS) { cin >> m[i]; }
-		FOR(0, NBANDS) { cin >> err[i]; }
+		for(unsigned int i=0; i<NBANDS; i++) { cin >> m[i]; }
+		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
 		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
+		typename TStellarData::TMagnitudes mag(m, err);
+		data.star.push_back(mag);
 	}
-
-	////////////// Sample Posterior Distributions
-	TModel::MarginalizerArray out;
-	FOREACH(margs) { out.push_back(i->second.get()); }
-
+	
 	model.DM_range = DM_range;
 	model.Ar_range = Ar_range;
 	model.Mr_range = Mr_range;
 	model.FeH_range = FeH_range;
 	cerr << "# Sampler:" 	<< " DM=[" << model.DM_range << "]" << " Ar=[" << model.Ar_range << "]"
 				<< " Mr=[" << model.Mr_range << "]" << " FeH=[" << model.FeH_range << "]\n";
-
-	model.sample(out, l, b, m, err);
-
-	////////////// Write out the results
-	FOREACH(margs)
-	{
-		IMarginalizer &pdf = dynamic_cast<IMarginalizer&>(*(i->second));
-		pdf.normalize_to_peak();
-
-		ofstream out(i->first.c_str());
-		pdf.output(out);
+	
+	//std::cout << data.star.size() << std::endl;
+	unsigned int count = 0;
+	unsigned int N_nonconverged = 0;
+	for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
+		// Calculate posterior for current star
+		std::cout << "=========================================" << std::endl;
+		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
+		TStats<4> stats;
+		bool converged;
+		converged = sample_mcmc(model, l, b, *it, multibinner, stats);
+		if(!converged) { N_nonconverged++; }
+		// Write out the marginalized posteriors
+		for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+			stringstream outfn("");
+			outfn << output_fns.at(i) << "_" << count << ".txt";
+			multibinner.get_binner(i)->write_to_file(outfn.str());
+		}
+		multibinner.clear();
+		// Write out summary of statistics
+		if(statsfn != "NONE") {
+			bool success = true;
+			stringstream outfn("");
+			outfn << statsfn << "_" << count << ".dat";
+			std::fstream f;
+			f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);
+			f.write(reinterpret_cast<char*>(&converged), sizeof(converged));
+			if(!f) {
+				f.close();
+				success = false;
+			} else {
+				f.close();
+				success = stats.write_binary(outfn.str(), std::ios::app);
+			}
+			if(!success) { std::cerr << "# Could not write " << outfn.str() << std::endl; }
+		}
 	}
+	
+	std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;
 
 	return 0;
 }

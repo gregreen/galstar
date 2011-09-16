@@ -5,7 +5,14 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <map>
+#include <boost/cstdint.hpp>
 
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+#include "NKC.h"
+#include "binner.h"
 #include <astro/util.h>
 
 static const int NBANDS = 5;
@@ -17,9 +24,6 @@ struct TSED
 
 	bool operator<(const TSED &b) const { return Mr < b.Mr || (Mr == b.Mr && FeH < b.FeH); }
 };
-typedef std::vector<TSED> TSEDs;	// set of SEDs
-void load_seds(TSEDs &seds, const std::string &fn);	// load SEDs from a file
-TSEDs::iterator get_closest_SED(TSEDs& seds, double Mr, double FeH);
 
 struct TLF	// the luminosity function
 {
@@ -53,62 +57,171 @@ struct TLF	// the luminosity function
 struct TModel
 {
 	// Model parameters: galactic ctr. distance, solar offset, disk scale height & length
-	double     R0, Z0;		// Solar position
-	double     H1, L1;		// Thin disk
-	double f,  H2, L2;		// Galactic structure (thin and thick disk)
-	double fh,  q,  n;		// Galactic structure (power-law halo)
-	TLF lf;				// luminosity function
-	TSEDs seds;			// Stellar SEDs
-
+	double     R0, Z0;			// Solar position
+	double     H1, L1;			// Thin disk
+	double f,  H2, L2;			// Galactic structure (thin and thick disk)
+	double fh,  qh,  nh, R_br2, nh_outer;	// Galactic structure (power-law halo)
+	double fh_outer;
+	TLF lf;					// luminosity function
+	TSED* seds;				// Stellar SEDs
+	double dMr, dFeH, Mr_min, FeH_min;	// Sample spacing for stellar SEDs
+	unsigned int N_FeH, N_Mr;
+	
 	static const double Acoef[NBANDS];	// Extinction coefficients relative to Ar
-
+	
 	struct Params				// Parameter space that can be sampled
 	{
 		double DM, Ar;
 		const TSED *SED;
-
+		
 		double get_DM()  const { return DM; }
 		double get_Ar()  const { return Ar; }
 		double get_Mr()  const { return SED->Mr; }
 		double get_FeH() const { return SED->FeH; }
-
+		
 		typedef double (TModel::Params::*Getter)() const;
 		static Getter varname2getter(const std::string &var);
 	};
-
+	
 	// Parameter ranges over which to sample
 	peyton::util::range<double>      DM_range, Ar_range;
 	peyton::util::interval<double>   Mr_range, FeH_range;
+	
+	TModel(const std::string& lf_, const std::string& seds_);
+	~TModel() { delete seds; }
+	
+	void computeCartesianPositions(double &X, double &Y, double &Z, double cos_l, double sin_l, double cos_b, double sin_b, double d) const;
+	double rho_disk(double R, double Z) const;
+	double rho_halo(double R, double Z) const;
+	double log_dn(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const;
+	double log_p_FeH(double cos_l, double sin_l, double cos_b, double sin_b, double DM, double FeH) const;	// From Ivezich et al. 2008
+	double f_halo(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const;
+	double mu_disk(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const;
+	
+	TSED* get_sed(const double Mr, const double FeH) const;
+	void get_sed_inline(TSED** sed_out, const double Mr, const double FeH) const;
+	unsigned int sed_index(const double Mr, const double FeH) const;
+};
 
-	struct MarginalizerStack;
-	struct Marginalizer
-	{
-		virtual void sampling_begin(int nthreads) = 0;
-		virtual void sampling_end() = 0;
 
-		virtual void operator()(const Params &p, double logL, int threadId) = 0;
-		virtual ~Marginalizer() {}
-	};
-	struct MarginalizerArray : public Marginalizer, public std::vector<Marginalizer*>
-	{
-		virtual void sampling_begin(int nthreads) { FOREACH(*this) { (*i)->sampling_begin(nthreads); } }
-		virtual void sampling_end()               { FOREACH(*this) { (*i)->sampling_end(); }           }
+// MCMC Stuff ////////////////////////////////////////////////////////////////////////////////////////////////
+#define _DM 0
+#define _Ar 1
+#define _Mr 2
+#define _FeH 3
 
-		virtual void operator()(const Params &p, double logL, int threadId)
-		{
-			FOREACH(*this) { (**i)(p, logL, threadId); }
+struct TStellarData {
+	struct TMagnitudes {
+		double m[NBANDS];
+		double err[NBANDS];
+		
+		TMagnitudes() {}
+		TMagnitudes(double (&_m)[NBANDS], double (&_err)[NBANDS]) {
+			for(unsigned int i=0; i<NBANDS; i++) {
+				m[i] = _m[i];
+				err[i] = _err[i];
+			}
 		}
 	};
-
-	TModel(const std::string& lf_, const std::string& seds_);
-
-	void computeCartesianPositions(double &X, double &Y, double &Z, double ldeg, double bdeg, double d) const;
-	double expdisk(double X, double Y, double Z) const;
-	double dn(double l, double b, double DM) const;
-
-	// evenly sample the (DM, Ar, SEDs) space, and pass the posterior
-	// probability to the output object
-	void sample(TModel::Marginalizer& out, double l, double b, const double m[5], const double err[5]);
+	
+	double l, b;
+	std::vector<TMagnitudes> star;
+	
+	TStellarData(std::string infile) { load_data(infile); }
+	TStellarData() {}
+	
+	TMagnitudes& operator[](const unsigned int &index) { return star.at(index); }
+	
+	bool load_data(std::string infile) {
+		std::ifstream fin(infile.c_str());
+		if(!fin.is_open()) {
+			std::cout << "# Cannot open file " << infile << std::endl;
+			return false;
+		}
+		std::cout << "# Loading stellar magnitudes from " << infile << " ..." << std::endl;
+		fin >> l >> b;
+		while(!fin.eof()) {
+			TMagnitudes tmp;
+			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.m[i]; }
+			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.err[i]; }
+			star.push_back(tmp);
+		}
+		star.pop_back();
+		fin.close();
+		return true;
+	}
 };
+
+struct MCMCParams {
+	double l, b, cos_l, sin_l, cos_b, sin_b;
+	double m[NBANDS];
+	double err[NBANDS];
+	TModel &model;
+	double DM_min, DM_max;
+	#define DM_SAMPLING 10000
+	double log_dn_arr[DM_SAMPLING];
+	double f_halo_arr[DM_SAMPLING];
+	double mu_disk_arr[DM_SAMPLING];
+	
+	MCMCParams(double _l, double _b, typename TStellarData::TMagnitudes &mag, TModel &_model) 
+		: model(_model), l(_l), b(_b)
+	{
+		update(mag);
+		// Precompute trig functions
+		cos_l = cos(0.0174532925*l);
+		sin_l = sin(0.0174532925*l);
+		cos_b = cos(0.0174532925*b);
+		sin_b = sin(0.0174532925*b);
+		// Precompute log_dn
+		DM_min = 0.01;
+		DM_max = 22.;
+		double dDM = (DM_max-DM_min)/DM_SAMPLING;
+		unsigned int i;
+		unsigned int count = 0;
+		for(double DM=DM_min; DM<=DM_max+dDM/2.; DM+=dDM) {
+			i = DM_index(DM);
+			log_dn_arr[i] = model.log_dn(cos_l, sin_l, cos_b, sin_b, DM);
+			f_halo_arr[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM);
+			mu_disk_arr[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM);
+			count++;
+		}
+	}
+	
+	inline unsigned int DM_index(double DM) { return (unsigned int)((DM-DM_min)/(DM_max-DM_min)*DM_SAMPLING + 0.5); }
+	
+	void update(typename TStellarData::TMagnitudes &mag) {
+		for(unsigned int i=0; i<NBANDS; i++) {
+			m[i] = mag.m[i];
+			err[i] = mag.err[i];
+		}
+	}
+	
+	inline double log_dn_interp(const double DM) {
+		if((DM < DM_min) || (DM > DM_max)) { return model.log_dn(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
+		unsigned int index = DM_index(DM);
+		return log_dn_arr[index];
+	}
+	
+	inline double f_halo_interp(const double DM) {
+		if((DM < DM_min) || (DM > DM_max)) { return model.f_halo(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
+		unsigned int index = DM_index(DM);
+		return f_halo_arr[index];
+	}
+	
+	inline double mu_disk_interp(const double DM) {
+		if((DM < DM_min) || (DM > DM_max)) { return model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
+		unsigned int index = DM_index(DM);
+		return mu_disk_arr[index];
+	}
+	
+	double log_p_FeH_fast(double DM, double FeH);
+	
+	#undef DM_SAMPLING
+};
+
+double calc_logP(const double (&x)[4], MCMCParams &p);
+
+bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats);
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #endif // sampler_h__

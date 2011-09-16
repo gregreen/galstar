@@ -1,13 +1,13 @@
 [Buildset]
-BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x0c\x00g\x00a\x00l\x00f\x00i\x00t)
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
 
 [CMake]
-BuildDirs=/home/mjuric/projects/galstar/build
+BuildDirs=/home/greg/projects/galstar/build
 CMakeDir=/usr/share/cmake-2.8/Modules
 Current CMake Binary=file:///usr/bin/cmake
-CurrentBuildDir=file:///home/mjuric/projects/galstar/build
+CurrentBuildDir=file:///home/greg/projects/galstar/build
 CurrentBuildType=Release
-CurrentInstallDir=file:///usr/local
+CurrentInstallDir=file:///home/greg/projects/galstar/staging
 ProjectRootRelative=./
 
 [Launch]
@@ -20,12 +20,15 @@ Name=galstar run
 Type=Native Application
 
 [Launch][Launch Configuration 0][Data]
-Arguments=
+Arguments=mcmcout.txt:DM,Ar --test
 Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
 Dependency Action=Nothing
 EnvironmentGroup=default
-Executable=file:///home/mjuric/projects/galstar/build/galstar
-Working Directory=file:///home/mjuric/projects/galstar
+Executable=file:///home/greg/projects/galstar/build/galstar
+External Terminal=gnome-terminal -e %exe
+Project Target=
+Use External Terminal=false
+Working Directory=file:///home/greg/projects/galstar
 isExecutable=true
 
 [MakeBuilder]

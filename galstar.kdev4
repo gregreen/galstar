@@ -1,4 +1,4 @@
 [Project]
-Name=galfit
 Manager=KDevCMakeManager
+Name=galstar
 VersionControl=

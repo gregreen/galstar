@@ -3,7 +3,6 @@
 #include "galstar_config.h"
 
 #include "sampler.h"
-#include "binner.h"
 
 #include <sstream>
 #include <fstream>
@@ -217,6 +216,8 @@ int main(int argc, char **argv)
 	
 	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.qh << " " << model.nh << "\n";
 	
+	
+	// Construct data set //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	TStellarData data;
 	double m[NBANDS], err[NBANDS];
 	double l, b;
@@ -269,6 +270,8 @@ int main(int argc, char **argv)
 	cerr << "# Sampler:" 	<< " DM=[" << model.DM_range << "]" << " Ar=[" << model.Ar_range << "]"
 				<< " Mr=[" << model.Mr_range << "]" << " FeH=[" << model.FeH_range << "]\n";
 	
+	
+	// Run sampler ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//std::cout << data.star.size() << std::endl;
 	unsigned int count = 0;
 	unsigned int N_nonconverged = 0;

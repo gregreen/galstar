@@ -13,6 +13,7 @@
 
 #include "NKC.h"
 #include "binner.h"
+#include "interpolater.h"
 #include <astro/util.h>
 
 static const int NBANDS = 5;
@@ -158,36 +159,54 @@ struct MCMCParams {
 	double err[NBANDS];
 	TModel &model;
 	double DM_min, DM_max;
-	#define DM_SAMPLING 10000
-	double log_dn_arr[DM_SAMPLING];
-	double f_halo_arr[DM_SAMPLING];
-	double mu_disk_arr[DM_SAMPLING];
+	#define DM_SAMPLES 10000
+	//double log_dn_arr[DM_SAMPLING];
+	//double f_halo_arr[DM_SAMPLING];
+	//double mu_disk_arr[DM_SAMPLING];
+	TInterpolater *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
 	MCMCParams(double _l, double _b, typename TStellarData::TMagnitudes &mag, TModel &_model) 
-		: model(_model), l(_l), b(_b)
+		: model(_model), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
 	{
 		update(mag);
+		
 		// Precompute trig functions
 		cos_l = cos(0.0174532925*l);
 		sin_l = sin(0.0174532925*l);
 		cos_b = cos(0.0174532925*b);
 		sin_b = sin(0.0174532925*b);
-		// Precompute log_dn
+		
+		// Precompute log(dn(DM)), f_halo(DM) and mu_disk(DM)
 		DM_min = 0.01;
-		DM_max = 22.;
-		double dDM = (DM_max-DM_min)/DM_SAMPLING;
+		DM_max = 25.;
+		log_dn_arr = new TInterpolater(DM_SAMPLES, DM_min, DM_max);
+		f_halo_arr = new TInterpolater(DM_SAMPLES, DM_min, DM_max);
+		mu_disk_arr = new TInterpolater(DM_SAMPLES, DM_min, DM_max);
+		double DM_i;
+		for(unsigned int i=0; i<DM_SAMPLES; i++) {
+			DM_i = log_dn_arr->get_x(i);
+			(*log_dn_arr)[i] = model.log_dn(cos_l, sin_l, cos_b, sin_b, DM_i);
+			(*f_halo_arr)[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM_i);
+			(*mu_disk_arr)[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM_i);
+		}
+		/*
+		double dDM = (DM_max-DM_min)/DM_SAMPLES;
 		unsigned int i;
-		unsigned int count = 0;
 		for(double DM=DM_min; DM<=DM_max+dDM/2.; DM+=dDM) {
 			i = DM_index(DM);
 			log_dn_arr[i] = model.log_dn(cos_l, sin_l, cos_b, sin_b, DM);
 			f_halo_arr[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM);
 			mu_disk_arr[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM);
-			count++;
-		}
+		}*/
 	}
 	
-	inline unsigned int DM_index(double DM) { return (unsigned int)((DM-DM_min)/(DM_max-DM_min)*DM_SAMPLING + 0.5); }
+	~MCMCParams() {
+		delete log_dn_arr;
+		delete f_halo_arr;
+		delete mu_disk_arr;
+	}
+	
+	//inline unsigned int DM_index(double DM) { return (unsigned int)((DM-DM_min)/(DM_max-DM_min)*DM_SAMPLES + 0.5); }
 	
 	void update(typename TStellarData::TMagnitudes &mag) {
 		for(unsigned int i=0; i<NBANDS; i++) {
@@ -198,20 +217,20 @@ struct MCMCParams {
 	
 	inline double log_dn_interp(const double DM) {
 		if((DM < DM_min) || (DM > DM_max)) { return model.log_dn(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		unsigned int index = DM_index(DM);
-		return log_dn_arr[index];
+		//unsigned int index = DM_index(DM);
+		return (*log_dn_arr)(DM);
 	}
 	
 	inline double f_halo_interp(const double DM) {
 		if((DM < DM_min) || (DM > DM_max)) { return model.f_halo(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		unsigned int index = DM_index(DM);
-		return f_halo_arr[index];
+		//unsigned int index = DM_index(DM);
+		return (*f_halo_arr)(DM);
 	}
 	
 	inline double mu_disk_interp(const double DM) {
 		if((DM < DM_min) || (DM > DM_max)) { return model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		unsigned int index = DM_index(DM);
-		return mu_disk_arr[index];
+		//unsigned int index = DM_index(DM);
+		return (*mu_disk_arr)(DM);
 	}
 	
 	double log_p_FeH_fast(double DM, double FeH);

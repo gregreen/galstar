@@ -44,7 +44,7 @@ include_directories("${PROJECT_BINARY_DIR}/src")
 #
 # galstar executable
 #
-add_executable(galstar src/main.cpp src/sampler.cpp)
+add_executable(galstar src/main.cpp src/sampler.cpp src/binner.cpp)
 
 target_link_libraries(galstar dl)
 target_link_libraries(galstar ${Boost_LIBRARIES})

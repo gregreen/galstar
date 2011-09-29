@@ -8,7 +8,42 @@
 #include <math.h>
 #include <limits>
 #include <vector>
+#include <omp.h>
 #include <boost/shared_ptr.hpp>
+
+#include "ndarray.h"
+#include <string.h>
+
+
+/** **************************************************************************************************************************************************************************
+ * ND Binner
+ *****************************************************************************************************************************************************************************/
+
+// TODO: Write accessors and marginalizers
+class TBinnerND {
+	// Data
+	NDArray<double> *bin;
+	double *min, *max, *dx;
+	unsigned int N;
+	
+	unsigned int *index_workspace;
+	
+public:
+	// Constructor & Destructor
+	TBinnerND(double *_min, double *_max, unsigned int *width, unsigned int _N);
+	~TBinnerND();
+	
+	// Mutators //////////////////////////////////////////////////////////////////////////////////////////////
+	void add_point(double *pos, double weight);	// Add data point to binner
+	void clear();					// Set the bins to zero
+	void normalize(bool to_peak=true);		// Normalize the bins either to the peak value, or to sum to unity
+	
+	void operator ()(double *pos, double weight) { add_point(pos, weight); }
+	
+	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
+	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true);	// Write the binned data to a binary file
+	void print_bins();								// Print out the bins to cout
+};
 
 
 /** **************************************************************************************************************************************************************************

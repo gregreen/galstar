@@ -291,12 +291,13 @@ void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
 bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats)
 {
 	unsigned int N_threads = 4;		// # of parallel Normal Kernel couplers to run
-	unsigned int size = 20;			// # of chains in each Normal Kernel Coupler
+	unsigned int size = 15;			// # of chains in each Normal Kernel Coupler
 	unsigned int N_steps = 5000*size;	// # of steps to take in each Normal Kernel Coupler per round
-	unsigned int max_rounds = 20;		// After <max_rounds> rounds, the Markov chains are terminated
-	double convergence_threshold = 1.05;	// Chains ended when GR diagnostic falls below this level
+	unsigned int max_rounds = 15;		// After <max_rounds> rounds, the Markov chains are terminated
+	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
+	double convergence_threshold = 1.08;	// Chains ended when GR diagnostic falls below this level
 	double nonconvergence_flag = 1.1;	// Return false if GR diagnostic is above this level at end of run
-	bool convergence = true;
+	bool convergence;
 	
 	timespec t_start, t_end;
 	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
@@ -312,36 +313,40 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 	MCMCParams p(l, b, mag, model);
 	typename TNKC<4, MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
 	typename TNKC<4, MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
-	TParallelNKC<4, MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, size, scale_0, p, multibinner, N_threads);
 	
-	// Run Markov chains
-	sampler.burn_in(70, 50*size, 0.18);
-	double bail = false;
-	unsigned int count = 0;
-	while(!bail) {
-		sampler.step(N_steps);
-		bail = true;
-		for(unsigned int i=0; i<4; i++) {
-			if(sampler.get_GR_diagnostic(i) > convergence_threshold) { bail = false; break; }
+	unsigned int count;
+	for(unsigned int n=0; n<max_attempts; n++) {
+		TParallelNKC<4, MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, size, scale_0, p, multibinner, N_threads);
+		
+		// Run Markov chains
+		sampler.burn_in(70, 50*size, 0.18);
+		count = 0;
+		while((count < max_rounds) && !convergence) {
+			sampler.step(N_steps);
+			convergence = true;
+			for(unsigned int i=0; i<4; i++) {
+				if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
+			}
+			count++;
 		}
-		count++;
-		if(count >= max_rounds) { bail = true; }
+		
+		sampler.print_stats();
+		stats = sampler.get_stats();
+		
+		if(convergence) { break; } else { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
+		multibinner.clear();
 	}
-	stats = sampler.get_stats();
 	
-	// Flag conconvergence
-	for(unsigned int i=0; i<4; i++) {
-		if(sampler.get_GR_diagnostic(i) > nonconvergence_flag) { convergence = false; break; }
-	}
+	//stats = sampler.get_stats();
 	
 	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer
 	
 	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) { multibinner.get_binner(i)->normalize(); }	// Normalize bins to peak value
 	
 	// Print stats and run time
-	sampler.print_stats();
+	//sampler.print_stats();
 	if(!convergence) { std::cout << std::endl << "Did not converge." << std::endl; }
-	std::cout << std::endl << "Time elapsed for " << N_steps*count << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	std::cout << std::endl << "Time elapsed for " << stats.N_items_tot/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return convergence;
 }

@@ -67,10 +67,12 @@ struct TBinner2D {
 	
 	// Mutators //////////////////////////////////////////////////////////////////////////////////////////////
 	void add_point(double (&pos)[N], double weight);	// Add data point to binner
+	void add_point(double *pos, unsigned int weight);	// Add data point to binner
 	void clear();						// Set the bins to zero
 	void normalize(bool to_peak=true);			// Normalize the bins either to the peak value, or to sum to unity
 	
 	void operator ()(double (&pos)[N], double weight) { add_point(pos, weight); }
+	void operator ()(double *pos, unsigned int weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
 	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true);	// Write the binned data to a binary file
@@ -122,6 +124,20 @@ void TBinner2D<N>::add_point(double (&pos)[N], double weight) {
 	for(unsigned int i=0; i<2; i++) { index[i] = (unsigned int)((pos[bin_dim[i]] - min[i]) / dx[i]); }
 	#pragma omp atomic
 	bin[index[0]][index[1]] += weight;
+}
+
+// Overloaded version of above
+template<unsigned int N>
+void TBinner2D<N>::add_point(double *pos, unsigned int weight) {
+	// Check bounds
+	for(unsigned int i=0; i<2; i++) {
+		if((pos[bin_dim[i]] < min[i]) || (pos[bin_dim[i]] > max[i])) { return; }
+	}
+	// Add point
+	unsigned int index[2];
+	for(unsigned int i=0; i<2; i++) { index[i] = (unsigned int)((pos[bin_dim[i]] - min[i]) / dx[i]); }
+	#pragma omp atomic
+	bin[index[0]][index[1]] += (double)weight;
 }
 
 // Normalize the bins either to the peak value, or to sum to unity
@@ -209,6 +225,10 @@ public:
 	~TMultiBinner() {}
 	
 	void operator ()(double (&pos)[N], double weight) {
+		for(typename std::vector< boost::shared_ptr<TBinner2D<N> > >::iterator it = binner_arr.begin(); it != binner_arr.end(); ++it) { (**it)(pos, weight); }
+	}
+	
+	void operator ()(double *pos, unsigned int weight) {
 		for(typename std::vector< boost::shared_ptr<TBinner2D<N> > >::iterator it = binner_arr.begin(); it != binner_arr.end(); ++it) { (**it)(pos, weight); }
 	}
 	

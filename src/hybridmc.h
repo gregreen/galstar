@@ -34,7 +34,7 @@ class THybridMC {
 public:
 	// Typedefs for log(pdf) and random state functions
 	typedef double (*log_pdf_t)(const double *const q, size_t dim, TParams &params);
-	typedef double (*rand_state_t)(double *q, size_t dim, gsl_rng *r, TParams &params);
+	typedef void (*rand_state_t)(double *q, size_t dim, gsl_rng *r, TParams &params);
 	
 	// Constructor & Destructor
 	THybridMC(size_t _dim, log_pdf_t _log_pdf, rand_state_t _rand_state, TParams &_params, TLogger &_logger, TStats &_stats);
@@ -99,7 +99,8 @@ public:
 	
 	// Accessors
 	double acceptance_rate() const;		// Return the rate of acceptance of proposal points
-	double get_GR_stat(size_t i)const;	// Get Gelman-Rubin statistic for axis i
+	double get_GR_stat(size_t i) const;	// Get Gelman-Rubin statistic for axis i
+	void print_stats() const;
 	
 private:
 	typename THybridMC<TParams, TLogger>::log_pdf_t log_pdf;	// Target distribution: log(p(q)) = -U(q) , where U(q) is the potential energy of the system at q
@@ -218,6 +219,16 @@ double TParallelHybridMC<TParams, TLogger>::get_GR_stat(size_t i) const {
 	return GR_stat[i];
 }
 
+template<class TParams, class TLogger>
+void TParallelHybridMC<TParams, TLogger>::print_stats() const {
+	stats.print();
+	std::cout << std::endl << "Gelman-Rubin diagnostic:" << std::endl;
+	for(unsigned int i=0; i<dim; i++) { std::cout << (i==0 ? "" : "\t") << std::setprecision(5) << get_GR_stat(i); }
+	std::cout << std::endl;
+	std::cout << "Acceptance rate: ";
+	for(unsigned int i=0; i<N_hmc; i++) { std::cout << std::setprecision(3) << 100.*hmc[i]->acceptance_rate() << "%" << (i != dim-1 ? " " : ""); }
+	std::cout << std::endl;
+}
 
 /** ********************************************************************************************************************************************************************************
  * 
@@ -403,9 +414,9 @@ void THybridMC<TParams, TLogger>::clear_acceptance_rate() { N_accepted = 0; N_re
 template<class TParams, class TLogger>
 void THybridMC<TParams, TLogger>::tune(unsigned int &L, double &eta, double target_acceptance, unsigned int N_rounds) {
 	unsigned int N_steps = (unsigned int)(50./target_acceptance);	// Step enough times to get ~50 acceptances if eta and L are already correct
-	double eta_new, lnc, lnp_0;
-	double lnp = log(target_acceptance);
-	double n = 3.;
+	//double eta_new, lnc, lnp_0;
+	//double lnp = log(target_acceptance);
+	//double n = 3.;
 	
 	for(unsigned int k=0; k<N_rounds; k++) {
 		clear_acceptance_rate();

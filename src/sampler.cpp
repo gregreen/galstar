@@ -251,48 +251,54 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 // MCMC sampler
 //////////////////////////////////////////////////////////////////////////////////////
 
-// TODO: Add in thick disk and halo terms to log_dn
 // pdf for the MCMC routine
-inline double calc_logP(const double (&x)[4], MCMCParams &p) {
+inline double calc_logP(const double *const x, size_t dim, MCMCParams &p) {
 	#define neginf -std::numeric_limits<double>::infinity()
 	double logP = 0.;
+	double Ar, DM;
 	
 	// P(Ar|G): Flat prior for Ar>0
-	if(x[_Ar] < 0.) { return neginf; }
+	if(x[_Ar] < 0.) { logP -= 10*x[_Ar]*x[_Ar]; Ar = 0.; } else { Ar = x[_Ar]; }
 	
 	// P(Mr|G) from luminosity function
 	logP += p.model.lf(x[_Mr]);
 	
 	// P(DM|G) from model of galaxy
-	if(x[_DM] < 0.) { return neginf; } else { logP += p.log_dn_interp(x[_DM]); }
+	if(x[_DM] < 0.) { logP -= 10*x[_DM]*x[_DM]; DM = 0.; } else { DM = x[_DM]; }
+	
+	logP += p.log_dn_interp(DM);
 	
 	// P(FeH|DM,G) from Ivezich et al (2008)
-	logP += p.log_p_FeH_fast(x[_DM], x[_FeH]);
+	logP += p.log_p_FeH_fast(DM, x[_FeH]);
+	
 	
 	// P(g,r,i,z,y|Ar,Mr,DM) from model spectra
 	double M[NBANDS];
-	FOR(0, NBANDS) { M[i] = p.m[i] - x[_DM] - x[_Ar]*p.model.Acoef[i]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
+	FOR(0, NBANDS) { M[i] = p.m[i] - DM - x[_Ar]*p.model.Acoef[i]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
 	TSED* closest_sed = NULL;
 	p.model.get_sed_inline(&closest_sed, x[_Mr], x[_FeH]);			// Retrieve template spectrum
-	if(closest_sed == NULL) { return neginf; } else { logP += logL_SED(M, p.err, *closest_sed); }
+	if(closest_sed == NULL) { logP -= 1000; } else { logP += logL_SED(M, p.err, *closest_sed); }
 	
 	#undef neginf
 	return logP;
 }
 
 // Generates a random state, with a flat distribution in each parameter
-void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
-	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
+void ran_state(double *x_0, size_t dim, gsl_rng *r, MCMCParams &p) {
+	x_0[_DM] = gsl_ran_flat(r, 6, 15);
 	x_0[_Ar] = gsl_ran_flat(r, 0.1, 2.9);
 	x_0[_Mr] = gsl_ran_flat(r, -0.9, 27.9);
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
 
-bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats)
+bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats)
 {
-	unsigned int N_threads = 4;		// # of parallel Normal Kernel couplers to run
-	unsigned int size = 20;			// # of chains in each Normal Kernel Coupler
-	unsigned int N_steps = 5000*size;	// # of steps to take in each Normal Kernel Coupler per round
+	unsigned int N_threads = 4;		// # of parallel chains to run
+	unsigned int N_burn_in = 1000;		// # of burn-in steps
+	unsigned int N_steps = 10000;		// # of steps to take per round
+	unsigned int L = 100;			// # of timesteps per integration
+	double eta = 1e-5;			// Integration step size
+	double target_acceptance = 0.98;	// Target acceptance rate for Monte Carlo steps
 	unsigned int max_rounds = 20;		// After <max_rounds> rounds, the Markov chains are terminated
 	double convergence_threshold = 1.05;	// Chains ended when GR diagnostic falls below this level
 	double nonconvergence_flag = 1.1;	// Return false if GR diagnostic is above this level at end of run
@@ -301,37 +307,38 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 	timespec t_start, t_end;
 	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
 	
-	// Set the initial step size for the MCMC run
-	double scale_0[4];
-	scale_0[_DM] = 1.;
-	scale_0[_Ar] = 0.2;
-	scale_0[_Mr] = 1.;
-	scale_0[_FeH] = 0.2;
-	
 	// Set run parameters
 	MCMCParams p(l, b, mag, model);
-	typename TNKC<4, MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
-	typename TNKC<4, MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
-	TParallelNKC<4, MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, size, scale_0, p, multibinner, N_threads);
+	typename THybridMC<MCMCParams, TMultiBinner<4> >::log_pdf_t pdf_ptr = &calc_logP;
+	typename THybridMC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
+	TParallelHybridMC<MCMCParams, TMultiBinner<4> > sampler(N_threads, 4, pdf_ptr, rand_state_ptr, p, multibinner, stats);
 	
-	// Run Markov chains
-	sampler.burn_in(70, 50*size, 0.18);
+	// Burn in and tune integration step size
+	sampler.tune(L, eta, target_acceptance, 50);
+	std::cerr << "# eta -> " << eta << std::endl;
+	sampler.step_multiple(N_burn_in, L, eta, false);
+	std::cerr << "# Burn-in acceptance rate: " << sampler.acceptance_rate() << " (target = " << target_acceptance << ")" << std::endl;
+	sampler.tune(L, eta, target_acceptance, 50);
+	std::cerr << "# eta -> " << eta << std::endl;
+	
+	// Main run
 	double bail = false;
 	unsigned int count = 0;
 	while(!bail) {
-		sampler.step(N_steps);
+		sampler.step_multiple(N_steps, L, eta);
 		bail = true;
+		sampler.calc_GR_stat();
 		for(unsigned int i=0; i<4; i++) {
-			if(sampler.get_GR_diagnostic(i) > convergence_threshold) { bail = false; break; }
+			if(sampler.get_GR_stat(i) > convergence_threshold) { bail = false; break; }
 		}
 		count++;
 		if(count >= max_rounds) { bail = true; }
 	}
-	stats = sampler.get_stats();
+	//stats = sampler.get_stats();
 	
 	// Flag conconvergence
 	for(unsigned int i=0; i<4; i++) {
-		if(sampler.get_GR_diagnostic(i) > nonconvergence_flag) { convergence = false; break; }
+		if(sampler.get_GR_stat(i) > nonconvergence_flag) { convergence = false; break; }
 	}
 	
 	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer

@@ -279,7 +279,7 @@ int main(int argc, char **argv)
 		// Calculate posterior for current star
 		std::cout << "=========================================" << std::endl;
 		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
-		TStats<4> stats;
+		TStats stats(4);
 		bool converged;
 		converged = sample_mcmc(model, l, b, *it, multibinner, stats);
 		if(!converged) { N_nonconverged++; }

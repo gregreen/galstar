@@ -11,7 +11,7 @@ CurrentInstallDir=file:///home/greg/projects/galstar/staging
 ProjectRootRelative=./
 
 [Launch]
-Launch Configurations=Launch Configuration 0
+Launch Configurations=Launch Configuration 0,Launch Configuration 1
 
 [Launch][Launch Configuration 0]
 Configured Launch Modes=execute
@@ -30,6 +30,24 @@ Project Target=
 Use External Terminal=false
 Working Directory=file:///home/greg/projects/galstar
 isExecutable=true
+
+[Launch][Launch Configuration 1]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=debug launch
+Type=Native Application
+
+[Launch][Launch Configuration 1][Data]
+Arguments=debugout.txt:DM,Ar --datafile testinput.txt
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=galstar,galstar
+Use External Terminal=false
+Working Directory=
+isExecutable=false
 
 [MakeBuilder]
 Number Of Jobs=1

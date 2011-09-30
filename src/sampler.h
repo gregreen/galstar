@@ -11,9 +11,12 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 
-#include "NKC.h"
+//#include "NKC.h"
+#include "hybridmc.h"
 #include "binner.h"
 #include "interpolater.h"
+#include "stats.h"
+
 #include <astro/util.h>
 
 static const int NBANDS = 5;
@@ -235,12 +238,15 @@ struct MCMCParams {
 	
 	double log_p_FeH_fast(double DM, double FeH);
 	
-	#undef DM_SAMPLING
+	#undef DM_SAMPLES
 };
 
-double calc_logP(const double (&x)[4], MCMCParams &p);
+//double calc_logP(const double (&x)[4], MCMCParams &p);
+double calc_logP(const double *const x, size_t dim, MCMCParams &p);
 
-bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats);
+//bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats);
+bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats);
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #endif // sampler_h__

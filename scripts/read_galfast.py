@@ -30,14 +30,15 @@ import numpy as np
 import pyfits
 import argparse, sys
 from scipy import interpolate
+from os.path import abspath
 
 err_spline = None
 
 def init_errs(photoerr_dir='/home/greg/projects/galstar/data'):
 	global err_spline
 	err_spline = []
-	for bandpass in ['u','g','r','i','z','y']:
-		photoerr_fn = 'LSSTugrizy.LSST%s.photoerr.txt' % bandpass
+	for bandpass in ['u','g','r','i','z']:
+		photoerr_fn = 'SDSSugriz.SDSS%s.photoerr.txt' % bandpass
 		if photoerr_dir[-1] == '/':
 			f = open(photoerr_dir + photoerr_fn)
 		else:
@@ -121,7 +122,7 @@ def main():
 		if values.toscreen:
 			print output
 		else:
-			tmp = fn.split('.')
+			tmp = abspath(fn).split('.')
 			output_fn = ''.join(tmp[:-1]) + '.in'
 			f = open(output_fn, 'w')
 			f.write(output)

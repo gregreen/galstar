@@ -140,7 +140,7 @@ bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns,
 				double max[2];
 				for(unsigned int k=0; k<ndim; k++) {
 					bin_dim[k] = G(what[k+2]);
-					width[k] = 100;//std_bin_width(what[k+2]);
+					width[k] = 50;//std_bin_width(what[k+2]);
 					min[k] = std_bin_min(what[k+2]);
 					max[k] = std_bin_max(what[k+2]);
 				}
@@ -191,14 +191,14 @@ int main(int argc, char **argv)
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
-
+	
 	po::variables_map vm;
 	po::store(po::command_line_parser(argc, argv).options(desc).positional(pd).run(), vm);
 	po::notify(vm);
-
+	
 	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
 	test = vm.count("test");
-
+	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
 	if(!construct_binners(multibinner, output_fns, output_pdfs)) { return -1; }
@@ -289,15 +289,27 @@ int main(int argc, char **argv)
 			outfn << output_fns.at(i) << "_" << count << ".txt";
 			multibinner.get_binner(i)->write_to_file(outfn.str());
 		}
-		multibinner.clear();
 		// Write out summary of statistics
 		if(statsfn != "NONE") {
 			bool success = true;
 			stringstream outfn("");
-			outfn << statsfn << "_" << count << ".dat";
+			outfn << statsfn << "_" << count << ".dat";				// Determine filename
 			std::fstream f;
-			f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);
+			f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);		// Write whether the fit converged as first byte
 			f.write(reinterpret_cast<char*>(&converged), sizeof(converged));
+			// Write max. likelihoods
+			double ML[2];
+			unsigned int N_binners = multibinner.get_num_binners();
+			f.write(reinterpret_cast<char*>(&N_binners), sizeof(N_binners));	// Write # of max. likelihoods that follow
+			for(unsigned int i=0; i<N_binners; i++) {
+				TBinner2D<4> *binner = multibinner.get_binner(i);
+				binner->get_ML(ML);
+				for(unsigned int k=0; k<2; k++) {
+					f.write(reinterpret_cast<char*>(&(binner->bin_dim[k])), sizeof(unsigned int));	// Write coordinate index
+					f.write(reinterpret_cast<char*>(&(ML[k])), sizeof(double));			// Write position of max. likelihood for this coord.
+				}
+			}
+			// Write means and covariance
 			if(!f) {
 				f.close();
 				success = false;
@@ -307,6 +319,7 @@ int main(int argc, char **argv)
 			}
 			if(!success) { std::cerr << "# Could not write " << outfn.str() << std::endl; }
 		}
+		multibinner.clear();
 	}
 	
 	std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;

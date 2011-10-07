@@ -144,7 +144,7 @@ struct TStellarData {
 		while(!fin.eof()) {
 			TMagnitudes tmp;
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.m[i]; }
-			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.err[i]; }
+			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.err[i]; tmp.err[i] = sqrt(tmp.err[i]); }
 			star.push_back(tmp);
 		}
 		star.pop_back();
@@ -235,7 +235,7 @@ struct MCMCParams {
 	
 	double log_p_FeH_fast(double DM, double FeH);
 	
-	#undef DM_SAMPLING
+	#undef DM_SAMPLES
 };
 
 double calc_logP(const double (&x)[4], MCMCParams &p);

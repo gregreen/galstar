@@ -75,6 +75,7 @@ struct TBinner2D {
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
 	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true);	// Write the binned data to a binary file
 	void print_bins();								// Print out the bins to cout
+	void get_ML(double (&ML)[2]);							// Return maximum likelihood
 };
 
 
@@ -139,6 +140,21 @@ void TBinner2D<N>::normalize(bool to_peak) {
 	}
 	for(unsigned int j=0; j<width[0]; j++) {
 		for(unsigned int k=0; k<width[1]; k++) { bin[j][k] /= norm; }
+	}
+}
+
+// Sets ML to the coordinate with maximum likelihood
+template<unsigned int N>
+void TBinner2D<N>::get_ML(double (&ML)[2]) {
+	double max = -1.;
+	for(unsigned int j=0; j<width[0]; j++) {
+		for(unsigned int k=0; k<width[1]; k++) {
+			if(bin[j][k] > max) {
+				max = bin[j][k];
+				ML[0] = min[0] + ((double)j + 0.5) * dx[0];
+				ML[1] = min[1] + ((double)k + 0.5) * dx[1];
+			}	
+		}
 	}
 }
 

@@ -291,12 +291,12 @@ void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
 bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats)
 {
 	unsigned int N_threads = 4;		// # of parallel Normal Kernel couplers to run
-	unsigned int size = 15;			// # of chains in each Normal Kernel Coupler
-	unsigned int N_steps = 5000*size;	// # of steps to take in each Normal Kernel Coupler per round
-	unsigned int max_rounds = 15;		// After <max_rounds> rounds, the Markov chains are terminated
-	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
-	double convergence_threshold = 1.08;	// Chains ended when GR diagnostic falls below this level
-	double nonconvergence_flag = 1.1;	// Return false if GR diagnostic is above this level at end of run
+	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
+	unsigned int N_steps = 15000*size;	// # of steps to take in each Normal Kernel Coupler per round
+	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
+	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
+	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
+	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
 	bool convergence;
 	
 	timespec t_start, t_end;
@@ -319,7 +319,9 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 		TParallelNKC<4, MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, size, scale_0, p, multibinner, N_threads);
 		
 		// Run Markov chains
-		sampler.burn_in(70, 50*size, 0.18);
+		sampler.burn_in(100, 50*size, 0.18, false);
+		sampler.set_bandwidth(0.1);
+		//for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
 		count = 0;
 		while((count < max_rounds) && !convergence) {
 			sampler.step(N_steps);

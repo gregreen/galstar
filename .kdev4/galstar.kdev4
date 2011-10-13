@@ -32,4 +32,5 @@ Working Directory=file:///home/greg/projects/galstar
 isExecutable=true
 
 [MakeBuilder]
+Default Make Environment Profile=0
 Number Of Jobs=1

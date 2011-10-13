@@ -34,71 +34,6 @@ void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &pa
 	cerr << "# MOCK:   m_obs :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<     m[i]; }; cerr << "\n";
 }
 
-int varname2int(const string &varname) {
-	if(varname == "DM") {
-		return _DM;
-	} else if(varname == "Ar") {
-		return _Ar;
-	} else if(varname == "Mr") {
-		return _Mr;
-	} else if(varname == "FeH") {
-		return _FeH;
-	}
-	return -1;
-}
-
-double std_bin_min(const string &varname) {
-	if(varname == "DM") {
-		return 5.;
-	} else if(varname == "Ar") {
-		return 0.;
-	} else if(varname == "Mr") {
-		return -1.;
-	} else if(varname == "FeH") {
-		return -2.5;
-	}
-	return -1.;
-}
-
-double std_bin_max(const string &varname) {
-	if(varname == "DM") {
-		return 20.;
-	} else if(varname == "Ar") {
-		return 5.;
-	} else if(varname == "Mr") {
-		return 28.;
-	} else if(varname == "FeH") {
-		return 0.;
-	}
-	return -1.;
-}
-
-double std_bin_min(unsigned int i) {
-	if(i == _DM) {
-		return 5.;
-	} else if(i == _Ar) {
-		return 0.;
-	} else if(i == _Mr) {
-		return -1.;
-	} else if(i == _FeH) {
-		return -2.5;
-	}
-	return -1.;
-}
-
-double std_bin_max(unsigned int i) {
-	if(i == _DM) {
-		return 20.;
-	} else if(i == _Ar) {
-		return 5.;
-	} else if(i == _Mr) {
-		return 28.;
-	} else if(i == _FeH) {
-		return 0.;
-	}
-	return -1.;
-}
-
 bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs) {
 	#define G(name)         varname2int(name)
 	static const regex e("([^:]+):([^,]+)(?:,([^,]+))?(?:,([^,]+))?");
@@ -169,6 +104,8 @@ int main(int argc, char **argv)
 	range<double> DM_range(5,20,0.02), Ar_range(0,5,0.02);
 	string datafn("NONE");
 	string statsfn("NONE");
+	bool brute_force = false;
+	unsigned int N_steps = 15000;
 	
 	// parse command line arguments
 	namespace po = boost::program_options;
@@ -188,6 +125,8 @@ int main(int argc, char **argv)
 		("range-Ar",   po::value<range<double> >(&Ar_range), "Ar grid to sample")
 		("datafile", po::value<string>(&datafn), "Stellar magnitudes and errors file")
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
+		("brute", "Use brute-force sampling")
+		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -198,6 +137,8 @@ int main(int argc, char **argv)
 	
 	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
 	test = vm.count("test");
+	
+	if(vm.count("brute")) { brute_force = true; }
 	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
@@ -281,7 +222,11 @@ int main(int argc, char **argv)
 		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
 		TStats<4> stats;
 		bool converged;
-		converged = sample_mcmc(model, l, b, *it, multibinner, stats);
+		if(brute_force) {
+			converged = sample_brute_force(model, l, b, *it, multibinner, stats);
+		} else {
+			converged = sample_mcmc(model, l, b, *it, multibinner, stats, N_steps);
+		}
 		if(!converged) { N_nonconverged++; }
 		// Write out the marginalized posteriors
 		for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {

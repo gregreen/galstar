@@ -5,10 +5,14 @@ import matplotlib.pyplot as plt;
 import matplotlib as mplib
 import sys
 import argparse
+from math import isnan
 
 # Load SM-formatted image and return an array
 def loadimage(fn):
 	x, y, p = np.loadtxt(fn, usecols=(0, 1, 2), unpack=True)
+	for i,p_i in enumerate(p):
+		if isnan(p_i): p[i] = -999.
+	#print 'loading %s' % fn, p[0:10]
 	# Sort x and y and get dx and dy
 	xs = x.copy(); xs.sort(); dx = xs[1:xs.size] - xs[0:xs.size-1]; dx = dx.max();
 	ys = y.copy(); ys.sort(); dy = ys[1:ys.size] - ys[0:ys.size-1]; dy = dy.max();
@@ -38,9 +42,10 @@ def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(No
 		if p_filtered[i] == p_min: p_filtered[i] = -999.
 	xmean = (np.exp(p_filtered)*x).sum() / np.exp(p_filtered).sum()
 	ymean = (np.exp(p_filtered)*y).sum() / np.exp(p_filtered).sum()
+	#if not (isnan(xmean) or isnan(ymean)):
 	ax.scatter(xmean, ymean, s=40, marker='o')
 	# Contouring at levels of accumulated probability
-	p2 = p.copy(); p2.sort(); cum = (np.exp(p2)/sum(np.exp(p2))).cumsum(); 
+	p2 = p.copy(); p2.sort(); cum = (np.exp(p2)/sum(np.exp(p2))).cumsum();
 	cont90 = p2[abs(cum - 0.9).argmin()]
 	cont50 = p2[abs(cum - 0.5).argmin()]
 	cont10 = p2[abs(cum - 0.1).argmin()]
@@ -91,17 +96,26 @@ def main():
 	mplib.rc('text', usetex=True)
 	mplib.rc('xtick', direction='out')
 	mplib.rc('ytick', direction='out')
+	# Determine # of figures to make
 	N_per_fig = values.shape[0]*values.shape[1]
-	N_figs = int(round(len(values.files)/N_per_fig + 0.5))
+	#N_figs = int(round(len(values.files)/N_per_fig + 0.5))
+	N_figs = int(len(values.files)/N_per_fig)
+	print N_per_fig, N_figs, len(values.files)
+	if N_figs*N_per_fig < len(values.files):
+		N_figs += 1
+	# Get x and y bounds for plots
+	xlim = (values.xmin, values.xmax)
+	ylim = (values.ymin, values.ymax)
 	for i in range(N_figs):
+		# Determine range of plots to put on this figure
 		i_min = i*N_per_fig
-		i_max = (i+1)*N_per_fig
+		i_max = i_min + N_per_fig
 		if i_max > len(values.files): i_max = len(values.files)
 		print 'Plotting files %d through %d...' % (i_min+1, i_max)
 		fn_list = values.files[i_min:i_max]
+		# Determine output filename for this figure
 		img_fname = str(values.output + '_' + str(i) + '.' + values.imgtype)
-		xlim = (values.xmin, values.xmax)
-		ylim = (values.ymin, values.ymax)
+		# Generate this figure
 		make_figure(fn_list, img_fname, values.shape, values.xname, values.yname, xlim, ylim)
 	
 	print 'Done.'

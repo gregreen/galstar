@@ -240,7 +240,77 @@ struct MCMCParams {
 
 double calc_logP(const double (&x)[4], MCMCParams &p);
 
-bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats);
+bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps);
+
+bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats);
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline int varname2int(const std::string &varname) {
+	if(varname == "DM") {
+		return _DM;
+	} else if(varname == "Ar") {
+		return _Ar;
+	} else if(varname == "Mr") {
+		return _Mr;
+	} else if(varname == "FeH") {
+		return _FeH;
+	}
+	return -1;
+}
+
+inline double std_bin_min(const std::string &varname) {
+	if(varname == "DM") {
+		return 5.;
+	} else if(varname == "Ar") {
+		return 0.;
+	} else if(varname == "Mr") {
+		return -1.;
+	} else if(varname == "FeH") {
+		return -2.5;
+	}
+	return -1.;
+}
+
+inline double std_bin_max(const std::string &varname) {
+	if(varname == "DM") {
+		return 20.;
+	} else if(varname == "Ar") {
+		return 5.;
+	} else if(varname == "Mr") {
+		return 28.;
+	} else if(varname == "FeH") {
+		return 0.;
+	}
+	return -1.;
+}
+
+inline double std_bin_min(unsigned int i) {
+	if(i == _DM) {
+		return 5.;
+	} else if(i == _Ar) {
+		return 0.;
+	} else if(i == _Mr) {
+		return -1.;
+	} else if(i == _FeH) {
+		return -2.5;
+	}
+	return -1.;
+}
+
+inline double std_bin_max(unsigned int i) {
+	if(i == _DM) {
+		return 20.;
+	} else if(i == _Ar) {
+		return 5.;
+	} else if(i == _Mr) {
+		return 28.;
+	} else if(i == _FeH) {
+		return 0.;
+	}
+	return -1.;
+}
+
 
 #endif // sampler_h__

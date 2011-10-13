@@ -288,11 +288,11 @@ void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
 
-bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats)
+bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps=15000)
 {
 	unsigned int N_threads = 4;		// # of parallel Normal Kernel couplers to run
 	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
-	unsigned int N_steps = 15000*size;	// # of steps to take in each Normal Kernel Coupler per round
+	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
 	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
 	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
 	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
@@ -351,4 +351,61 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 	std::cout << std::endl << "Time elapsed for " << stats.N_items_tot/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return convergence;
+}
+
+bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats) {
+	unsigned int N_threads = 4;		// # of threads to divide work between
+	double N_bins = 150;
+	double Delta[4];
+	for(unsigned int i=0; i<4; i++) {
+		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_bins;
+	}
+	
+	timespec t_start, t_end;
+	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	
+	// Set up model parameters
+	MCMCParams p(l, b, mag, model);
+	
+	omp_set_num_threads(N_threads);
+	#pragma omp parallel
+	{
+		unsigned int thread_ID = omp_get_thread_num();
+		double x[4];
+		double prob;
+		for(unsigned int i=0; i<N_bins; i++) {
+			if(i % N_threads == thread_ID) {
+				x[0] = std_bin_min(0) + ((double)i + 0.5)*Delta[0];
+				for(unsigned j=0; j<N_bins; j++){
+					x[1] = std_bin_min(1) + ((double)j + 0.5)*Delta[1];
+					for(unsigned int k=0; k<N_bins; k++) {
+						x[2] = std_bin_min(2) + ((double)k + 0.5)*Delta[2];
+						for(unsigned int l=0; l<N_bins; l++) {
+							x[3] = std_bin_min(3) + ((double)l + 0.5)*Delta[3];
+							prob = exp(calc_logP(x, p));
+							#pragma omp critical (multibinner)
+							{
+								multibinner(x, prob);
+							}
+							#pragma omp critical (stats)
+							{
+								stats(x, prob*1.e6);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	
+	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer
+	
+	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) { multibinner.get_binner(i)->normalize(); }	// Normalize bins to peak value
+	
+	// Print stats and run time
+	stats.print();
+	std::cout << std::endl << "Time elapsed: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	
+	return true;
 }

@@ -31,6 +31,23 @@ from os.path import abspath
 from operator import itemgetter
 import sys, argparse
 
+
+def get_param_index(param_name):
+	try:
+		return int(param_name)
+	except ValueError:
+		plower = param_name.lower()
+		if plower == 'dm':
+			return 0
+		elif plower == 'ar':
+			return 1
+		elif plower == 'mr':
+			return 2
+		elif plower == 'feh':
+			return 3
+		else: return None
+
+
 def main():
 	parser = argparse.ArgumentParser(prog='comp_stats.py', description='Compare statistics from two galfast runs.', add_help=True)
 	parser.add_argument('--f1', type=str, nargs='+', required=True, help='First set of galstar statistics files')
@@ -38,13 +55,22 @@ def main():
 	parser.add_argument('--converged', action='store_true', help='Filter out nonconverged stars')
 	parser.add_argument('--normalize', action='store_true', help='Divide each error by standard deviation')
 	parser.add_argument('--output', type=str, help='Output plot filename')
-	parser.add_argument('--errorbars', action='store_true', help='Show error bars on plots')
-	parser.add_argument('--useML', type=int, default=None, help='Index of max. likelihood in stats file to use')
+	parser.add_argument('--axisname', type=str, nargs=2, default=('\Delta \mu', '\Delta A_r'), help='x- and y-axis labels')
+	parser.add_argument('--axes', type=str, nargs=2, default=('DM', 'Ar'), help='Parameters to use as x- and y-axes (default: DM Ar)')
+	parser.add_argument('--title', type=str, help='Plot title (in LaTeX markup)')
 	if sys.argv[0] == 'python':
 		offset = 2
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
+	
+	# Determine which parameters to use as x- and y-axes
+	axis_index = [None, None]
+	for i in range(2):
+		axis_index[i] = get_param_index(values.axes[i])
+	if None in axis_index:
+		print 'Invalid parameter name entered in --axes option.'
+		return 1
 	
 	# Sort both filename lists
 	f = [[],[]]
@@ -74,13 +100,9 @@ def main():
 	means = np.empty((2, N, 4), dtype=float)
 	cov = np.empty((2, N, 4, 4), dtype=float)
 	converged = np.empty((2, N), dtype=bool)
-	ML = np.empty((2, N, 2), dtype=float)
 	for i in range(N):
 		converged[0][i], means[0][i], cov[0][i], tmp1, tmp2 = read_stats(abspath(f[0][i]))
 		converged[1][i], means[1][i], cov[1][i], tmp3, tmp4 = read_stats(abspath(f[1][i]))
-		if values.useML != None:
-			ML[0][i] = tmp2[values.useML]
-			ML[1][i] = tmp4[values.useML]
 	
 	# Initialize filter
 	idx = np.empty(N, dtype=bool)
@@ -98,16 +120,11 @@ def main():
 	for i in range(2):
 		means[i] = means[i][idx]
 		cov[i] = cov[i][idx]
-		ML[i] = ML[i][idx]
 	print 'Filtered out %d stars.' % (N - len(means[0]))
 	N = len(means[0])
 	
 	# Calculate differences and covariances
-	Delta = None
-	if values.useML == None:
-		Delta = means[0] - means[1]
-	else:
-		Delta = ML[0] - ML[1]
+	Delta = means[0] - means[1]
 	
 	for d in Delta:
 		print d
@@ -125,11 +142,8 @@ def main():
 	
 	# Normalize differences
 	if values.normalize:
-		imax = 4
-		if values.useML != None:
-			imax = 2
 		for n in range(N):
-			for i in range(imax):
+			for i in range(4):
 				Delta[n][i] /= sigma[n][i]
 	
 	print ''
@@ -146,9 +160,29 @@ def main():
 	# Set up figure
 	fig = plt.figure()
 	ax = fig.add_subplot(1,1,1)
+	param_name = ['\mu', 'A_r', 'M_r', 'Z']
+	ax.set_xlabel(r'$\Delta %s$' % param_name[axis_index[0]], fontsize=18)
+	ax.set_ylabel(r'$\Delta %s$' % param_name[axis_index[1]], fontsize=18)
+	if values.title != None:
+		ax.set_title(r'$\mathrm{%s}$' % values.title.replace(' ','\ '), fontsize=22)
 	
-	ax.scatter(Delta[:,0], Delta[:,1])
+	# Plot differences
+	ax.scatter(Delta[:,axis_index[0]], Delta[:,axis_index[1]])
 	
+	# Draw axes and set make plot range symmetric
+	xlims = max([abs(x) for x in ax.get_xlim()])
+	ylims = max([abs(y) for y in ax.get_ylim()])
+	ax.plot([-xlims,xlims], [0,0], 'k')
+	ax.plot([0,0], [-ylims,ylims], 'k')
+	ax.set_xlim(-xlims, xlims)
+	ax.set_ylim(-ylims, ylims)
+	
+	# Save plot to file
+	if values.output != None:
+		fn = abspath(values.output)
+		if '.' not in fn:
+			fn += '.png'
+		fig.savefig(fn)
 	plt.show()
 	
 	return 0

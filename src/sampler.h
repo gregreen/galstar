@@ -242,7 +242,7 @@ double calc_logP(const double (&x)[4], MCMCParams &p);
 
 bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps);
 
-bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats);
+bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -303,7 +303,7 @@ inline double std_bin_max(unsigned int i) {
 	if(i == _DM) {
 		return 20.;
 	} else if(i == _Ar) {
-		return 5.;
+		return 10.;
 	} else if(i == _Mr) {
 		return 28.;
 	} else if(i == _FeH) {

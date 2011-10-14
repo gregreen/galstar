@@ -106,6 +106,7 @@ int main(int argc, char **argv)
 	string statsfn("NONE");
 	bool brute_force = false;
 	unsigned int N_steps = 15000;
+	unsigned int N_samples = 150;
 	
 	// parse command line arguments
 	namespace po = boost::program_options;
@@ -127,6 +128,7 @@ int main(int argc, char **argv)
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
 		("brute", "Use brute-force sampling")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
+		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -223,7 +225,7 @@ int main(int argc, char **argv)
 		TStats<4> stats;
 		bool converged;
 		if(brute_force) {
-			converged = sample_brute_force(model, l, b, *it, multibinner, stats);
+			converged = sample_brute_force(model, l, b, *it, multibinner, stats, N_samples);
 		} else {
 			converged = sample_mcmc(model, l, b, *it, multibinner, stats, N_steps);
 		}

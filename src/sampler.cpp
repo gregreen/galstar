@@ -353,12 +353,11 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats) {
+bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples = 150) {
 	unsigned int N_threads = 4;		// # of threads to divide work between
-	double N_bins = 150;
 	double Delta[4];
 	for(unsigned int i=0; i<4; i++) {
-		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_bins;
+		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples;
 	}
 	
 	timespec t_start, t_end;
@@ -373,14 +372,14 @@ bool sample_brute_force(TModel &model, double l, double b, typename TStellarData
 		unsigned int thread_ID = omp_get_thread_num();
 		double x[4];
 		double prob;
-		for(unsigned int i=0; i<N_bins; i++) {
+		for(unsigned int i=0; i<N_samples; i++) {
 			if(i % N_threads == thread_ID) {
 				x[0] = std_bin_min(0) + ((double)i + 0.5)*Delta[0];
-				for(unsigned j=0; j<N_bins; j++){
+				for(unsigned j=0; j<N_samples; j++){
 					x[1] = std_bin_min(1) + ((double)j + 0.5)*Delta[1];
-					for(unsigned int k=0; k<N_bins; k++) {
+					for(unsigned int k=0; k<N_samples; k++) {
 						x[2] = std_bin_min(2) + ((double)k + 0.5)*Delta[2];
-						for(unsigned int l=0; l<N_bins; l++) {
+						for(unsigned int l=0; l<N_samples; l++) {
 							x[3] = std_bin_min(3) + ((double)l + 0.5)*Delta[3];
 							prob = exp(calc_logP(x, p));
 							#pragma omp critical (multibinner)
@@ -405,7 +404,7 @@ bool sample_brute_force(TModel &model, double l, double b, typename TStellarData
 	
 	// Print stats and run time
 	stats.print();
-	std::cout << std::endl << "Time elapsed: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	std::cout << std::endl << "Time elapsed for " << N_samples*N_samples*N_samples*N_samples << " samples: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return true;
 }

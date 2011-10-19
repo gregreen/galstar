@@ -188,7 +188,7 @@ int main(int argc, char **argv)
 		par.SED = model.get_sed(Mr, FeH);
 		generate_test_data(m, rng, par, err);
 		
-		typename TStellarData::TMagnitudes mag(m, err);
+		TStellarData::TMagnitudes mag(m, err);
 		data.star.push_back(mag);
 		
 		gsl_rng_free(rng);
@@ -202,7 +202,7 @@ int main(int argc, char **argv)
 		for(unsigned int i=0; i<NBANDS; i++) { cin >> m[i]; }
 		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
 		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
-		typename TStellarData::TMagnitudes mag(m, err);
+		TStellarData::TMagnitudes mag(m, err);
 		data.star.push_back(mag);
 	}
 	

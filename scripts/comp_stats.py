@@ -55,7 +55,6 @@ def main():
 	parser.add_argument('--converged', action='store_true', help='Filter out nonconverged stars')
 	parser.add_argument('--normalize', action='store_true', help='Divide each error by standard deviation')
 	parser.add_argument('--output', type=str, help='Output plot filename')
-	parser.add_argument('--axisname', type=str, nargs=2, default=('\Delta \mu', '\Delta A_r'), help='x- and y-axis labels')
 	parser.add_argument('--axes', type=str, nargs=2, default=('DM', 'Ar'), help='Parameters to use as x- and y-axes (default: DM Ar)')
 	parser.add_argument('--title', type=str, help='Plot title (in LaTeX markup)')
 	if sys.argv[0] == 'python':

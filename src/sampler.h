@@ -165,7 +165,7 @@ struct MCMCParams {
 	//double mu_disk_arr[DM_SAMPLING];
 	TInterpolater *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
-	MCMCParams(double _l, double _b, typename TStellarData::TMagnitudes &mag, TModel &_model) 
+	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &mag, TModel &_model) 
 		: model(_model), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
 	{
 		update(mag);
@@ -208,7 +208,7 @@ struct MCMCParams {
 	
 	//inline unsigned int DM_index(double DM) { return (unsigned int)((DM-DM_min)/(DM_max-DM_min)*DM_SAMPLES + 0.5); }
 	
-	void update(typename TStellarData::TMagnitudes &mag) {
+	void update(TStellarData::TMagnitudes &mag) {
 		for(unsigned int i=0; i<NBANDS; i++) {
 			m[i] = mag.m[i];
 			err[i] = mag.err[i];
@@ -240,9 +240,9 @@ struct MCMCParams {
 
 double calc_logP(const double (&x)[4], MCMCParams &p);
 
-bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps);
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps);
 
-bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples);
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

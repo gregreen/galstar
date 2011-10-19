@@ -288,7 +288,7 @@ void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
 
-bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps=15000)
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps=15000)
 {
 	unsigned int N_threads = 4;		// # of parallel Normal Kernel couplers to run
 	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
@@ -311,8 +311,8 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 	
 	// Set run parameters
 	MCMCParams p(l, b, mag, model);
-	typename TNKC<4, MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
-	typename TNKC<4, MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
+	TNKC<4, MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
+	TNKC<4, MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
 	
 	unsigned int count;
 	for(unsigned int n=0; n<max_attempts; n++) {
@@ -353,7 +353,7 @@ bool sample_mcmc(TModel &model, double l, double b, typename TStellarData::TMagn
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, typename TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples = 150) {
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples = 150) {
 	unsigned int N_threads = 4;		// # of threads to divide work between
 	double Delta[4];
 	for(unsigned int i=0; i<4; i++) {

@@ -240,9 +240,9 @@ struct MCMCParams {
 
 double calc_logP(const double (&x)[4], MCMCParams &p);
 
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps);
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps, unsigned int N_threads);
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples);
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples, unsigned int N_threads);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -288,9 +288,9 @@ void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
 
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps=15000)
+// N_threads	 # of parallel Normal Kernel couplers to run
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
-	unsigned int N_threads = 4;		// # of parallel Normal Kernel couplers to run
 	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
 	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
@@ -353,8 +353,7 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples = 150) {
-	unsigned int N_threads = 4;		// # of threads to divide work between
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples = 150, unsigned int N_threads=4) {
 	double Delta[4];
 	for(unsigned int i=0; i<4; i++) {
 		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples;

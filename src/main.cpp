@@ -227,9 +227,9 @@ int main(int argc, char **argv)
 		TStats<4> stats;
 		bool converged;
 		if(brute_force) {
-			converged = sample_brute_force(model, l, b, *it, multibinner, stats, N_samples, N_threads);
+			converged = sample_brute_force(model, l, b, *it, data, multibinner, stats, N_samples, N_threads);
 		} else {
-			converged = sample_mcmc(model, l, b, *it, multibinner, stats, N_steps, N_threads);
+			converged = sample_mcmc(model, l, b, *it, data, multibinner, stats, N_steps, N_threads);
 		}
 		if(!converged) { N_nonconverged++; }
 		// Write out the marginalized posteriors

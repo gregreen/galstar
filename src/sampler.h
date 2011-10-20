@@ -14,6 +14,7 @@
 #include "NKC.h"
 #include "binner.h"
 #include "interpolater.h"
+#include "smoothsort.h"
 #include <astro/util.h>
 
 static const int NBANDS = 5;
@@ -115,13 +116,27 @@ struct TStellarData {
 	struct TMagnitudes {
 		double m[NBANDS];
 		double err[NBANDS];
+		double DM_est;		// Estimate of distance to star. Used in sorting stars.
 		
 		TMagnitudes() {}
+		
 		TMagnitudes(double (&_m)[NBANDS], double (&_err)[NBANDS]) {
 			for(unsigned int i=0; i<NBANDS; i++) {
 				m[i] = _m[i];
 				err[i] = _err[i];
 			}
+			DM_est = 0.;
+		}
+		
+		bool operator>(TMagnitudes& rhs) { return (rhs.DM_est > DM_est); }
+		
+		TMagnitudes& operator=(const TMagnitudes& rhs) {
+			for(unsigned int i=0; i<NBANDS; i++) {
+				m[i] = rhs.m[i];
+				err[i] = rhs.err[i];
+			}
+			DM_est = rhs.DM_est;
+			return *this;
 		}
 	};
 	
@@ -155,20 +170,24 @@ struct TStellarData {
 
 struct MCMCParams {
 	double l, b, cos_l, sin_l, cos_b, sin_b;
+	TStellarData &data;			// Contains stellar magnitudes
+	TModel &model;				// Contains galactic model information
+	sorted_ptr_arr<TStellarData::TMagnitudes> sorted_stars;
+	double DM_min, DM_max;			// Minimum and maximum distance moduli for which to precompute various priors
+	#define DM_SAMPLES 10000
+	
+	// These two parameters are only used when fitting one star at a time
 	double m[NBANDS];
 	double err[NBANDS];
-	TModel &model;
-	double DM_min, DM_max;
-	#define DM_SAMPLES 10000
-	//double log_dn_arr[DM_SAMPLING];
-	//double f_halo_arr[DM_SAMPLING];
-	//double mu_disk_arr[DM_SAMPLING];
+	
 	TInterpolater *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
-	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &mag, TModel &_model) 
-		: model(_model), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
+	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &_mag, TModel &_model, TStellarData &_data) 
+		: model(_model), data(_data), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
 	{
-		update(mag);
+		update(_mag);
+		
+		sorted_stars(_data.star);
 		
 		// Precompute trig functions
 		cos_l = cos(0.0174532925*l);
@@ -189,15 +208,6 @@ struct MCMCParams {
 			(*f_halo_arr)[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM_i);
 			(*mu_disk_arr)[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM_i);
 		}
-		/*
-		double dDM = (DM_max-DM_min)/DM_SAMPLES;
-		unsigned int i;
-		for(double DM=DM_min; DM<=DM_max+dDM/2.; DM+=dDM) {
-			i = DM_index(DM);
-			log_dn_arr[i] = model.log_dn(cos_l, sin_l, cos_b, sin_b, DM);
-			f_halo_arr[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM);
-			mu_disk_arr[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM);
-		}*/
 	}
 	
 	~MCMCParams() {
@@ -240,9 +250,9 @@ struct MCMCParams {
 
 double calc_logP(const double (&x)[4], MCMCParams &p);
 
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps, unsigned int N_threads);
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps, unsigned int N_threads);
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples, unsigned int N_threads);
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples, unsigned int N_threads);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

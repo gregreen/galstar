@@ -373,10 +373,6 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 		double prob;
 		for(unsigned int i=0; i<N_samples; i++) {
 			if(i % N_threads == thread_ID) {
-				#pragma omp critical (cout)
-				{
-					std::cout << "Thread " << thread_ID << " running sample " << i << std::endl;
-				}
 				x[0] = std_bin_min(0) + ((double)i + 0.5)*Delta[0];
 				for(unsigned j=0; j<N_samples; j++){
 					x[1] = std_bin_min(1) + ((double)j + 0.5)*Delta[1];

@@ -123,7 +123,7 @@ def main():
 	N = len(means[0])
 	
 	# Calculate differences and covariances
-	Delta = means[0] - means[1]
+	Delta = means[1] - means[0]
 	
 	for d in Delta:
 		print d
@@ -160,8 +160,12 @@ def main():
 	fig = plt.figure()
 	ax = fig.add_subplot(1,1,1)
 	param_name = ['\mu', 'A_r', 'M_r', 'Z']
-	ax.set_xlabel(r'$\Delta %s$' % param_name[axis_index[0]], fontsize=18)
-	ax.set_ylabel(r'$\Delta %s$' % param_name[axis_index[1]], fontsize=18)
+	if values.normalize:
+		ax.set_xlabel(r'$\Delta %s \, / \, \sigma_{%s}$' % (param_name[axis_index[0]], param_name[axis_index[0]]), fontsize=18)
+		ax.set_ylabel(r'$\Delta %s \, / \, \sigma_{%s}$' % (param_name[axis_index[1]], param_name[axis_index[1]]), fontsize=18)
+	else:
+		ax.set_xlabel(r'$\Delta %s$' % param_name[axis_index[0]], fontsize=18)
+		ax.set_ylabel(r'$\Delta %s$' % param_name[axis_index[1]], fontsize=18)
 	if values.title != None:
 		ax.set_title(r'$\mathrm{%s}$' % values.title.replace(' ','\ '), fontsize=22)
 	

@@ -227,7 +227,7 @@ inline double MCMCParams::log_p_FeH_fast(double DM, double FeH) {
 	double mu_D_poor = mu_D + 0.14;
 	double sigma_D_poor = 0.2;
 	P_tmp += 0.37 * (1-f_H) * exp(-(FeH-mu_D_poor)*(FeH-mu_D_poor)/(2.*sigma_D_poor*sigma_D_poor)) / (sqrttwopi*sigma_D_poor);
-	#undef sqrt2pi
+	#undef sqrttwopi
 	
 	return log(P_tmp);
 }
@@ -367,11 +367,16 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 	omp_set_num_threads(N_threads);
 	#pragma omp parallel
 	{
+		TStats stats_i(4);
 		unsigned int thread_ID = omp_get_thread_num();
 		double x[4];
 		double prob;
 		for(unsigned int i=0; i<N_samples; i++) {
 			if(i % N_threads == thread_ID) {
+				#pragma omp critical (cout)
+				{
+					std::cout << "Thread " << thread_ID << " running sample " << i << std::endl;
+				}
 				x[0] = std_bin_min(0) + ((double)i + 0.5)*Delta[0];
 				for(unsigned j=0; j<N_samples; j++){
 					x[1] = std_bin_min(1) + ((double)j + 0.5)*Delta[1];
@@ -380,19 +385,15 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 						for(unsigned int l=0; l<N_samples; l++) {
 							x[3] = std_bin_min(3) + ((double)l + 0.5)*Delta[3];
 							prob = exp(calc_logP(&(x[0]), 4, p));
-							#pragma omp critical (multibinner)
-							{
-								multibinner(x, prob);
-							}
-							#pragma omp critical (stats)
-							{
-								stats(x, prob*1.e6);
-							}
+							multibinner(x, prob);
+							stats_i(x, prob*1.e6);
 						}
 					}
 				}
 			}
 		}
+		#pragma omp critical (addstats)
+		stats += stats_i;
 	}
 	
 	

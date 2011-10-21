@@ -251,7 +251,11 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 // MCMC sampler
 //////////////////////////////////////////////////////////////////////////////////////
 
-// pdf for the MCMC routine
+double calc_logP_full(const double *const x, unsigned int N, MCMCParams &p) {
+	
+}
+
+// pdf for individual star
 inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	#define neginf -std::numeric_limits<double>::infinity()
 	double logP = 0.;

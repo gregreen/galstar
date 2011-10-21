@@ -172,7 +172,6 @@ struct MCMCParams {
 	double l, b, cos_l, sin_l, cos_b, sin_b;
 	TStellarData &data;			// Contains stellar magnitudes
 	TModel &model;				// Contains galactic model information
-	sorted_ptr_arr<TStellarData::TMagnitudes> sorted_stars;
 	double DM_min, DM_max;			// Minimum and maximum distance moduli for which to precompute various priors
 	#define DM_SAMPLES 10000
 	
@@ -186,8 +185,6 @@ struct MCMCParams {
 		: model(_model), data(_data), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
 	{
 		update(_mag);
-		
-		sorted_stars(_data.star);
 		
 		// Precompute trig functions
 		cos_l = cos(0.0174532925*l);

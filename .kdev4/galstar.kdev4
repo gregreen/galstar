@@ -20,13 +20,13 @@ Name=galstar run
 Type=Native Application
 
 [Launch][Launch Configuration 0][Data]
-Arguments=mcmcout.txt:DM,Ar --test
+Arguments=mcmcout.txt:DM,Ar --test --threads 1
 Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
 Dependency Action=Nothing
 EnvironmentGroup=default
 Executable=file:///home/greg/projects/galstar/build/galstar
 External Terminal=gnome-terminal -e %exe
-Project Target=
+Project Target=galstar,galstar
 Use External Terminal=false
 Working Directory=file:///home/greg/projects/galstar
 isExecutable=true

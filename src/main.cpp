@@ -1,5 +1,3 @@
-// TODO: Do general cleanup of code, eliminating unused parts
-
 #include "galstar_config.h"
 
 #include "sampler.h"
@@ -224,7 +222,7 @@ int main(int argc, char **argv)
 		// Calculate posterior for current star
 		std::cout << "=========================================" << std::endl;
 		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
-		TStats<4> stats;
+		TStats stats(4);
 		bool converged;
 		if(brute_force) {
 			converged = sample_brute_force(model, l, b, *it, data, multibinner, stats, N_samples, N_threads);

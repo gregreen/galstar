@@ -251,9 +251,8 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 // MCMC sampler
 //////////////////////////////////////////////////////////////////////////////////////
 
-// TODO: Add in thick disk and halo terms to log_dn
 // pdf for the MCMC routine
-inline double calc_logP(const double (&x)[4], MCMCParams &p) {
+inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	#define neginf -std::numeric_limits<double>::infinity()
 	double logP = 0.;
 	
@@ -281,7 +280,7 @@ inline double calc_logP(const double (&x)[4], MCMCParams &p) {
 }
 
 // Generates a random state, with a flat distribution in each parameter
-void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
+void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
 	x_0[_Ar] = gsl_ran_flat(r, 0.1, 2.9);
 	x_0[_Mr] = gsl_ran_flat(r, -0.9, 27.9);
@@ -289,7 +288,7 @@ void ran_state(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
 }
 
 // N_threads	 # of parallel Normal Kernel couplers to run
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
@@ -311,12 +310,12 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	
 	// Set run parameters
 	MCMCParams p(l, b, mag, model, data);
-	TNKC<4, MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
-	TNKC<4, MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
+	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
+	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
 	
 	unsigned int count;
 	for(unsigned int n=0; n<max_attempts; n++) {
-		TParallelNKC<4, MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, size, scale_0, p, multibinner, N_threads);
+		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4, size, scale_0, p, multibinner, N_threads);
 		
 		// Run Markov chains
 		sampler.burn_in(100, 50*size, 0.18, false);
@@ -348,12 +347,12 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	// Print stats and run time
 	//sampler.print_stats();
 	if(!convergence) { std::cout << std::endl << "Did not converge." << std::endl; }
-	std::cout << std::endl << "Time elapsed for " << stats.N_items_tot/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	std::cout << std::endl << "Time elapsed for " << stats.get_N_items()/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples = 150, unsigned int N_threads=4) {
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples = 150, unsigned int N_threads=4) {
 	double Delta[4];
 	for(unsigned int i=0; i<4; i++) {
 		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples;
@@ -380,7 +379,7 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 						x[2] = std_bin_min(2) + ((double)k + 0.5)*Delta[2];
 						for(unsigned int l=0; l<N_samples; l++) {
 							x[3] = std_bin_min(3) + ((double)l + 0.5)*Delta[3];
-							prob = exp(calc_logP(x, p));
+							prob = exp(calc_logP(&(x[0]), 4, p));
 							#pragma omp critical (multibinner)
 							{
 								multibinner(x, prob);
@@ -406,46 +405,4 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 	std::cout << std::endl << "Time elapsed for " << N_samples*N_samples*N_samples*N_samples << " samples: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return true;
-}
-
-
-//////////////////////////////////////////////////////////////////////////////////////
-// Sample entire line-of-sight
-//////////////////////////////////////////////////////////////////////////////////////
-
-// TODO: Add in thick disk and halo terms to log_dn
-// pdf for the MCMC routine
-inline double log_P_individual(const double (&x)[4], MCMCParams &p) {
-	#define neginf -std::numeric_limits<double>::infinity()
-	double logP = 0.;
-	
-	// P(Ar|G): Flat prior for Ar>0
-	if(x[_Ar] < 0.) { return neginf; }
-	
-	// P(Mr|G) from luminosity function
-	logP += p.model.lf(x[_Mr]);
-	
-	// P(DM|G) from model of galaxy
-	if(x[_DM] < 0.) { return neginf; } else { logP += p.log_dn_interp(x[_DM]); }
-	
-	// P(FeH|DM,G) from Ivezich et al (2008)
-	logP += p.log_p_FeH_fast(x[_DM], x[_FeH]);
-	
-	// P(g,r,i,z,y|Ar,Mr,DM) from model spectra
-	double M[NBANDS];
-	FOR(0, NBANDS) { M[i] = p.m[i] - x[_DM] - x[_Ar]*p.model.Acoef[i]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
-	TSED* closest_sed = NULL;
-	p.model.get_sed_inline(&closest_sed, x[_Mr], x[_FeH]);			// Retrieve template spectrum
-	if(closest_sed == NULL) { return neginf; } else { logP += logL_SED(M, p.err, *closest_sed); }
-	
-	#undef neginf
-	return logP;
-}
-
-// Generates a random state, with a flat distribution in each parameter
-void ran_state_total(double (&x_0)[4], gsl_rng *r, MCMCParams &p) {
-	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
-	x_0[_Ar] = gsl_ran_flat(r, 0.1, 2.9);
-	x_0[_Mr] = gsl_ran_flat(r, -0.9, 27.9);
-	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }

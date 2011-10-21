@@ -11,8 +11,8 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 
-#include "NKC.h"
 #include "binner.h"
+#include "NKC.h"
 #include "interpolater.h"
 #include "smoothsort.h"
 #include <astro/util.h>
@@ -248,11 +248,11 @@ struct MCMCParams {
 	#undef DM_SAMPLES
 };
 
-double calc_logP(const double (&x)[4], MCMCParams &p);
+double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
 
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_steps, unsigned int N_threads);
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps, unsigned int N_threads);
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats<4> &stats, unsigned int N_samples, unsigned int N_threads);
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples, unsigned int N_threads);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

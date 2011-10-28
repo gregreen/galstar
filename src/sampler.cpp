@@ -252,6 +252,10 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 //////////////////////////////////////////////////////////////////////////////////////
 
 double calc_logP_full(const double *const x, unsigned int N, MCMCParams &p) {
+	return 1;
+}
+
+double permutation_likelihood(const double *const x, unsigned int N, MCMCParams &p) {
 	
 }
 
@@ -356,7 +360,7 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples = 150, unsigned int N_threads=4) {
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {
 	double Delta[4];
 	for(unsigned int i=0; i<4; i++) {
 		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples;

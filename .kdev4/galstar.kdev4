@@ -34,3 +34,6 @@ isExecutable=true
 [MakeBuilder]
 Default Make Environment Profile=0
 Number Of Jobs=1
+
+[Project]
+VersionControlSupport=kdevgit

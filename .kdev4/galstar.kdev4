@@ -11,7 +11,7 @@ CurrentInstallDir=file:///home/greg/projects/galstar/staging
 ProjectRootRelative=./
 
 [Launch]
-Launch Configurations=Launch Configuration 0
+Launch Configurations=Launch Configuration 0,Launch Configuration 1
 
 [Launch][Launch Configuration 0]
 Configured Launch Modes=execute
@@ -30,6 +30,24 @@ Project Target=galstar,galstar
 Use External Terminal=false
 Working Directory=file:///home/greg/projects/galstar
 isExecutable=true
+
+[Launch][Launch Configuration 1]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=los
+Type=Native Application
+
+[Launch][Launch Configuration 1][Data]
+Arguments=los_test:DM,Ar --los --datafile ../test_input/sky_3.in --threads 1
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=galstar,galstar
+Use External Terminal=false
+Working Directory=
+isExecutable=false
 
 [MakeBuilder]
 Default Make Environment Profile=0

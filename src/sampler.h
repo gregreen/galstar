@@ -10,6 +10,8 @@
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_sf_gamma.h>
 
 #include "binner.h"
 #include "NKC.h"
@@ -31,15 +33,18 @@ struct TLF	// the luminosity function
 {
 	double Mr0, dMr;
 	std::vector<double> lf;
+	TInterpolater *lf_interp;
 
-	TLF(const std::string &fn) { load(fn); }
-
-	double operator()(double Mr) const	// return the LF at position Mr (nearest neighbor interp.)
+	TLF(const std::string &fn) : lf_interp(NULL) { load(fn); }
+	~TLF() { delete lf_interp; }
+	
+	double operator()(double Mr) const	// return the LF at position Mr (linear interpolation)
 	{
-		int idx = (int)floor((Mr - Mr0) / dMr + 0.5);
+		return (*lf_interp)(Mr);
+		/*int idx = (int)floor((Mr - Mr0) / dMr + 0.5);
 		if(idx < 0) { return lf.front(); }
 		if(idx >= lf.size()) { return lf.back(); }
-		return lf[idx];
+		return lf[idx];*/
 	}
 
 	void load(const std::string &fn);
@@ -245,10 +250,17 @@ struct MCMCParams {
 	#undef DM_SAMPLES
 };
 
+// Functions for line-of-sight calculations
+void ran_state_los(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
+double calc_logP_los(const double *const x, unsigned int N, MCMCParams &p);
+double log_prior(const double *const x, unsigned int N, MCMCParams &p);
+double log_permutation_likelihood(const double *const x, unsigned int N, MCMCParams &p, gsl_permutation *data_order);
+bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps, unsigned int N_threads);
+
+// Functions for individual star
+void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-
 bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps, unsigned int N_threads);
-
 bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples, unsigned int N_threads);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////

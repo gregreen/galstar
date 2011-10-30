@@ -103,6 +103,7 @@ int main(int argc, char **argv)
 	string datafn("NONE");
 	string statsfn("NONE");
 	bool brute_force = false;
+	bool los = false;
 	unsigned int N_steps = 15000;
 	unsigned int N_samples = 150;
 	unsigned int N_threads = 4;
@@ -126,6 +127,7 @@ int main(int argc, char **argv)
 		("datafile", po::value<string>(&datafn), "Stellar magnitudes and errors file")
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
 		("brute", "Use brute-force sampling")
+		("los", "Sample entire line of sight at once")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
@@ -139,8 +141,8 @@ int main(int argc, char **argv)
 	
 	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
 	test = vm.count("test");
-	
 	if(vm.count("brute")) { brute_force = true; }
+	if(vm.count("los")) { los = true; }
 	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
@@ -216,60 +218,67 @@ int main(int argc, char **argv)
 	
 	// Run sampler ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//std::cout << data.star.size() << std::endl;
-	unsigned int count = 0;
-	unsigned int N_nonconverged = 0;
-	for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
-		// Calculate posterior for current star
-		std::cout << "=========================================" << std::endl;
-		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
-		TStats stats(4);
+	if(los) {
+		unsigned int N_stars = data.star.size();
+		TStats stats(4*N_stars);
 		bool converged;
-		if(brute_force) {
-			converged = sample_brute_force(model, l, b, *it, data, multibinner, stats, N_samples, N_threads);
-		} else {
-			converged = sample_mcmc(model, l, b, *it, data, multibinner, stats, N_steps, N_threads);
-		}
-		if(!converged) { N_nonconverged++; }
-		// Write out the marginalized posteriors
-		for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
-			stringstream outfn("");
-			outfn << output_fns.at(i) << "_" << count << ".txt";
-			multibinner.get_binner(i)->write_to_file(outfn.str());
-		}
-		// Write out summary of statistics
-		if(statsfn != "NONE") {
-			bool success = true;
-			stringstream outfn("");
-			outfn << statsfn << "_" << count << ".dat";				// Determine filename
-			std::fstream f;
-			f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);		// Write whether the fit converged as first byte
-			f.write(reinterpret_cast<char*>(&converged), sizeof(converged));
-			// Write max. likelihoods
-			double ML[2];
-			unsigned int N_binners = multibinner.get_num_binners();
-			f.write(reinterpret_cast<char*>(&N_binners), sizeof(N_binners));	// Write # of max. likelihoods that follow
-			for(unsigned int i=0; i<N_binners; i++) {
-				TBinner2D<4> *binner = multibinner.get_binner(i);
-				binner->get_ML(ML);
-				for(unsigned int k=0; k<2; k++) {
-					f.write(reinterpret_cast<char*>(&(binner->bin_dim[k])), sizeof(unsigned int));	// Write coordinate index
-					f.write(reinterpret_cast<char*>(&(ML[k])), sizeof(double));			// Write position of max. likelihood for this coord.
-				}
-			}
-			// Write means and covariance
-			if(!f) {
-				f.close();
-				success = false;
+		converged = sample_mcmc_los(model, l, b, *(data.star.begin()), data, multibinner, stats, N_steps, N_threads);
+	} else {
+		unsigned int count = 0;
+		unsigned int N_nonconverged = 0;
+		for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
+			// Calculate posterior for current star
+			std::cout << "=========================================" << std::endl;
+			std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
+			TStats stats(4);
+			bool converged;
+			if(brute_force) {
+				converged = sample_brute_force(model, l, b, *it, data, multibinner, stats, N_samples, N_threads);
 			} else {
-				f.close();
-				success = stats.write_binary(outfn.str(), std::ios::app);
+				converged = sample_mcmc(model, l, b, *it, data, multibinner, stats, N_steps, N_threads);
 			}
-			if(!success) { std::cerr << "# Could not write " << outfn.str() << std::endl; }
+			if(!converged) { N_nonconverged++; }
+			// Write out the marginalized posteriors
+			for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+				stringstream outfn("");
+				outfn << output_fns.at(i) << "_" << count << ".txt";
+				multibinner.get_binner(i)->write_to_file(outfn.str());
+			}
+			// Write out summary of statistics
+			if(statsfn != "NONE") {
+				bool success = true;
+				stringstream outfn("");
+				outfn << statsfn << "_" << count << ".dat";				// Determine filename
+				std::fstream f;
+				f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);		// Write whether the fit converged as first byte
+				f.write(reinterpret_cast<char*>(&converged), sizeof(converged));
+				// Write max. likelihoods
+				double ML[2];
+				unsigned int N_binners = multibinner.get_num_binners();
+				f.write(reinterpret_cast<char*>(&N_binners), sizeof(N_binners));	// Write # of max. likelihoods that follow
+				for(unsigned int i=0; i<N_binners; i++) {
+					TBinner2D<4> *binner = multibinner.get_binner(i);
+					binner->get_ML(ML);
+					for(unsigned int k=0; k<2; k++) {
+						f.write(reinterpret_cast<char*>(&(binner->bin_dim[k])), sizeof(unsigned int));	// Write coordinate index
+						f.write(reinterpret_cast<char*>(&(ML[k])), sizeof(double));			// Write position of max. likelihood for this coord.
+					}
+				}
+				// Write means and covariance
+				if(!f) {
+					f.close();
+					success = false;
+				} else {
+					f.close();
+					success = stats.write_binary(outfn.str(), std::ios::app);
+				}
+				if(!success) { std::cerr << "# Could not write " << outfn.str() << std::endl; }
+			}
+			multibinner.clear();
 		}
-		multibinner.clear();
+		
+		std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;
 	}
 	
-	std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;
-
 	return 0;
 }

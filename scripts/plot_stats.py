@@ -111,6 +111,7 @@ def main():
 	parser.add_argument('--filterr', type=float, help='Filter out stars with errors greater than specified amount')
 	parser.add_argument('--filtmag', type=float, help='Filter out stars with magnitude greater than specified amount')
 	parser.add_argument('--galfast_comp', type=str, help='Galfast fits file')
+	parser.add_argument('--galfast_only', action='store_true', help='Plot only galfast catalog')
 	parser.add_argument('--output', type=str, help='Output plot filename')
 	parser.add_argument('--errorbars', action='store_true', help='Show error bars on plots')
 	parser.add_argument('--useML', type=int, default=-1, help='Index of max. likelihood in stats file to use')
@@ -200,6 +201,24 @@ def main():
 		ax.set_ylabel(r'$A_r$', fontsize=18)
 		ax.set_title(r'$\mathrm{Scatter\ Plot\ of\ } ( \mu , A_r )$', fontsize=22)
 		ax.set_ylim(0., ax.get_ylim()[1])
+	elif values.galfast_only:	# Only plot galfast input
+		fig = plt.figure()
+		ax = fig.add_subplot(1,1,1)
+		xerr, yerr = np.empty(N, dtype=float), np.empty(N, dtype=float)
+		for i in range(N):
+			xerr[i] = sqrt(cov[i,DM,DM])
+			yerr[i] = sqrt(cov[i,Ar,Ar])
+		params = params[idx]				# Apply same filter to galfast catalog as to galstar output
+		x, y = None, None
+		x = params[:,DM]
+		y = params[:,Ar]
+		if values.errorbars:
+			ax.errorbar(x, y, xerr, yerr, linestyle='None')
+		else:
+			ax.plot(x, y, '.', linestyle='None', markersize=1)
+		ax.set_xlabel(r'$\mu$', fontsize=18)
+		ax.set_ylabel(r'$A_r$', fontsize=18)
+		ax.set_title(r'$\mathrm{Galfast\ Catalog}$', fontsize=22)
 	else:	# Compare with galfast input
 		fig = plt.figure()
 		ax = fig.add_subplot(1,1,1)

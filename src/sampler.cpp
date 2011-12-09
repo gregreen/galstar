@@ -155,7 +155,8 @@ inline double TModel::f_halo(double cos_l, double sin_l, double cos_b, double si
 	double R = sqrt(X*X + Y*Y);
 	
 	double rho_halo_tmp = rho_halo(R,Z);
-	double f_h_tmp = rho_halo_tmp/(rho_disk(R,Z)+rho_halo_tmp);
+	double rho_disk_tmp = rho_disk(R,Z);
+	double f_h_tmp = rho_halo_tmp/(rho_disk_tmp+rho_halo_tmp);
 	
 	return f_h_tmp;
 }
@@ -167,9 +168,9 @@ inline double TModel::mu_disk(double cos_l, double sin_l, double cos_b, double s
 	computeCartesianPositions(X, Y, Z, cos_l, sin_l, cos_b, sin_b, D);
 	
 	// TODO: Move some of these parameters to the TModel object and allow them to be set from the commandline
-	double mu_inf = -0.78;
-	double delta_mu = 0.35;
-	double H_mu = 1000.;
+	double mu_inf = -0.82;
+	double delta_mu = 0.55;
+	double H_mu = 500.;
 	return mu_inf + delta_mu*exp(-fabs(Z+Z0)/H_mu);
 }
 
@@ -210,7 +211,7 @@ inline double TModel::log_p_FeH(double cos_l, double sin_l, double cos_b, double
 	// Metal-poor disk
 	double mu_D = mu_disk(cos_l, sin_l, cos_b, sin_b, DM) - 0.067;
 	double sigma_D = 0.2;
-	P_tmp += 0.67 * (1-f_H) * exp(-sqr(FeH-mu_D)/(2.*sigma_D*sigma_D)) / (sqrttwopi*sigma_D);
+	P_tmp += 0.63 * (1-f_H) * exp(-sqr(FeH-mu_D)/(2.*sigma_D*sigma_D)) / (sqrttwopi*sigma_D);
 	
 	// Metal-rich disk
 	double mu_D_poor = mu_D + 0.14;
@@ -487,17 +488,22 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	#define neginf -std::numeric_limits<double>::infinity()
 	double logP = 0.;
 	
-	// P(Ar|G): Flat prior for Ar>0
-	if(x[_Ar] < 0.) { return neginf; }
+	//double x_tmp[4] = {x[0],x[1],x[2],x[3]};
+	
+	// P(Ar|G): Flat prior for Ar > 0. Don't allow DM < 0
+	if((x[_Ar] < 0.) || (x[_DM] < 0.)) { return neginf; }
 	
 	// P(Mr|G) from luminosity function
-	logP += p.model.lf(x[_Mr]);
+	double loglf_tmp = p.model.lf(x[_Mr]);
+	logP += loglf_tmp;
 	
 	// P(DM|G) from model of galaxy
-	if(x[_DM] < 0.) { return neginf; } //else { logP += p.log_dn_interp(x[_DM]); }
+	double logdn_tmp = p.log_dn_interp(x[_DM]);
+	logP += logdn_tmp;
 	
 	// P(FeH|DM,G) from Ivezich et al (2008)
-	logP += p.log_p_FeH_fast(x[_DM], x[_FeH]);
+	double logpFeH_tmp = p.log_p_FeH_fast(x[_DM], x[_FeH]);
+	logP += logpFeH_tmp;
 	
 	// P(g,r,i,z,y|Ar,Mr,DM) from model spectra
 	double M[NBANDS];

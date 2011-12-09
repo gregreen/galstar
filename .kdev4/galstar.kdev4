@@ -6,12 +6,12 @@ BuildDirs=/home/greg/projects/galstar/build
 CMakeDir=/usr/share/cmake-2.8/Modules
 Current CMake Binary=file:///usr/bin/cmake
 CurrentBuildDir=file:///home/greg/projects/galstar/build
-CurrentBuildType=Debug
+CurrentBuildType=Release
 CurrentInstallDir=file:///home/greg/projects/galstar/staging
 ProjectRootRelative=./
 
 [Launch]
-Launch Configurations=Launch Configuration 0,Launch Configuration 1
+Launch Configurations=Launch Configuration 0,Launch Configuration 1,Launch Configuration 2
 
 [Launch][Launch Configuration 0]
 Configured Launch Modes=execute
@@ -39,6 +39,24 @@ Type=Native Application
 
 [Launch][Launch Configuration 1][Data]
 Arguments=los_test:DM,Ar --los --datafile ../test_input/sky_3.in --threads 1
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+EnvironmentGroup=default
+Executable=
+External Terminal=konsole --noclose --workdir %workdir -e %exe
+Project Target=galstar,galstar
+Use External Terminal=false
+Working Directory=
+isExecutable=false
+
+[Launch][Launch Configuration 2]
+Configured Launch Modes=execute
+Configured Launchers=nativeAppLauncher
+Name=galstar debug
+Type=Native Application
+
+[Launch][Launch Configuration 2][Data]
+Arguments=mcmcout.txt:DM,Ar --datafile ../test_input/sky_3.in --threads 1
 Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
 Dependency Action=Nothing
 EnvironmentGroup=default

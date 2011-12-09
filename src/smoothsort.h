@@ -316,7 +316,7 @@ struct sorted_ptr_arr {
 	void operator()(T* data, size_t N) { assign(data, N); sort(); }
 	
 	template<class TContainer>
-	void operator()(TContainer &data) { assign<TContainer>(data); sort(); }
+	void operator()(TContainer &data) { assign(data); sort(); }
 	
 	void assign(T* data, size_t _N) {
 		if(ptr_arr != NULL) { delete[] ptr_arr; }

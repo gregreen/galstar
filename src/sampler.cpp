@@ -40,13 +40,16 @@ void TLF::load(const std::string &fn)
 
 		std::istringstream ss(line);
 		ss >> Mr >> Phi;
-
+		
 			if(dMr == -1) { Mr0 = Mr; dMr = 0; }
 		else	if(dMr == 0)  { dMr = Mr - Mr0; }
-
+		
 		lf.push_back(log(Phi));
 	}
-
+	
+	lf_interp = new TLinearInterp(Mr0, Mr0 + dMr*(lf.size()-1), lf.size());
+	for(unsigned int i=0; i<lf.size(); i++) { (*lf_interp)[i] = lf[i]; }
+	
 	std::cerr << "# Loaded Phi(" << Mr0 << " <= Mr <= " <<  Mr0 + dMr*(lf.size()-1) << ") LF from " << fn << "\n";
 }
 
@@ -55,10 +58,7 @@ void TLF::load(const std::string &fn)
 //////////////////////////////////////////////////////////////////////////////////////
 
 TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
-	:
-	lf(lf_fn),
-	DM_range(5., 20., .02), Ar_range(0.),
-	Mr_range(ALL), FeH_range(ALL)
+	: lf(lf_fn), DM_range(5., 20., .02), Ar_range(0.), Mr_range(ALL), FeH_range(ALL), sed_interp(NULL)
 {
 	unsigned int Mr_index, FeH_index;
 	dFeH = 0.05;
@@ -67,6 +67,8 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 	Mr_min = -1.00;
 	N_FeH = 51;
 	N_Mr = 2901;
+	FeH_max = FeH_min + dFeH*(N_FeH-1);
+	Mr_max = Mr_min + dMr*(N_Mr-1);
 	seds = new TSED[N_FeH*N_Mr];
 	
 	// Load the SEDs
@@ -94,6 +96,13 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 		sed->v[0] += sed->v[1];			// Mu
 		sed->v[3]  = sed->v[2] - sed->v[3];	// Mi
 		sed->v[4]  = sed->v[3] - sed->v[4];	// Mz
+	}
+	
+	sed_interp = new TBilinearInterp<TSED>(Mr_min, Mr_max, N_Mr, FeH_min, FeH_max, N_FeH);
+	unsigned int idx;
+	for(unsigned int i=0; i<N_Mr*N_FeH; i++) {
+		idx = sed_interp->get_index(seds[i].Mr, seds[i].FeH);
+		(*sed_interp)[idx] = seds[i];
 	}
 	
 	std::cerr << "# Loaded " << N_FeH*N_Mr << " SEDs from " << seds_fn << "\n";
@@ -146,7 +155,8 @@ inline double TModel::f_halo(double cos_l, double sin_l, double cos_b, double si
 	double R = sqrt(X*X + Y*Y);
 	
 	double rho_halo_tmp = rho_halo(R,Z);
-	double f_h_tmp = rho_halo_tmp/(rho_disk(R,Z)+rho_halo_tmp);
+	double rho_disk_tmp = rho_disk(R,Z);
+	double f_h_tmp = rho_halo_tmp/(rho_disk_tmp+rho_halo_tmp);
 	
 	return f_h_tmp;
 }
@@ -158,14 +168,14 @@ inline double TModel::mu_disk(double cos_l, double sin_l, double cos_b, double s
 	computeCartesianPositions(X, Y, Z, cos_l, sin_l, cos_b, sin_b, D);
 	
 	// TODO: Move some of these parameters to the TModel object and allow them to be set from the commandline
-	double mu_inf = -0.78;
-	double delta_mu = 0.35;
-	double H_mu = 1000.;
+	double mu_inf = -0.82;
+	double delta_mu = 0.55;
+	double H_mu = 500.;
 	return mu_inf + delta_mu*exp(-fabs(Z+Z0)/H_mu);
 }
 
 
-TSED* TModel::get_sed(const double Mr, const double FeH) const {
+TSED* TModel::get_sed(double Mr, double FeH) const {
 	unsigned int Mr_index = (unsigned int)((Mr-Mr_min)/dMr + 0.5);
 	unsigned int FeH_index = (unsigned int)((FeH-FeH_min)/dFeH + 0.5);
 	if((Mr_index < 0) || (Mr_index >= N_Mr) || (FeH_index < 0) || (FeH_index >= N_FeH)) { return NULL; }
@@ -175,7 +185,11 @@ TSED* TModel::get_sed(const double Mr, const double FeH) const {
 inline void TModel::get_sed_inline(TSED** sed_out, const double Mr, const double FeH) const {
 	unsigned int Mr_index = (unsigned int)((Mr-Mr_min)/dMr + 0.5);
 	unsigned int FeH_index = (unsigned int)((FeH-FeH_min)/dFeH + 0.5);
-	if((Mr_index > 0) && (Mr_index < N_Mr) && (FeH_index > 0) && (FeH_index < N_FeH)) { *sed_out = &seds[N_Mr*FeH_index+Mr_index]; }
+	if((Mr_index > 0) && (Mr_index < N_Mr) && (FeH_index > 0) && (FeH_index < N_FeH)) {
+		*sed_out = &seds[N_Mr*FeH_index+Mr_index];
+	} else {
+		*sed_out = NULL;
+	}
 }
 
 inline unsigned int TModel::sed_index(const double Mr, const double FeH) const {
@@ -197,7 +211,7 @@ inline double TModel::log_p_FeH(double cos_l, double sin_l, double cos_b, double
 	// Metal-poor disk
 	double mu_D = mu_disk(cos_l, sin_l, cos_b, sin_b, DM) - 0.067;
 	double sigma_D = 0.2;
-	P_tmp += 0.67 * (1-f_H) * exp(-sqr(FeH-mu_D)/(2.*sigma_D*sigma_D)) / (sqrttwopi*sigma_D);
+	P_tmp += 0.63 * (1-f_H) * exp(-sqr(FeH-mu_D)/(2.*sigma_D*sigma_D)) / (sqrttwopi*sigma_D);
 	
 	// Metal-rich disk
 	double mu_D_poor = mu_D + 0.14;
@@ -247,54 +261,138 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 	return 0.5*logLtotal;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 //////////////////////////////////////////////////////////////////////////////////////
 // MCMC sampler
 //////////////////////////////////////////////////////////////////////////////////////
 
-double calc_logP_full(const double *const x, unsigned int N, MCMCParams &p) {
-	
+
+// Generates a random state for an entire line of sight, with a flat distribution in each parameter
+void ran_state_los(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
+	unsigned int N_stars = N/4;
+	double dDM_max = 18. / (double)N_stars;
+	double dAr_max = 5. / (double)N_stars;
+	for(unsigned int i=0; i<N_stars; i++) {
+		x_0[4*i+_DM] = gsl_ran_flat(r, 0.05, dDM_max);
+		x_0[4*i+_Ar] = gsl_ran_flat(r, 0.05, dAr_max);
+		x_0[4*i+_Mr] = gsl_ran_flat(r, -0.9, 27.9);
+		x_0[4*i+_FeH] = gsl_ran_flat(r, -2.4, -0.1);
+	}
+	x_0[_DM] += 5.1;	// Lowest reasonable DM
 }
 
-// pdf for individual star
-inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
-	#define neginf -std::numeric_limits<double>::infinity()
-	double logP = 0.;
+// Unnormalized posterior for entire line of sight:
+// P(DM,Ar,FeH,Mr|g,r,i,z,y,G)
+double calc_logP_los(const double *const x, unsigned int N, MCMCParams &p) {
+	unsigned int N_stars = N/4;
+	gsl_permutation *data_order = gsl_permutation_calloc(N_stars);
 	
-	// P(Ar|G): Flat prior for Ar>0
-	if(x[_Ar] < 0.) { return neginf; }
+	double logP = log_prior(x, N, p);
+	if(logP == -std::numeric_limits<double>::infinity()) { return logP; }
 	
-	// P(Mr|G) from luminosity function
-	logP += p.model.lf(x[_Mr]);
+	unsigned int N_permutations = gsl_sf_fact(N_stars);
+	double low_cutoff = -std::numeric_limits<double>::infinity() / N_stars;
+	double logL_i;
+	for(unsigned int i=0; i<N_permutations; i++) {
+		logL_i = log_permutation_likelihood(x, N, p, data_order);
+		if(logL_i < low_cutoff) { logP += low_cutoff; } else { logP += logL_i; }
+		gsl_permutation_next(data_order);
+	}
 	
-	// P(DM|G) from model of galaxy
-	if(x[_DM] < 0.) { return neginf; } else { logP += p.log_dn_interp(x[_DM]); }
+	gsl_permutation_free(data_order);
 	
-	// P(FeH|DM,G) from Ivezich et al (2008)
-	logP += p.log_p_FeH_fast(x[_DM], x[_FeH]);
-	
-	// P(g,r,i,z,y|Ar,Mr,DM) from model spectra
-	double M[NBANDS];
-	FOR(0, NBANDS) { M[i] = p.m[i] - x[_DM] - x[_Ar]*p.model.Acoef[i]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
-	TSED* closest_sed = NULL;
-	p.model.get_sed_inline(&closest_sed, x[_Mr], x[_FeH]);			// Retrieve template spectrum
-	if(closest_sed == NULL) { return neginf; } else { logP += logL_SED(M, p.err, *closest_sed); }
-	
-	#undef neginf
 	return logP;
 }
 
-// Generates a random state, with a flat distribution in each parameter
-void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
-	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
-	x_0[_Ar] = gsl_ran_flat(r, 0.1, 2.9);
-	x_0[_Mr] = gsl_ran_flat(r, -0.9, 27.9);
-	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
+// P(DM,Ar,FeH,Mr|G)
+double log_prior(const double *const x, unsigned int N, MCMCParams &p) {
+	unsigned int N_stars = N/4;
+	
+	// Check that DM, Ar are in increasing order
+	for(unsigned int i=0; i<N_stars; i++) {
+		// P(Ar|G) = 0 for Ar < 0, stars are ordered by increasing reddening
+		if(x[4*i+_Ar] < 0.) { return -std::numeric_limits<double>::infinity(); }
+		// P(DM|G) = 0 for DM < 0, stars are ordered by increasing distance
+		if(x[4*i+_DM] < 0.) { return -std::numeric_limits<double>::infinity(); }
+		// Mr and FeH must be within the range contained in the SED template library
+		if((x[_Mr] < p.model.Mr_min) || (x[_Mr] > p.model.Mr_max) || (x[_FeH] < p.model.FeH_min) || (x[_FeH] > p.model.FeH_max)) { return -std::numeric_limits<double>::infinity(); }
+	}
+	
+	// Sum priors for each star
+	double DM = 0.;
+	double Ar = 0.;
+	double logP_0;
+	double logP_i;
+	double tmp_sum = 0.;
+	for(unsigned int i=0; i<N_stars; i++) {
+		DM += x[4*i+_DM];
+		Ar += x[4*i+_Ar];
+		
+		logP_i = 0;
+		// P(FeH|DM,G) from Ivezich et al (2008)
+		logP_i += p.log_p_FeH_fast(DM, x[4*i+_FeH]);
+		// P(DM|G) from model of galaxy
+		logP_i += p.log_dn_interp(DM);
+		// P(Mr|G) from luminosity function
+		logP_i += p.model.lf(x[4*i+_Mr]);
+		
+		if(i == 0) { logP_0 = logP_i; } else { tmp_sum += exp(logP_i-logP_0); }
+	}
+	
+	return logP_0 + log(tmp_sum);
+	
+	return 0.;
 }
 
+// P(g,r,i,z,y|Ar,Mr,DM) from model spectra for a given permutation
+double log_permutation_likelihood(const double *const x, unsigned int N, MCMCParams &p, gsl_permutation *data_order) {
+	double logL = 0.;
+	
+	double M[NBANDS];		// Absolute magnitudes
+	//TSED* closest_sed = NULL;	// Closest match in SED template library
+	TSED sed_bilin_interp;
+	
+	unsigned int N_stars = N/4;
+	TStellarData::TMagnitudes *mag = NULL;
+	
+	double DM = 0.;
+	double Ar = 0.;
+	for(unsigned int i=0; i<N_stars; i++) {
+		DM += x[4*i+_DM];
+		Ar += x[4*i+_Ar];
+		unsigned int idx = gsl_permutation_get(data_order, i);
+		mag = &p.data[gsl_permutation_get(data_order, i)];					// Get ith star in the given permutation
+		for(unsigned int k=0; k<NBANDS; k++) { M[k] = mag->m[k] - DM - Ar*p.model.Acoef[k]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
+		TSED sed_bilin_interp = (*p.model.sed_interp)(x[_Mr], x[_FeH]);
+		double logL_i = logL_SED(M, p.err, sed_bilin_interp);
+		logL += logL_SED(M, p.err, sed_bilin_interp);						// Update log likelihood from difference between absolute magnitudes and template SED magnitudes
+	}
+	
+	if(logL > -100.) {
+		#pragma omp critical (cout)
+		std::cout << x[_DM] << "\t" << x[_Ar] << "\t" << x[_Mr] << "\t" << x[_FeH] << "\t" << logL << std::endl;
+	}
+	
+	return logL;
+}
+
+// TODO: Eliminate dependence on <mag>
 // N_threads	 # of parallel Normal Kernel couplers to run
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
-	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
+	unsigned int size = 20;			// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
 	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
 	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
@@ -305,21 +403,26 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	timespec t_start, t_end;
 	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
 	
+	unsigned int N_stars = data.star.size();
+	
 	// Set the initial step size for the MCMC run
-	double scale_0[4];
-	scale_0[_DM] = 1.;
-	scale_0[_Ar] = 0.2;
-	scale_0[_Mr] = 1.;
-	scale_0[_FeH] = 0.2;
+	double *scale_0 = new double[4*N_stars];
+	double scale_norm = 100*sqrt((double)N_stars);
+	for(unsigned int i=0; i<N_stars; i++) {
+		scale_0[4*i+_DM] = 1. / scale_norm;
+		scale_0[4*i+_Ar] = 0.2 / scale_norm;
+		scale_0[4*i+_Mr] = 1. / scale_norm;
+		scale_0[4*i+_FeH] = 0.2 / scale_norm;
+	}
 	
 	// Set run parameters
 	MCMCParams p(l, b, mag, model, data);
-	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
-	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
+	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP_los;
+	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state_los;
 	
 	unsigned int count;
 	for(unsigned int n=0; n<max_attempts; n++) {
-		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4, size, scale_0, p, multibinner, N_threads);
+		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4*N_stars, size, scale_0, p, multibinner, N_threads);
 		
 		// Run Markov chains
 		sampler.burn_in(100, 50*size, 0.18, false);
@@ -353,10 +456,154 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	if(!convergence) { std::cout << std::endl << "Did not converge." << std::endl; }
 	std::cout << std::endl << "Time elapsed for " << stats.get_N_items()/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
+	delete[] scale_0;
+	
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples = 150, unsigned int N_threads=4) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// pdf for individual star
+inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
+	#define neginf -std::numeric_limits<double>::infinity()
+	double logP = 0.;
+	
+	//double x_tmp[4] = {x[0],x[1],x[2],x[3]};
+	
+	// P(Ar|G): Flat prior for Ar > 0. Don't allow DM < 0
+	if((x[_Ar] < 0.) || (x[_DM] < 0.)) { return neginf; }
+	
+	// P(Mr|G) from luminosity function
+	double loglf_tmp = p.model.lf(x[_Mr]);
+	logP += loglf_tmp;
+	
+	// P(DM|G) from model of galaxy
+	double logdn_tmp = p.log_dn_interp(x[_DM]);
+	logP += logdn_tmp;
+	
+	// P(FeH|DM,G) from Ivezich et al (2008)
+	double logpFeH_tmp = p.log_p_FeH_fast(x[_DM], x[_FeH]);
+	logP += logpFeH_tmp;
+	
+	// P(g,r,i,z,y|Ar,Mr,DM) from model spectra
+	double M[NBANDS];
+	FOR(0, NBANDS) { M[i] = p.m[i] - x[_DM] - x[_Ar]*p.model.Acoef[i]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
+	
+	/*TSED* closest_sed = NULL;
+	p.model.get_sed_inline(&closest_sed, x[_Mr], x[_FeH]);			// Retrieve template spectrum
+	if(closest_sed == NULL) { return neginf; } else { logP += logL_SED(M, p.err, *closest_sed); }*/
+	
+	if((x[_Mr] < p.model.Mr_min) || (x[_Mr] > p.model.Mr_max) || (x[_FeH] < p.model.FeH_min) || (x[_FeH] > p.model.FeH_max)) { return neginf; }
+	TSED sed_bilin_interp = (*p.model.sed_interp)(x[_Mr], x[_FeH]);
+	
+	double logL = logL_SED(M, p.err, sed_bilin_interp);
+	//if(logL > -0.1) {
+	//	#pragma omp critical (cout)
+	//	std::cout << x[_DM] << "\t" << x[_Ar] << "\t" << x[_Mr] << "\t" << x[_FeH] << std::endl;
+	//}
+	logP += logL;
+	
+	#undef neginf
+	return logP;
+}
+
+// Generates a random state, with a flat distribution in each parameter
+void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
+	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
+	x_0[_Ar] = gsl_ran_flat(r, 0.1, 2.9);
+	x_0[_Mr] = gsl_ran_flat(r, 4.5, 27.9);
+	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
+}
+
+// N_threads	 # of parallel Normal Kernel couplers to run
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
+{
+	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
+	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
+	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
+	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
+	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
+	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
+	bool convergence;
+	
+	timespec t_start, t_end;
+	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	
+	// Set the initial step size for the MCMC run
+	double scale_0[4];
+	scale_0[_DM] = 1.;
+	scale_0[_Ar] = 0.2;
+	scale_0[_Mr] = 1.;
+	scale_0[_FeH] = 0.2;
+	
+	// Set run parameters
+	MCMCParams p(l, b, mag, model, data);
+	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
+	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
+	
+	unsigned int count;
+	for(unsigned int n=0; n<max_attempts; n++) {
+		multibinner.clear();
+		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4, size, scale_0, p, multibinner, N_threads);
+		
+		// Run Markov chains
+		sampler.burn_in(100, 50*size, 0.18, false);
+		sampler.set_bandwidth(0.1);
+		//for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
+		count = 0;
+		while((count < max_rounds) && !convergence) {
+			sampler.step(N_steps);
+			convergence = true;
+			for(unsigned int i=0; i<4; i++) {
+				if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
+			}
+			count++;
+		}
+		
+		sampler.print_stats();
+		stats = sampler.get_stats();
+		
+		if(convergence) { break; } else { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
+	}
+	
+	//stats = sampler.get_stats();
+	
+	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer
+	
+	// Normalize bins to peak value
+	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+		multibinner.get_binner(i)->normalize();
+	}
+	
+	// Print stats and run time
+	//sampler.print_stats();
+	if(!convergence) { std::cout << std::endl << "Did not converge." << std::endl; }
+	std::cout << std::endl << "Time elapsed for " << stats.get_N_items()/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	
+	return convergence;
+}
+
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {
 	double Delta[4];
 	for(unsigned int i=0; i<4; i++) {
 		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples;

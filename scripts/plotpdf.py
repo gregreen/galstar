@@ -5,7 +5,13 @@ import matplotlib.pyplot as plt;
 import matplotlib as mplib
 import sys
 import argparse
+from operator import itemgetter
 from math import isnan
+
+# Load true parameter values from ascii file
+def load_true_values(fn):
+	params = np.loadtxt(fn, usecols=(0,1,2,3))
+	return params
 
 # Load SM-formatted image and return an array
 def loadimage(fn):
@@ -27,7 +33,7 @@ def loadimage(fn):
 	img[i,j] = p
 	return img, x, y, p
 
-def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(None,None)):
+def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(None,None), params=None):
 	bounds = [x.min(), x.max(), y.min(), y.max()]
 	for i in range(2):
 		if xlim[i] != None: bounds[i] = xlim[i]
@@ -44,6 +50,8 @@ def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(No
 	ymean = (np.exp(p_filtered)*y).sum() / np.exp(p_filtered).sum()
 	#if not (isnan(xmean) or isnan(ymean)):
 	ax.scatter(xmean, ymean, s=40, marker='o')
+	if params != None:
+		ax.scatter(params[0], params[1], s=40, marker='d', c='r')
 	# Contouring at levels of accumulated probability
 	p2 = p.copy(); p2.sort(); cum = (np.exp(p2)/sum(np.exp(p2))).cumsum();
 	cont90 = p2[abs(cum - 0.9).argmin()]
@@ -62,13 +70,17 @@ def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(No
 	if xname != None: ax.set_ylabel(r'$\mathrm{%s}$'%yname)
 
 # Draw a figure with multiple plots, laid out in a manner determined by <shape>
-def make_figure(fn_list, img_fname, shape, xname, yname, xlim=(None,None), ylim=(None,None)):
+def make_figure(fn_list, img_fname, shape, xname, yname, xlim=(None,None), ylim=(None,None), params_list=None):
 	fig = plt.figure(figsize=(8.5,11.))
 	ax = []
 	for i,fname in enumerate(fn_list):
 		img, x, y, p = loadimage(fname)
 		ax.append(fig.add_subplot(shape[0], shape[1], i+1, axisbg='k'))
-		plotimg(img, x, y, p, ax[-1], xname, yname, xlim, ylim)
+		if params_list != None:
+			params_i = params_list[i]
+		else:
+			params_i = None
+		plotimg(img, x, y, p, ax[-1], xname, yname, xlim, ylim, params_i)
 	fig.suptitle(r'$\ln \mathrm{P}(' + xname + '\, , \,' + yname + ') \mathrm{, \ normalized \ to \ peak}$', y=0.95, fontsize=16)
 	fig.savefig(img_fname, transparent=False, dpi=300)
 	plt.close(fig)
@@ -77,6 +89,7 @@ def main():
 	# Parse commandline arguments
 	parser = argparse.ArgumentParser(prog='plotpdf', description='Plots posterior distributions produced by galstar', add_help=True)
 	parser.add_argument('files', nargs='+', type=str, help='Input posterior distributions')
+	parser.add_argument('--truth', type=str, default=None, help='File containing true parameter values')
 	parser.add_argument('--output', type=str, required=True, help='Output image filename base (without extension)')
 	parser.add_argument('--imgtype', type=str, default='png', choices=('png','pdf','eps'), help='Output image filetype')
 	parser.add_argument('--shape', nargs=2, type=int, default=(1,1), help='# of rows and columns in figure')
@@ -92,31 +105,53 @@ def main():
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
 	
+	# Sort filenames
+	files = values.files
+	z = [(ff, int((ff.split('_')[-1]).split('.')[0])) for ff in files]
+	z.sort(key=itemgetter(1))
+	for n in range(len(z)):
+		files[n] = z[n][0]
+	
+	# Load true parameter values
+	params = None
+	if values.truth != None:
+		params = np.loadtxt(values.truth, usecols=(0,1,2,3))
+	
 	# Make figures
 	mplib.rc('text', usetex=True)
 	mplib.rc('xtick', direction='out')
 	mplib.rc('ytick', direction='out')
+	
 	# Determine # of figures to make
 	N_per_fig = values.shape[0]*values.shape[1]
-	#N_figs = int(round(len(values.files)/N_per_fig + 0.5))
 	N_figs = int(len(values.files)/N_per_fig)
 	print N_per_fig, N_figs, len(values.files)
 	if N_figs*N_per_fig < len(values.files):
 		N_figs += 1
+	
 	# Get x and y bounds for plots
 	xlim = (values.xmin, values.xmax)
 	ylim = (values.ymin, values.ymax)
+	
 	for i in range(N_figs):
 		# Determine range of plots to put on this figure
 		i_min = i*N_per_fig
 		i_max = i_min + N_per_fig
-		if i_max > len(values.files): i_max = len(values.files)
+		if i_max > len(files): i_max = len(files)
 		print 'Plotting files %d through %d...' % (i_min+1, i_max)
-		fn_list = values.files[i_min:i_max]
+		fn_list = files[i_min:i_max]
+		if params != None:
+			params_list = params[i_min:i_max+1]
+		else:
+			params_list = None
+		
+		print fn_list
+		
 		# Determine output filename for this figure
 		img_fname = str(values.output + '_' + str(i) + '.' + values.imgtype)
+		
 		# Generate this figure
-		make_figure(fn_list, img_fname, values.shape, values.xname, values.yname, xlim, ylim)
+		make_figure(fn_list, img_fname, values.shape, values.xname, values.yname, xlim, ylim, params_list)
 	
 	print 'Done.'
 	return 0

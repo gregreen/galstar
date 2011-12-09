@@ -10,10 +10,12 @@
 
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_sf_gamma.h>
 
 #include "binner.h"
 #include "NKC.h"
-#include "interpolater.h"
+#include "interpolation.h"
 #include "smoothsort.h"
 #include <astro/util.h>
 
@@ -23,23 +25,83 @@ struct TSED
 {
 	double Mr, FeH;
 	double v[NBANDS];	// Mu, Mg, Mr, Mi, Mz
-
+	
+	TSED() {
+		for(unsigned int i=0; i<NBANDS; i++) { v[i] = 0; }
+		Mr = 0; 
+		FeH = 0;
+	}
+	
 	bool operator<(const TSED &b) const { return Mr < b.Mr || (Mr == b.Mr && FeH < b.FeH); }
+	
+	// Operators required for bilinear interpolation
+	
+	TSED& operator=(const TSED &rhs) {
+		for(unsigned int i=0; i<NBANDS; i++) { v[i] = rhs.v[i]; }
+		Mr = rhs.Mr;
+		FeH = rhs.FeH;
+		return *this;
+	}
+	
+	friend TSED operator+(const TSED &sed1, const TSED &sed2) {
+		TSED tmp;
+		for(unsigned int i=0; i<NBANDS; i++) { tmp.v[i] = sed1.v[i] + sed2.v[i]; }
+		tmp.Mr = sed1.Mr + sed2.Mr;
+		tmp.FeH = sed1.FeH + sed2.FeH;
+		return tmp;
+	}
+	
+	friend TSED operator-(const TSED &sed1, const TSED &sed2) {
+		TSED tmp;
+		for(unsigned int i=0; i<NBANDS; i++) { tmp.v[i] = sed1.v[i] - sed2.v[i]; }
+		tmp.Mr = sed1.Mr - sed2.Mr;
+		tmp.FeH = sed1.FeH - sed2.FeH;
+		return tmp;
+	}
+	
+	friend TSED operator*(const TSED &sed, const double &a) {
+		TSED tmp;
+		for(unsigned int i=0; i<NBANDS; i++) { tmp.v[i] = a*sed.v[i]; }
+		tmp.Mr = a*sed.Mr;
+		tmp.FeH = a*sed.FeH;
+		return tmp;
+	}
+	
+	friend TSED operator*(const double &a, const TSED &sed) {
+		TSED tmp;
+		for(unsigned int i=0; i<NBANDS; i++) { tmp.v[i] = a*sed.v[i]; }
+		tmp.Mr = a*sed.Mr;
+		tmp.FeH = a*sed.FeH;
+		return tmp;
+	}
+	
+	friend TSED operator/(const TSED &sed, const double &a) {
+		TSED tmp;
+		for(unsigned int i=0; i<NBANDS; i++) { tmp.v[i] = sed.v[i]/a; }
+		tmp.Mr = sed.Mr / a;
+		tmp.FeH = sed.FeH / a;
+		return tmp;
+	}
 };
 
 struct TLF	// the luminosity function
 {
 	double Mr0, dMr;
 	std::vector<double> lf;
+	TLinearInterp *lf_interp;
 
-	TLF(const std::string &fn) { load(fn); }
-
-	double operator()(double Mr) const	// return the LF at position Mr (nearest neighbor interp.)
+	TLF(const std::string &fn) : lf_interp(NULL) { load(fn); }
+	~TLF() { delete lf_interp; }
+	
+	double operator()(double Mr) const	// return the LF at position Mr (linear interpolation)
 	{
-		int idx = (int)floor((Mr - Mr0) / dMr + 0.5);
+		return (*lf_interp)(Mr);
+		/*int idx = (int)floor((Mr - Mr0) / dMr + 0.5);
 		if(idx < 0) { return lf.front(); }
 		if(idx >= lf.size()) { return lf.back(); }
-		return lf[idx];
+		double lf_lin_interp = (*lf_interp)(Mr);
+		double lf_nn_interp = lf[idx];
+		return lf[idx];*/
 	}
 
 	void load(const std::string &fn);
@@ -64,12 +126,14 @@ struct TModel
 	double f,  H2, L2;			// Galactic structure (thin and thick disk)
 	double fh,  qh,  nh, R_br2, nh_outer;	// Galactic structure (power-law halo)
 	double fh_outer;
-	TLF lf;					// luminosity function
-	TSED* seds;				// Stellar SEDs
-	double dMr, dFeH, Mr_min, FeH_min;	// Sample spacing for stellar SEDs
+	TLF lf;							// luminosity function
+	TSED* seds;						// Stellar SEDs
+	double dMr, dFeH, Mr_min, FeH_min, Mr_max, FeH_max;	// Sample spacing for stellar SEDs
 	unsigned int N_FeH, N_Mr;
 	
 	static const double Acoef[NBANDS];	// Extinction coefficients relative to Ar
+	
+	TBilinearInterp<TSED> *sed_interp;	// Bilinear interpolation of stellar SEDs in Mr and FeH
 	
 	struct Params				// Parameter space that can be sampled
 	{
@@ -90,7 +154,7 @@ struct TModel
 	peyton::util::interval<double>   Mr_range, FeH_range;
 	
 	TModel(const std::string& lf_, const std::string& seds_);
-	~TModel() { delete seds; }
+	~TModel() { delete seds; delete sed_interp; }
 	
 	void computeCartesianPositions(double &X, double &Y, double &Z, double cos_l, double sin_l, double cos_b, double sin_b, double d) const;
 	double rho_disk(double R, double Z) const;
@@ -179,7 +243,7 @@ struct MCMCParams {
 	double m[NBANDS];
 	double err[NBANDS];
 	
-	TInterpolater *log_dn_arr, *f_halo_arr, *mu_disk_arr;
+	TLinearInterp *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
 	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &_mag, TModel &_model, TStellarData &_data) 
 		: model(_model), data(_data), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
@@ -195,9 +259,9 @@ struct MCMCParams {
 		// Precompute log(dn(DM)), f_halo(DM) and mu_disk(DM)
 		DM_min = 0.01;
 		DM_max = 25.;
-		log_dn_arr = new TInterpolater(DM_SAMPLES, DM_min, DM_max);
-		f_halo_arr = new TInterpolater(DM_SAMPLES, DM_min, DM_max);
-		mu_disk_arr = new TInterpolater(DM_SAMPLES, DM_min, DM_max);
+		log_dn_arr = new TLinearInterp(DM_min, DM_max, DM_SAMPLES);
+		f_halo_arr = new TLinearInterp(DM_min, DM_max, DM_SAMPLES);
+		mu_disk_arr = new TLinearInterp(DM_min, DM_max, DM_SAMPLES);
 		double DM_i;
 		for(unsigned int i=0; i<DM_SAMPLES; i++) {
 			DM_i = log_dn_arr->get_x(i);
@@ -245,10 +309,17 @@ struct MCMCParams {
 	#undef DM_SAMPLES
 };
 
+// Functions for line-of-sight calculations
+void ran_state_los(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
+double calc_logP_los(const double *const x, unsigned int N, MCMCParams &p);
+double log_prior(const double *const x, unsigned int N, MCMCParams &p);
+double log_permutation_likelihood(const double *const x, unsigned int N, MCMCParams &p, gsl_permutation *data_order);
+bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps, unsigned int N_threads);
+
+// Functions for individual star
+void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-
 bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps, unsigned int N_threads);
-
 bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples, unsigned int N_threads);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////

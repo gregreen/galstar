@@ -7,6 +7,8 @@ import sys
 import argparse
 from operator import itemgetter
 from math import isnan
+import galstarutils
+
 
 # Load true parameter values from ascii file
 def load_true_values(fn):
@@ -90,6 +92,7 @@ def main():
 	parser = argparse.ArgumentParser(prog='plotpdf', description='Plots posterior distributions produced by galstar', add_help=True)
 	parser.add_argument('files', nargs='+', type=str, help='Input posterior distributions')
 	parser.add_argument('--truth', type=str, default=None, help='File containing true parameter values')
+	parser.add_argument('--converged', nargs='+', type=str, help='Filter out nonconverged stars using provided stats files')
 	parser.add_argument('--output', type=str, required=True, help='Output image filename base (without extension)')
 	parser.add_argument('--imgtype', type=str, default='png', choices=('png','pdf','eps'), help='Output image filetype')
 	parser.add_argument('--shape', nargs=2, type=int, default=(1,1), help='# of rows and columns in figure')
@@ -106,16 +109,30 @@ def main():
 	values = parser.parse_args(sys.argv[offset:])
 	
 	# Sort filenames
-	files = values.files
-	z = [(ff, int((ff.split('_')[-1]).split('.')[0])) for ff in files]
-	z.sort(key=itemgetter(1))
-	for n in range(len(z)):
-		files[n] = z[n][0]
+	files = galstarutils.sort_filenames(values.files)
 	
-	# Load true parameter values
+	# Load true stellar parameters
 	params = None
 	if values.truth != None:
 		params = np.loadtxt(values.truth, usecols=(0,1,2,3))
+	
+	# Load stats files and filter out nonconverged stars
+	stats_fn = None
+	N = len(files)
+	convergence_filter = np.empty(N, dtype=bool)
+	convergence_filter.fill(True)
+	if values.converged != None:
+		stats_fn = galstarutils.sort_filenames(values.converged)
+		for i,fn in enumerate(stats_fn):
+			converged, mean, cov, ML_dim, ML = galstarutils.read_stats(fn)
+			convergence_filter[i] = converged
+	files_tmp = []
+	for i,f in enumerate(files):
+		if convergence_filter[i]:
+			files_tmp.append(f)
+	files = files_tmp
+	if params != None:
+		params = params[convergence_filter]
 	
 	# Make figures
 	mplib.rc('text', usetex=True)

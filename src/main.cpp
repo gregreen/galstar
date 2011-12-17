@@ -104,7 +104,7 @@ int main(int argc, char **argv)
 	string statsfn("NONE");
 	bool brute_force = false;
 	bool los = false;
-	unsigned int N_steps = 15000;
+	unsigned int N_steps = 20000;
 	unsigned int N_samples = 150;
 	unsigned int N_threads = 4;
 	
@@ -241,14 +241,22 @@ int main(int argc, char **argv)
 			// Write out the marginalized posteriors
 			for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
 				stringstream outfn("");
-				outfn << output_fns.at(i) << "_" << count << ".txt";
+				if(test) {								// Determine filename
+					outfn << output_fns.at(i) << ".txt";
+				} else {
+					outfn << output_fns.at(i) << "_" << count << ".txt";
+				}
 				multibinner.get_binner(i)->write_to_file(outfn.str());
 			}
 			// Write out summary of statistics
 			if(statsfn != "NONE") {
 				bool success = true;
 				stringstream outfn("");
-				outfn << statsfn << "_" << count << ".dat";				// Determine filename
+				if(test) {								// Determine filename
+					outfn << statsfn << ".dat";
+				} else {
+					outfn << statsfn << "_" << count << ".dat";
+				}
 				std::fstream f;
 				f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);		// Write whether the fit converged as first byte
 				f.write(reinterpret_cast<char*>(&converged), sizeof(converged));

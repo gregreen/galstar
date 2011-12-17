@@ -223,7 +223,7 @@ struct TStellarData {
 		while(!fin.eof()) {
 			TMagnitudes tmp;
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.m[i]; }
-			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.err[i]; tmp.err[i] = sqrt(tmp.err[i]); }
+			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.err[i]; }//tmp.err[i] = sqrt(tmp.err[i]); }
 			star.push_back(tmp);
 		}
 		star.pop_back();
@@ -245,7 +245,7 @@ struct MCMCParams {
 	
 	TLinearInterp *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
-	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &_mag, TModel &_model, TStellarData &_data) 
+	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &_mag, TModel &_model, TStellarData &_data)
 		: model(_model), data(_data), l(_l), b(_b), log_dn_arr(NULL), f_halo_arr(NULL), mu_disk_arr(NULL)
 	{
 		update(_mag);

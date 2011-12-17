@@ -103,6 +103,16 @@ def get_objects(galfast_fits_fname, filt=0.5):
 	# Return [(RA, DEC),...] , [(u,g,r,i,z),...], [(sig_u,sig_g,...),...], [(DM,Ar,Mr,FeH),...]
 	return ra_dec, mags, errs, params
 
+def get_objects_ascii(txt_fname):
+	f = open(txt_fname, 'r')
+	params_list = []
+	for line in f:
+		tmp = line.lstrip().rstrip().split()
+		if len(tmp) != 0:
+			params_list.append(tmp)
+	params = np.array(params_list, dtype=float)
+	return params
+
 
 def main():
 	parser = argparse.ArgumentParser(prog='plot_stats.py', description='Plot overview of galstar output', add_help=True)
@@ -112,6 +122,7 @@ def main():
 	parser.add_argument('--filtmag', type=float, help='Filter out stars with magnitude greater than specified amount')
 	parser.add_argument('--galfast_comp', type=str, help='Galfast fits file')
 	parser.add_argument('--galfast_only', action='store_true', help='Plot only galfast catalog')
+	parser.add_argument('--txt_comp', type=str, help='Text file containing true stellar parameter values')
 	parser.add_argument('--output', type=str, help='Output plot filename')
 	parser.add_argument('--errorbars', action='store_true', help='Show error bars on plots')
 	parser.add_argument('--useML', type=int, default=-1, help='Index of max. likelihood in stats file to use')
@@ -165,12 +176,16 @@ def main():
 		if values.filtmag != None:
 			for i in range(N):
 				filtmag[i] = (mags[i,:].max() <= values.filtmag)
+	elif values.txt_comp:
+		params = get_objects_ascii(abspath(values.txt_comp))
 	
 	# Combine and apply filters
-	idx = np.logical_and(conv, filterr, filtmag)
+	idx = np.logical_and(filterr, filtmag)
 	means = means[idx]
 	cov = cov[idx]
 	ML = ML[idx]
+	conv = conv[idx]
+	not_conv = np.logical_not(conv)
 	N = len(means)
 	
 	# Set matplotlib style attributes
@@ -180,7 +195,7 @@ def main():
 	mplib.rc('axes', grid=True)
 	
 	# Scatter plot of (DM, Ar)
-	if values.galfast_comp == None:
+	if (values.galfast_comp == None) and (values.txt_comp == None):
 		fig = plt.figure()
 		ax = fig.add_subplot(1,1,1)
 		xerr, yerr = np.empty(N, dtype=float), np.empty(N, dtype=float)
@@ -234,14 +249,16 @@ def main():
 		else:
 			x = means[:,DM]
 			y = means[:,Ar]
-		for i in range(N):
-			print params[i,DM], params[i,Ar], x[i], y[i]
+		#for i in range(N):
+		#	print params[i,DM], params[i,Ar], x[i], y[i]
 		x -= params[:,DM]
 		y -= params[:,Ar]
 		if values.errorbars:
-			ax.errorbar(x, y, xerr, yerr, linestyle='None')
+			ax.errorbar(x[conv], y[conv], xerr[conv], yerr[conv], 'b', linestyle='None')
+			ax.errorbar(x[not_conv], y[not_conv], xerr[not_conv], yerr[not_conv], 'r', linestyle='None')
 		else:
-			ax.plot(x, y, '.', linestyle='None', markersize=1)
+			ax.plot(x[conv], y[conv], 'b.', linestyle='None', markersize=1)
+			ax.plot(x[not_conv], y[not_conv], 'r.', linestyle='None', markersize=1)
 		ax.set_xlabel(r'$\Delta \mu$', fontsize=18)
 		ax.set_ylabel(r'$\Delta A_r$', fontsize=18)
 		if values.useML != -1:
@@ -254,7 +271,7 @@ def main():
 		fn = abspath(values.output)
 		if '.' not in fn:
 			fn += '.png'
-		fig.savefig(fn)
+		fig.savefig(fn, dpi=300)
 	
 	plt.show()
 	

@@ -108,7 +108,7 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 	std::cerr << "# Loaded " << N_FeH*N_Mr << " SEDs from " << seds_fn << "\n";
 }
 
-const double TModel::Acoef[NBANDS] = {5.155/2.751, 3.793/2.751, 1., 2.086/2.751, 1.479/2.751};
+const double TModel::Acoef[NBANDS] = {1.8236, 1.4241, 1.0000, 0.7409, 0.5821}; //{5.155/2.751, 3.793/2.751, 1., 2.086/2.751, 1.479/2.751};
 
 // compute Galactocentric XYZ given l,b,d
 inline void TModel::computeCartesianPositions(double &X, double &Y, double &Z, double cos_l, double sin_l, double cos_b, double sin_b, double d) const
@@ -420,7 +420,8 @@ bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitude
 	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP_los;
 	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state_los;
 	
-	unsigned int count;
+	unsigned int count, tmp_max_rounds;
+	double highest_GR, tmp_GR;
 	for(unsigned int n=0; n<max_attempts; n++) {
 		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4*N_stars, size, scale_0, p, multibinner, N_threads);
 		
@@ -429,13 +430,19 @@ bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitude
 		sampler.set_bandwidth(0.1);
 		//for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
 		count = 0;
-		while((count < max_rounds) && !convergence) {
+		convergence = false;
+		tmp_max_rounds = max_rounds;
+		while((count < tmp_max_rounds) && !convergence) {
 			sampler.step(N_steps);
-			convergence = true;
+			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
-				if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
+				tmp_GR = sampler.get_GR_diagnostic(i);
+				if(tmp_GR > highest_GR) { highest_GR = tmp_GR; }
+				//if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
 			}
+			if(highest_GR < convergence_threshold) { convergence = true; }
 			count++;
+			if(!convergence && (count == max_rounds) && (highest_GR < 2.) && (tmp_max_rounds == max_rounds)) { tmp_max_rounds *= 2; }
 		}
 		
 		sampler.print_stats();
@@ -530,24 +537,24 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 // Generates a random state, with a flat distribution in each parameter
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
-	x_0[_Ar] = gsl_ran_flat(r, 0.1, 2.9);
-	x_0[_Mr] = gsl_ran_flat(r, 4.5, 27.9);
+	x_0[_Ar] = gsl_ran_flat(r, 0.1, 10.0);
+	x_0[_Mr] = gsl_ran_flat(r, -0.5, 27.5);
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
 
 // N_threads	 # of parallel Normal Kernel couplers to run
 bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
-	unsigned int size = 10;			// # of chains in each Normal Kernel Coupler
+	unsigned int size = 15;			// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
 	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
-	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
+	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
 	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
 	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
 	bool convergence;
 	
-	timespec t_start, t_end;
-	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	//timespec t_start, t_end;
+	//clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
 	
 	// Set the initial step size for the MCMC run
 	double scale_0[4];
@@ -561,23 +568,34 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
 	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
 	
-	unsigned int count;
+	timespec t_start, t_end;
+	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	
+	unsigned int count, tmp_max_rounds;
+	double highest_GR, tmp_GR;
 	for(unsigned int n=0; n<max_attempts; n++) {
 		multibinner.clear();
 		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4, size, scale_0, p, multibinner, N_threads);
 		
 		// Run Markov chains
-		sampler.burn_in(100, 50*size, 0.18, false);
 		sampler.set_bandwidth(0.1);
-		//for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
+		sampler.burn_in(200, 50*size, 0.18, true);
+		for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
+		
 		count = 0;
-		while((count < max_rounds) && !convergence) {
+		convergence = false;
+		tmp_max_rounds = max_rounds;
+		while((count < tmp_max_rounds) && !convergence) {
 			sampler.step(N_steps);
-			convergence = true;
+			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
-				if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
+				tmp_GR = sampler.get_GR_diagnostic(i);
+				if(tmp_GR > highest_GR) { highest_GR = tmp_GR; }
+				//if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
 			}
+			if(highest_GR < convergence_threshold) { convergence = true; }
 			count++;
+			if(!convergence && (count == tmp_max_rounds) && (highest_GR < 2.) && (tmp_max_rounds < 4*max_rounds)) { tmp_max_rounds += max_rounds; std::cout << "Extending run." << std::endl; }
 		}
 		
 		sampler.print_stats();

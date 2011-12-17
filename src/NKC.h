@@ -175,7 +175,7 @@ TNKC<TParams, TLogger>::TNKC(pdf_t _pdf, rand_state_t _rand_state, unsigned int 
 	// Set the bandwidth tuning parameter to its default value
 	set_bandwidth(sqrt(1.4 / pow((double)size, 2./(4.+(double)N))));
 	//log_h = log(h);
-	tune_rate = 1.1;
+	tune_rate = 1.015;
 	twopiN = pow(6.28318531, (double)N);
 	
 	i_updt = 0;

@@ -14,6 +14,8 @@
 #include "ndarray.h"
 #include <string.h>
 
+#include <stdint.h>
+
 
 /** **************************************************************************************************************************************************************************
  * ND Binner
@@ -61,6 +63,8 @@ struct TBinner2D {
 	unsigned int bin_dim[2];
 	double **bin;
 	
+	uint64_t **nsamples;
+	
 	// Constructor & Destructor
 	TBinner2D(double (&_min)[2], double (&_max)[2], unsigned int (&_width)[2], unsigned int (&_bin_dim)[2]);
 	~TBinner2D();
@@ -89,11 +93,13 @@ TBinner2D<N>::TBinner2D(double (&_min)[2], double (&_max)[2], unsigned int (&_wi
 		width[i] = _width[i];
 		assert(_bin_dim[i] < N);
 		bin_dim[i] = _bin_dim[i];
-		dx[i] = (max[i]-min[i])/(double)width[i];
+		dx[i] = (max[i] - min[i]) / (double)width[i];
 	}
 	bin = new double*[width[0]];
+	nsamples = new uint64_t*[width[0]];
 	for(unsigned int i=0; i<width[0]; i++) {
 		bin[i] = new double[width[1]];
+		nsamples[i] = new uint64_t[width[1]];
 		//for(unsigned int k=0; k<width[1]; k++) { bin[i][k] = 0.; }
 	}
 	clear();
@@ -101,15 +107,15 @@ TBinner2D<N>::TBinner2D(double (&_min)[2], double (&_max)[2], unsigned int (&_wi
 
 template<unsigned int N>
 TBinner2D<N>::~TBinner2D() {
-	for(unsigned int i=0; i<width[0]; i++) { delete[] bin[i]; }
-	delete[] bin;
+	for(unsigned int i=0; i<width[0]; i++) { delete[] bin[i]; delete[] nsamples[i]; }
+	delete[] bin; delete[] nsamples;
 }
 
 // Set the bins to zero
 template<unsigned int N>
 void TBinner2D<N>::clear() {
 	for(unsigned int i=0; i<width[0]; i++) {
-		for(unsigned int k=0; k<width[1]; k++) { bin[i][k] = 0.; }
+		for(unsigned int k=0; k<width[1]; k++) { bin[i][k] = 0.; nsamples[i][k] = 0; }
 	}
 }
 
@@ -122,9 +128,15 @@ void TBinner2D<N>::add_point(double (&pos)[N], double weight) {
 	}
 	// Add point
 	unsigned int index[2];
-	for(unsigned int i=0; i<2; i++) { index[i] = (unsigned int)((pos[bin_dim[i]] - min[i]) / dx[i]); }
+	for(unsigned int i=0; i<2; i++) {
+		index[i] = (unsigned int)((pos[bin_dim[i]] - min[i]) / dx[i]);
+		//#pragma omp critical(cout)
+		//std::cout << (pos[bin_dim[i]] - min[i]) / dx[i] << "\t" << index[i] << std::endl;
+	}
 	#pragma omp atomic
 	bin[index[0]][index[1]] += weight;
+	#pragma omp atomic
+	nsamples[index[0]][index[1]] += 1;
 }
 
 template<unsigned int N>
@@ -218,6 +230,7 @@ void TBinner2D<N>::print_bins() {
 	for(int k=(int)width[1]-1; k>=0; k--) {
 		std::cout << std::setprecision(3) << min[1]+dx[1]*((double)k+0.5) << "\t||\t";
 		for(unsigned int j=0; j<width[0]; j++) { std::cout << std::setprecision(3) << bin[j][k] << "\t"; }
+		//for(unsigned int j=0; j<width[0]; j++) { std::cout << nsamples[j][k] << "\t"; }
 		std::cout << std::endl;
 	}
 	for(unsigned int j=0; j<width[0]+2; j++) { std::cout << "====\t"; }

@@ -111,7 +111,7 @@ TBilinearInterp<T>::~TBilinearInterp() {
 template<class T>
 unsigned int TBilinearInterp<T>::get_index(double x, double y) const {
 	assert((x >= x_min) && (x <= x_max) && (y >= y_min) && (y <= y_max));
-	return (unsigned int)((x-x_min)*inv_dx) + (unsigned int)(Nx*(y-y_min)*inv_dy);
+	return (unsigned int)((x-x_min)*inv_dx + 0.5) + Nx*(unsigned int)((y-y_min)*inv_dy + 0.5);
 }
 
 template<class T>

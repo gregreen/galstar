@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyfits
 from scipy import interpolate
-from matplotlib.ticker import MultipleLocator, MaxNLocator
+from matplotlib.ticker import MultipleLocator, MaxNLocator, NullFormatter, AutoMinorLocator, AutoLocator
 from struct import unpack
 from os.path import abspath
 from operator import itemgetter
@@ -126,6 +126,7 @@ def main():
 	parser.add_argument('--output', type=str, help='Output plot filename')
 	parser.add_argument('--errorbars', action='store_true', help='Show error bars on plots')
 	parser.add_argument('--useML', type=int, default=-1, help='Index of max. likelihood in stats file to use')
+	parser.add_argument('--norm', action='store_true', help='Normalize differences to standard deviation')
 	if sys.argv[0] == 'python':
 		offset = 2
 	else:
@@ -192,7 +193,7 @@ def main():
 	mplib.rc('text',usetex=True)
 	mplib.rc('xtick.major', size=6)
 	mplib.rc('xtick.minor', size=4)
-	mplib.rc('axes', grid=True)
+	mplib.rc('axes', grid=False)
 	
 	# Scatter plot of (DM, Ar)
 	if (values.galfast_comp == None) and (values.txt_comp == None):
@@ -235,8 +236,35 @@ def main():
 		ax.set_ylabel(r'$A_r$', fontsize=18)
 		ax.set_title(r'$\mathrm{Galfast\ Catalog}$', fontsize=22)
 	else:	# Compare with galfast input
-		fig = plt.figure()
-		ax = fig.add_subplot(1,1,1)
+		# Determine geometry of scatter plot and histograms
+		scatter_left, scatter_bottom = 0.1, 0.1
+		scatter_width, scatter_height = 0.70, 0.60
+		buffer_x, buffer_y = 0.02, 0.02
+		histx_height, histy_height = 0.15, 0.116
+		rect_scatter = [scatter_left, scatter_bottom, scatter_width, scatter_height]
+		rect_histx = [scatter_left, scatter_bottom+scatter_height+buffer_y, scatter_width, histx_height]
+		rect_histy = [scatter_left+scatter_width+buffer_x, scatter_bottom, histy_height, scatter_height]
+		# Set up the figure with a scatter plot and two histograms
+		fig = plt.figure(figsize=(11,8.5))
+		ax_scatter = fig.add_axes(rect_scatter)
+		ax_histx = fig.add_axes(rect_histx)
+		ax_histy = fig.add_axes(rect_histy)
+		# Set tick positions
+		ax_scatter.xaxis.set_major_locator(MaxNLocator(5))
+		ax_scatter.yaxis.set_major_locator(MaxNLocator(5))
+		ax_scatter.xaxis.set_minor_locator(AutoMinorLocator())
+		ax_scatter.yaxis.set_minor_locator(AutoMinorLocator())
+		ax_histx.xaxis.set_major_formatter(NullFormatter())
+		ax_histx.yaxis.set_major_locator(MaxNLocator(3))
+		ax_histy.xaxis.set_major_locator(MaxNLocator(3))
+		ax_histy.yaxis.set_major_formatter(NullFormatter())
+		ax_histy.yaxis.set_minor_formatter(NullFormatter())
+		# Set up grid
+		ax_scatter.xaxis.grid(True, which='major')
+		ax_scatter.yaxis.grid(True, which='major')
+		ax_histx.yaxis.grid(True, which='major')
+		ax_histy.xaxis.grid(True, which='major')
+		# Set up data
 		xerr, yerr = np.empty(N, dtype=float), np.empty(N, dtype=float)
 		for i in range(N):
 			xerr[i] = sqrt(cov[i,DM,DM])
@@ -249,22 +277,38 @@ def main():
 		else:
 			x = means[:,DM]
 			y = means[:,Ar]
-		#for i in range(N):
-		#	print params[i,DM], params[i,Ar], x[i], y[i]
 		x -= params[:,DM]
 		y -= params[:,Ar]
+		# Create scatterplot
 		if values.errorbars:
-			ax.errorbar(x[conv], y[conv], xerr[conv], yerr[conv], 'b', linestyle='None')
-			ax.errorbar(x[not_conv], y[not_conv], xerr[not_conv], yerr[not_conv], 'r', linestyle='None')
+			ax_scatter.errorbar(x[conv], y[conv], xerr[conv], yerr[conv], 'b', linestyle='None')
+			ax_scatter.errorbar(x[not_conv], y[not_conv], xerr[not_conv], yerr[not_conv], 'r', linestyle='None')
 		else:
-			ax.plot(x[conv], y[conv], 'b.', linestyle='None', markersize=1)
-			ax.plot(x[not_conv], y[not_conv], 'r.', linestyle='None', markersize=1)
-		ax.set_xlabel(r'$\Delta \mu$', fontsize=18)
-		ax.set_ylabel(r'$\Delta A_r$', fontsize=18)
+			if values.norm:
+				x = x/xerr
+				y = y/yerr
+			ax_scatter.plot(x[conv], y[conv], 'b.', linestyle='None', markersize=1)
+			ax_scatter.plot(x[not_conv], y[not_conv], 'r.', linestyle='None', markersize=1)
+		# Create histograms
+		xmin, xmax = ax_scatter.get_xlim()
+		ymin, ymax = ax_scatter.get_ylim()
+		ax_histx.hist(x[conv], range=(xmin, xmax), bins=20, alpha=0.5)
+		ax_histy.hist(y[conv], range=(ymin, ymax), bins=20, alpha=0.5, orientation='horizontal')
+		ax_histx.hist(x[not_conv], range=(xmin, xmax), bins=20, alpha=0.5, fc='r')
+		ax_histy.hist(y[not_conv], range=(ymin, ymax), bins=20, alpha=0.5, fc='r', orientation='horizontal')
+		ax_histx.set_xlim(xmin, xmax)
+		ax_histy.set_ylim(ymin, ymax)
+		# Set labels and title
+		if values.norm:
+			ax_scatter.set_xlabel(r'$\Delta \mu / \sigma_{\mu}$', fontsize=18)
+			ax_scatter.set_ylabel(r'$\Delta A_r / \sigma_{A_r}$', fontsize=18)
+		else:
+			ax_scatter.set_xlabel(r'$\Delta \mu$', fontsize=18)
+			ax_scatter.set_ylabel(r'$\Delta A_r$', fontsize=18)
 		if values.useML != -1:
-			ax.set_title(r'$\mathrm{Comparison\ with\ Galfast\ Catalog\ (ML)}$', fontsize=22)
+			fig.suptitle(r'$\mathrm{Comparison\ with\ Galfast\ Catalog\ (ML)}$', fontsize=22, y=0.95)
 		else:
-			ax.set_title(r'$\mathrm{Comparison\ with\ Galfast\ Catalog\ (Means)}$', fontsize=22)
+			fig.suptitle(r'$\mathrm{Comparison\ with\ Galfast\ Catalog\ (Means)}$', fontsize=22, y=0.95)
 	
 	# Save plot to file
 	if values.output != None:

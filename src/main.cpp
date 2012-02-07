@@ -98,14 +98,15 @@ int main(int argc, char **argv)
 	string par_halo = "0.0051 0.70 -2.62 27.8 -3.8";
 	// TODO: Add in option to set metallicity parameters
 	bool test = false;
+	bool calcpdf = false;
 	interval<double> Mr_range(ALL), FeH_range(ALL);
 	range<double> DM_range(5,20,0.02), Ar_range(0,5,0.02);
 	string datafn("NONE");
 	string statsfn("NONE");
 	bool brute_force = false;
 	bool los = false;
-	unsigned int N_steps = 20000;
-	unsigned int N_samples = 150;
+	unsigned int N_steps = 200000;
+	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
 	// parse command line arguments
@@ -120,6 +121,7 @@ int main(int argc, char **argv)
 		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
 		("halo", po::value<string>(&par_halo), "Halo model parameters, (f_halo q n_inner R_br n_outer)")
 		("test", po::value<bool>(&test)->zero_tokens(), "Assume the input contains (l b Ar DM Mr FeH uErr gErr rErr iErr zErr) and generate test data")
+		("calcpdf", po::value<bool>(&calcpdf)->zero_tokens(), "Calculate log(p). Assume input contains l b DM Ar Mr FeH u g r i z uErr gErr rErr iErr zErr.")
 		("range-M",   po::value<interval<double> >(&Mr_range),  "Range of absolute magnitudes to sample")
 		("range-FeH", po::value<interval<double> >(&FeH_range), "Range of Fe/H to consider")
 		("range-DM",   po::value<range<double> >(&DM_range), "DM grid to sample")
@@ -166,8 +168,7 @@ int main(int argc, char **argv)
 	TStellarData data;
 	double m[NBANDS], err[NBANDS];
 	double l, b;
-	if(test)
-	{
+	if(test) {
 		////////////// Load Test Params and generate test data
 		gsl_rng_env_setup();
 		gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -194,6 +195,14 @@ int main(int argc, char **argv)
 		data.star.push_back(mag);
 		
 		gsl_rng_free(rng);
+	} else if(calcpdf) {
+		double DM, Ar, Mr, FeH;
+		cin >> l >> b >> DM >> Ar >> Mr >> FeH;
+		for(unsigned int i=0; i<NBANDS; i++) { cin >> m[i]; }
+		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
+		TStellarData::TMagnitudes mag(m, err);
+		print_logpdf(model, l, b, mag, data, m, err, DM, Ar, Mr, FeH);
+		return 0;
 	} else if(datafn != "NONE") {
 		data.load_data(datafn);
 		l = data.l;
@@ -233,7 +242,10 @@ int main(int argc, char **argv)
 			TStats stats(4);
 			bool converged;
 			if(brute_force) {
-				converged = sample_brute_force(model, l, b, *it, data, multibinner, stats, N_samples, N_threads);
+				stringstream outfn("");
+				outfn << statsfn << "_" << count << ".chain";
+				TChainLogger chainlogger(outfn.str(), 4, 1, true);
+				converged = sample_brute_force(model, l, b, *it, data, multibinner, chainlogger, stats, N_samples, N_threads);
 			} else {
 				converged = sample_mcmc(model, l, b, *it, data, multibinner, stats, N_steps, N_threads);
 			}

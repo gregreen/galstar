@@ -40,7 +40,7 @@ def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(No
 	for i in range(2):
 		if xlim[i] != None: bounds[i] = xlim[i]
 		if ylim[i] != None: bounds[i+2]= ylim[i]
-	ax.imshow(img.transpose(), origin='lower', aspect='auto', interpolation='bilinear', cmap='hot', extent=(x.min(),x.max(),y.min(),y.max()))
+	ax.imshow(img.transpose(), origin='lower', aspect='auto', interpolation='nearest', cmap='hot', extent=(x.min(),x.max(),y.min(),y.max()), vmin=-8)
 	# Maximum likelihood point, and expectation value
 	imax = p.argmax()
 	ax.scatter(x[imax], y[imax], s=40, marker='x')

@@ -257,7 +257,7 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 		x = (M[i] - sed.v[i]) / sigma[i];
 		logLtotal -= x*x;
 	}
-
+	
 	return 0.5*logLtotal;
 }
 
@@ -516,19 +516,40 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	double M[NBANDS];
 	FOR(0, NBANDS) { M[i] = p.m[i] - x[_DM] - x[_Ar]*p.model.Acoef[i]; }	// Calculate absolute magnitudes from observed magnitudes, distance and extinction
 	
-	/*TSED* closest_sed = NULL;
-	p.model.get_sed_inline(&closest_sed, x[_Mr], x[_FeH]);			// Retrieve template spectrum
-	if(closest_sed == NULL) { return neginf; } else { logP += logL_SED(M, p.err, *closest_sed); }*/
+	//TSED* closest_sed = NULL;
+	//p.model.get_sed_inline(&closest_sed, x[_Mr], x[_FeH]);			// Retrieve template spectrum
+	//if(closest_sed == NULL) { return neginf; } else { logP += logL_SED(M, p.err, *closest_sed); }
+	
+	//double x_tmp[4] = {x[_DM], x[_Ar], x[_Mr], x[_FeH]};
 	
 	if((x[_Mr] < p.model.Mr_min) || (x[_Mr] > p.model.Mr_max) || (x[_FeH] < p.model.FeH_min) || (x[_FeH] > p.model.FeH_max)) { return neginf; }
 	TSED sed_bilin_interp = (*p.model.sed_interp)(x[_Mr], x[_FeH]);
-	
 	double logL = logL_SED(M, p.err, sed_bilin_interp);
+	logP += logL;
+	
+	/*if(logL > -10.) {
+		std::cout << logL;
+		for(double dp = 0.01; dp <= 0.1; dp += 0.01) {
+			TSED sed_binin_interp_2 = (*p.model.sed_interp)(x[_Mr] + dp, x[_FeH]);
+			double logL_2 = logL_SED(M, p.err, sed_binin_interp_2);
+			std::cout << "\t" << logL_2;
+			if(logL - logL_2 > 100.) {
+				double tmp = 1.;
+				sed_binin_interp_2 = (*p.model.sed_interp)(x[_Mr] + dp, x[_FeH]);
+				logL_2 = logL_SED(M, p.err, sed_binin_interp_2);
+			}
+		}
+		std::cout << std::endl;
+	}*/
+	//double logL = -0.5 * ((x[_Mr] - 5.)*(x[_Mr] - 5.)/(0.1*0.1) + (x[_FeH] + 0.7)*(x[_FeH] + 0.7)/(0.1*0.1));
+	//logL += -0.5 * ((x[_DM] - 10.)*(x[_DM] - 10.)/(0.5*0.5) + (x[_Ar] - 1.5)*(x[_Ar] - 1.5)/(0.1*0.1));
+	//logP += logL;
+	
 	//if(logL > -0.1) {
 	//	#pragma omp critical (cout)
 	//	std::cout << x[_DM] << "\t" << x[_Ar] << "\t" << x[_Mr] << "\t" << x[_FeH] << std::endl;
 	//}
-	logP += logL;
+	//logP += logL;
 	
 	#undef neginf
 	return logP;
@@ -537,7 +558,7 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 // Generates a random state, with a flat distribution in each parameter
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
-	x_0[_Ar] = gsl_ran_flat(r, 0.1, 10.0);
+	x_0[_Ar] = gsl_ran_flat(r, 0.1, 3.0);
 	x_0[_Mr] = gsl_ran_flat(r, -0.5, 27.5);
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
@@ -558,10 +579,10 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	
 	// Set the initial step size for the MCMC run
 	double scale_0[4];
-	scale_0[_DM] = 1.;
-	scale_0[_Ar] = 0.2;
-	scale_0[_Mr] = 1.;
-	scale_0[_FeH] = 0.2;
+	scale_0[_DM] = 0.1;
+	scale_0[_Ar] = 0.1;
+	scale_0[_Mr] = 0.1;
+	scale_0[_FeH] = 0.1;
 	
 	// Set run parameters
 	MCMCParams p(l, b, mag, model, data);
@@ -578,9 +599,12 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 		TParallelNKC<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4, size, scale_0, p, multibinner, N_threads);
 		
 		// Run Markov chains
-		sampler.set_bandwidth(0.1);
-		sampler.burn_in(200, 50*size, 0.18, true);
-		for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
+		sampler.set_tune_rate(1.0003);
+		sampler.set_bandwidth(0.05);
+		sampler.burn_in(800, 50*size, 0.18, true, true);
+		//sampler.set_bandwidth(0.01);
+		//sampler.step(10000*size, false);
+		//for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
 		
 		count = 0;
 		convergence = false;
@@ -621,10 +645,12 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {
+bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {
 	double Delta[4];
+	//unsigned int N_samples_indiv[4] = {200, 200, 200, 200};
 	for(unsigned int i=0; i<4; i++) {
 		Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples;
+		//Delta[i] = (std_bin_max(i) - std_bin_min(i)) / (double)N_samples_indiv[i];
 	}
 	
 	timespec t_start, t_end;
@@ -649,9 +675,26 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 						x[2] = std_bin_min(2) + ((double)k + 0.5)*Delta[2];
 						for(unsigned int l=0; l<N_samples; l++) {
 							x[3] = std_bin_min(3) + ((double)l + 0.5)*Delta[3];
-							prob = exp(calc_logP(&(x[0]), 4, p));
+							double logprob = calc_logP(&(x[0]), 4, p);
+							prob = exp(logprob);
 							multibinner(x, prob);
+							//chainlogger(x, prob);
 							stats_i(x, prob*1.e6);
+							/*if(logprob > -3) {
+								#pragma omp critical (cout)
+								{
+									std::cout << logprob;
+									double tmp_DM = x[0];
+									double logprob2;
+									for(double dDM = 0.1; dDM <= 1.; dDM += 0.1) {
+										x[0] = tmp_DM + dDM;
+										logprob2 = calc_logP(&(x[0]), 4, p);
+										std::cout << "\t" << std::setprecision(3) << logprob2;
+									}
+									std::cout << std::endl;
+									x[0] = tmp_DM;
+								}
+							}*/
 						}
 					}
 				}
@@ -664,11 +707,21 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 	
 	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer
 	
-	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) { multibinner.get_binner(i)->normalize(); }	// Normalize bins to peak value
+	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+		multibinner.get_binner(i)->normalize();		// Normalize bins to peak value
+		//multibinner.get_binner(i)->print_bins();
+	}
 	
 	// Print stats and run time
 	stats.print();
 	std::cout << std::endl << "Time elapsed for " << N_samples*N_samples*N_samples*N_samples << " samples: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return true;
+}
+
+void print_logpdf(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, double (&m)[5], double (&err)[5], double DM, double Ar, double Mr, double FeH) {
+	MCMCParams p(l, b, mag, model, data);
+	double x[4] = {DM, Ar, Mr, FeH};
+	double tmp = calc_logP(&(x[0]), 4, p);
+	std::cout << std::setprecision(3) << "(" << DM << ", " << Ar << ", " << Mr << ", " << FeH << ") -> " << tmp << std::endl << std::endl;
 }

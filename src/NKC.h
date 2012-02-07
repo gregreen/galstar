@@ -108,7 +108,7 @@ public:
 	
 	// Mutators
 	void step(bool log_step, bool jump);		// Take one step
-	void burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance, bool tune);	// Burn in while adjusting proposal covariance
+	void burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance, bool tune, bool adjust_proposal);	// Burn in while adjusting proposal covariance
 	void set_scale(const double *const sigma);								// Set proposal covariance to diag(sigma)
 	void set_covariance(const double *const cov);								// Set proposal covariance to <cov>
 	void set_bandwidth(double _h) { h = _h; h_N = pow(h,N); log_h = log(_h); };	// Set bandwidth by which the step size is scaled
@@ -260,7 +260,7 @@ struct TNKC<TParams, TLogger>::TState {
 template<class TParams, class TLogger>
 inline double TNKC<TParams, TLogger>::q_YX() {
 	double tmp = 0.;
-	for(unsigned int i=0; i<size; i++) { tmp += Gaussian_density(Y.element, X[i].element, invV, normV, N, h, h_N, log_h, false); }//fail_count++; }
+	for(unsigned int i=0; i<size; i++) { tmp += Gaussian_density(Y.element, X[i].element, invV, N, normV, h, h_N, log_h, false); }//fail_count++; }
 	return tmp / (double)size;
 }
 
@@ -269,10 +269,10 @@ template<class TParams, class TLogger>
 inline double TNKC<TParams, TLogger>::q_XY(unsigned int u) {
 	double tmp = 0.;
 	for(unsigned int i=0; i<size; i++) {
-		if(i != u) { tmp += Gaussian_density(X[u].element, X[i].element, invV, normV, N, h, h_N, log_h, false); }
+		if(i != u) { tmp += Gaussian_density(X[u].element, X[i].element, invV, N, normV, h, h_N, log_h, false); }
 		//if(i != u) { tmp += GDCache(u, i, X[u], X[i], this); }
 	}
-	tmp += Gaussian_density(X[u].element, Y.element, invV, normV, N, h, h_N, log_h, false);
+	tmp += Gaussian_density(X[u].element, Y.element, invV, N, normV, h, h_N, log_h, false);
 	//fail_count++;
 	return tmp / (double)size;
 }
@@ -343,10 +343,15 @@ void TNKC<TParams, TLogger>::step(bool log_step=true, bool jump=true) {
 	if(Y.pi > X_ML.pi) { X_ML = Y; }
 	
 	double alpha;
-	if(use_log) { alpha = fast_exp(Y.pi - X[i_updt].pi); } else { alpha = Y.pi / X[i_updt].pi; }
-	if(jump && (alpha != 0)) {
-		double q_factor = q_XY(i_updt) / q_YX();
-		alpha *= q_factor;
+	if(isinff(X[i_updt].pi) && !(isinff(Y.pi))) {
+		alpha = 2.;	// Accept the proposal if the current state has zero probability and the proposed state doesn't
+	} else {
+		if(use_log) { alpha = fast_exp(Y.pi - X[i_updt].pi); } else { alpha = Y.pi / X[i_updt].pi; }
+		if(jump && (alpha != 0)) {
+			double q_factor = q_XY(i_updt) / q_YX();
+			//if(q_factor != 1) { std::cout << q_factor << std::endl; }
+			alpha *= q_factor;
+		}
 	}
 	
 	bool accept = false;
@@ -384,18 +389,20 @@ void TNKC<TParams, TLogger>::step(bool log_step=true, bool jump=true) {
 }
 
 template<class TParams, class TLogger>
-void TNKC<TParams, TLogger>::burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance=0.25, bool tune=true) {
+void TNKC<TParams, TLogger>::burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance=0.25, bool tune=true, bool adjust_proposal=true) {
 	bool jump = false;
 	for(unsigned int i=0; i<N_rounds; i++) {
-		if(i > N_rounds/2) { jump = true; }
+		if(i > N_rounds/2) {
+			jump = true;
+		}
 		for(unsigned int n=0; n<round_length; n++) { step(false, jump); }
 		flush(false);
 		for(unsigned int j=0; j<N; j++) {
 			for(unsigned int k=j+1; k<N; k++) { V[N*j+k] = stats.cov(j,k); V[k+N*j] = V[N*j+k]; }
 			V[N*j+j] = stats.cov(j,j);
 		}
-		update_sqrtV();
-		if(i == 0) {
+		if(adjust_proposal) { update_sqrtV(); }
+		if(i < N_rounds/3) {
 			stats.clear();
 		} else if (tune) {
 			double acceptance_rate = get_acceptance_rate();
@@ -583,7 +590,7 @@ public:
 	
 	// Mutators - TODO: Parallelize some of these routines, using <burn_in> as a template
 	void step(unsigned int N_steps, bool log_step);				// Take the given number of steps in each NKC object
-	void burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance, bool tune);				// Burn in while adjusting proposal covariance in each NKC object
+	void burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance, bool tune, bool adjust_proposal);	// Burn in while adjusting proposal covariance in each NKC object
 	void set_scale(const double *const sigma) { for(unsigned int i=0; i<N_chains; i++) { nkc[i]->set_scale(sigma); } };		// Set proposal covariance to diag(sigma)
 	void set_covariance(const double *const cov) { for(unsigned int i=0; i<N_chains; i++) { nkc[i]->set_covariance(cov); } };	// Set proposal covariance to <cov>
 	void set_bandwidth(double h) { for(unsigned int i=0; i<N_chains; i++) { nkc[i]->set_bandwidth(h); } }				// Set bandwidth by which the step size is scaled
@@ -647,11 +654,11 @@ void TParallelNKC<TParams, TLogger>::step(unsigned int N_steps, bool log_step=tr
 }
 
 template<class TParams, class TLogger>
-void TParallelNKC<TParams, TLogger>::burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance=0.25, bool tune=true){
+void TParallelNKC<TParams, TLogger>::burn_in(unsigned int N_rounds, unsigned int round_length, double target_acceptance=0.25, bool tune=true, bool adjust_proposal=true){
 	#pragma omp parallel shared(N_rounds, round_length) num_threads(N_chains)
 	{
 		unsigned int thread_ID = omp_get_thread_num();
-		nkc[thread_ID]->burn_in(N_rounds, round_length, target_acceptance, tune);
+		nkc[thread_ID]->burn_in(N_rounds, round_length, target_acceptance, tune, adjust_proposal);
 	}
 }
 

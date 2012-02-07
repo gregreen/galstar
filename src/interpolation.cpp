@@ -28,7 +28,8 @@ double TLinearInterp::operator()(double x) const {
 	if((x < x_min) || (x > x_max)) { return std::numeric_limits<double>::quiet_NaN(); }
 	double index_dbl = (x - x_min) * inv_dx;
 	unsigned int index_nearest = (unsigned int)(index_dbl + 0.5);
-	double dist = (index_dbl - (double)(index_nearest)) * dx;
+	return f_x[index_nearest];
+	/*double dist = (index_dbl - (double)(index_nearest)) * dx;
 	if(index_nearest == N) { return f_x[N-1] - dist*(f_x[N-1]-f_x[N-2])*inv_dx; }
 	if(dist == 0) {
 		return f_x[index_nearest];
@@ -36,7 +37,7 @@ double TLinearInterp::operator()(double x) const {
 		return f_x[index_nearest] + dist * (f_x[index_nearest+1]-f_x[index_nearest])*inv_dx;
 	} else {
 		return f_x[index_nearest] + dist * (f_x[index_nearest]-f_x[index_nearest-1])*inv_dx;
-	}
+	}*/
 }
 
 double TLinearInterp::dfdx(double x) const {

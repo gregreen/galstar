@@ -604,7 +604,7 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 		sampler.burn_in(800, 50*size, 0.18, true, true);
 		//sampler.set_bandwidth(0.01);
 		//sampler.step(10000*size, false);
-		for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
+		//for(unsigned int i=0; i<N_threads; i++) { std::cout << "h[" << i << "] = " << sampler.get_chain(i)->get_bandwidth() << std::endl; }
 		
 		count = 0;
 		convergence = false;

@@ -349,7 +349,7 @@ void TNKC<TParams, TLogger>::step(bool log_step=true, bool jump=true) {
 		if(use_log) { alpha = fast_exp(Y.pi - X[i_updt].pi); } else { alpha = Y.pi / X[i_updt].pi; }
 		if(jump && (alpha != 0)) {
 			double q_factor = q_XY(i_updt) / q_YX();
-			if(gsl_rng_uniform(r) < 0.00001) { std::cout << q_factor << "\t" << alpha<< std::endl; }
+			//if(gsl_rng_uniform(r) < 0.00001) { std::cout << q_factor << "\t" << alpha<< std::endl; }
 			//if(q_factor != 1) { std::cout << q_factor << std::endl; }
 			alpha *= q_factor;
 		}

@@ -500,10 +500,11 @@ inline double fast_exp(double y) {
 	} else if(y > 700.) {
 		return std::numeric_limits<double>::infinity();
 	}
-	double d;
+	/*double d;
 	*((int*)(&d) + 0) = 0;
 	*((int*)(&d) + 1) = (int)(1512775 * y + 1072632447);
-	return d;
+	return d;*/
+	return exp(y);
 }
 
 // Seed a gsl_rng with the Unix time in nanoseconds

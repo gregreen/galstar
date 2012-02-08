@@ -568,7 +568,7 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 {
 	unsigned int size = 15;			// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
-	unsigned int max_rounds = 10;		// After <max_rounds> rounds, the Markov chains are terminated
+	unsigned int max_rounds = 3;		// After <max_rounds> rounds, the Markov chains are terminated
 	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
 	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
 	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run

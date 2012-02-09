@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2.7
 
 import numpy as np;
 import matplotlib.pyplot as plt;
@@ -35,7 +35,7 @@ def loadimage(fn):
 	img[i,j] = p
 	return img, x, y, p
 
-def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(None,None), params=None):
+def plotimg(img, x, y, p, ax, axis_labels=None, xlim=(None,None), ylim=(None,None), params=None):
 	bounds = [x.min(), x.max(), y.min(), y.max()]
 	for i in range(2):
 		if xlim[i] != None: bounds[i] = xlim[i]
@@ -67,23 +67,24 @@ def plotimg(img, x, y, p, ax, xname=None, yname=None, xlim=(None,None), ylim=(No
 	# Set canvas size
 	ax.set_xlim(bounds[0:2])
 	ax.set_ylim(bounds[2:])
-	# Set axes labels
-	if xname != None: ax.set_xlabel(r'$\mathrm{%s}$'%xname)
-	if xname != None: ax.set_ylabel(r'$\mathrm{%s}$'%yname)
+	# Set axis labels
+	if axis_labels != None:
+		ax.set_xlabel(r'$\mathrm{%s}$'%axis_labels[0])
+		ax.set_ylabel(r'$\mathrm{%s}$'%axis_labels[1])
 
 # Draw a figure with multiple plots, laid out in a manner determined by <shape>
-def make_figure(fn_list, img_fname, shape, xname, yname, xlim=(None,None), ylim=(None,None), params_list=None):
+def make_figure(fn_list, img_fname, shape, axis_labels, xlim=(None,None), ylim=(None,None), params_list=None, param_indices=None):
 	fig = plt.figure(figsize=(8.5,11.))
 	ax = []
 	for i,fname in enumerate(fn_list):
 		img, x, y, p = loadimage(fname)
 		ax.append(fig.add_subplot(shape[0], shape[1], i+1, axisbg='k'))
 		if params_list != None:
-			params_i = params_list[i]
+			params_i = [params_list[i][param_indices[0]], params_list[i][param_indices[1]]]
 		else:
 			params_i = None
-		plotimg(img, x, y, p, ax[-1], xname, yname, xlim, ylim, params_i)
-	fig.suptitle(r'$\ln \mathrm{P}(' + xname + '\, , \,' + yname + ') \mathrm{, \ normalized \ to \ peak}$', y=0.95, fontsize=16)
+		plotimg(img, x, y, p, ax[-1], axis_labels, xlim, ylim, params_i)
+	fig.suptitle(r'$\ln \mathrm{P}(' + axis_labels[0] + '\, , \,' + axis_labels[1] + ') \mathrm{, \ normalized \ to \ peak}$', y=0.95, fontsize=16)
 	fig.savefig(img_fname, transparent=False, dpi=300)
 	plt.close(fig)
 
@@ -91,6 +92,7 @@ def main():
 	# Parse commandline arguments
 	parser = argparse.ArgumentParser(prog='plotpdf', description='Plots posterior distributions produced by galstar', add_help=True)
 	parser.add_argument('files', nargs='+', type=str, help='Input posterior distributions')
+	parser.add_argument('--params', nargs=2, type=str, required=True, help='Names of parameters, in order (e.g. "DM Ar")')
 	parser.add_argument('--truth', type=str, default=None, help='File containing true parameter values')
 	parser.add_argument('--converged', nargs='+', type=str, help='Filter out nonconverged stars using provided stats files')
 	parser.add_argument('--output', type=str, required=True, help='Output image filename base (without extension)')
@@ -107,6 +109,19 @@ def main():
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
+	
+	# Determine names and indices of parameters
+	param_dict = {'dm':(0, '\mu'), 'ar':(1, 'A_r'), 'mr':(2, 'M_r'), 'feh':(3, 'Z')}
+	param_indices, param_labels = [], []
+	for p in values.params:
+		try:
+			tmp = param_dict[p.lower()]
+			param_indices.append(tmp[0])
+			param_labels.append(tmp[1])
+		except:
+			print 'Invalid parameter name: "%s"' % p
+			print 'Valid parameter names are DM, Ar, Mr and FeH.'
+			return 1
 	
 	# Sort filenames
 	files = galstarutils.sort_filenames(values.files)
@@ -168,7 +183,7 @@ def main():
 		img_fname = str(values.output + '_' + str(i) + '.' + values.imgtype)
 		
 		# Generate this figure
-		make_figure(fn_list, img_fname, values.shape, values.xname, values.yname, xlim, ylim, params_list)
+		make_figure(fn_list, img_fname, values.shape, param_labels, xlim, ylim, params_list, param_indices)
 	
 	print 'Done.'
 	return 0

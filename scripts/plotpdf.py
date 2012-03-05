@@ -157,7 +157,6 @@ def main():
 	# Determine # of figures to make
 	N_per_fig = values.shape[0]*values.shape[1]
 	N_figs = int(len(values.files)/N_per_fig)
-	print N_per_fig, N_figs, len(values.files)
 	if N_figs*N_per_fig < len(values.files):
 		N_figs += 1
 	

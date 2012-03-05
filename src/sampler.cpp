@@ -135,7 +135,7 @@ inline double TModel::rho_disk(double R, double Z) const {
 
 // the number of stars per unit solid area and unit distance modulus,
 // in direction l,b at distance modulus DM
-inline double TModel::log_dn(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const {
+double TModel::log_dn(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const {
 	double X, Y, Z;
 	double D = pow10(DM/5.+1.);
 	computeCartesianPositions(X, Y, Z, cos_l, sin_l, cos_b, sin_b, D);
@@ -148,7 +148,7 @@ inline double TModel::log_dn(double cos_l, double sin_l, double cos_b, double si
 }
 
 // Fraction of stars at given position in the halo
-inline double TModel::f_halo(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const {
+double TModel::f_halo(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const {
 	double X, Y, Z;
 	double D = pow10(DM/5.+1.);
 	computeCartesianPositions(X, Y, Z, cos_l, sin_l, cos_b, sin_b, D);
@@ -162,7 +162,7 @@ inline double TModel::f_halo(double cos_l, double sin_l, double cos_b, double si
 }
 
 // Mean disk metallicity at given position in space
-inline double TModel::mu_disk(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const {
+double TModel::mu_disk(double cos_l, double sin_l, double cos_b, double sin_b, double DM) const {
 	double X, Y, Z;
 	double D = pow10(DM/5.+1.);
 	computeCartesianPositions(X, Y, Z, cos_l, sin_l, cos_b, sin_b, D);
@@ -564,9 +564,9 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 }
 
 // N_threads	 # of parallel Normal Kernel couplers to run
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=15, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
-	unsigned int size = 15;			// # of chains in each Normal Kernel Coupler
+	unsigned int size = N_samplers;		// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
 	unsigned int max_rounds = 3;		// After <max_rounds> rounds, the Markov chains are terminated
 	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
@@ -611,6 +611,80 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 		tmp_max_rounds = max_rounds;
 		while((count < tmp_max_rounds) && !convergence) {
 			sampler.step(N_steps);
+			highest_GR = -1.;
+			for(unsigned int i=0; i<4; i++) {
+				tmp_GR = sampler.get_GR_diagnostic(i);
+				if(tmp_GR > highest_GR) { highest_GR = tmp_GR; }
+				//if(sampler.get_GR_diagnostic(i) > convergence_threshold) { convergence = false; break; }
+			}
+			if(highest_GR < convergence_threshold) { convergence = true; }
+			count++;
+			if(!convergence && (count == tmp_max_rounds) && (highest_GR < 2.) && (tmp_max_rounds < 4*max_rounds)) { tmp_max_rounds += max_rounds; std::cout << "Extending run." << std::endl; }
+		}
+		
+		sampler.print_stats();
+		stats = sampler.get_stats();
+		
+		if(convergence) { break; } else { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
+	}
+	
+	//stats = sampler.get_stats();
+	
+	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer
+	
+	// Normalize bins to peak value
+	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+		multibinner.get_binner(i)->normalize();
+	}
+	
+	// Print stats and run time
+	//sampler.print_stats();
+	if(!convergence) { std::cout << std::endl << "Did not converge." << std::endl; }
+	std::cout << std::endl << "Time elapsed for " << stats.get_N_items()/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	
+	return convergence;
+}
+
+// N_threads	 # of parallel affine samplers to run
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+{
+	unsigned int size = N_samplers;		// # of chains in each affine sampler
+	unsigned int max_rounds = 3;		// After <max_rounds> rounds, the Markov chains are terminated
+	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
+	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
+	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
+	bool convergence;
+	
+	//timespec t_start, t_end;
+	//clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	
+	// Set run parameters
+	//MCMCParams p(l, b, mag, model, data);
+	p.update(mag);
+	TAffineSampler<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
+	TAffineSampler<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
+	
+	timespec t_start, t_end;
+	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	
+	unsigned int count, tmp_max_rounds;
+	double highest_GR, tmp_GR;
+	for(unsigned int n=0; n<max_attempts; n++) {
+		multibinner.clear();
+		TParallelAffineSampler<MCMCParams, TMultiBinner<4> > sampler(pdf_ptr, rand_state_ptr, 4, size, p, multibinner, N_threads);
+		
+		// Burn-in
+		sampler.set_scale(5.);
+		sampler.step(N_steps, false, 4.);
+		sampler.clear();
+		
+		// Main run
+		count = 0;
+		convergence = false;
+		tmp_max_rounds = max_rounds;
+		while((count < tmp_max_rounds) && !convergence) {
+			sampler.set_scale(3.);
+			sampler.step(N_steps, true, 10.);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);

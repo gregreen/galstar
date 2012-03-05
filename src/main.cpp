@@ -106,6 +106,7 @@ int main(int argc, char **argv)
 	bool brute_force = false;
 	bool los = false;
 	unsigned int N_steps = 200000;
+	unsigned int N_samplers = 15;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
@@ -131,6 +132,7 @@ int main(int argc, char **argv)
 		("brute", "Use brute-force sampling")
 		("los", "Sample entire line of sight at once")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
+		("samplers", po::value<unsigned int>(&N_samplers), "# of NKC samplers")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
 	;
@@ -233,6 +235,7 @@ int main(int argc, char **argv)
 		bool converged;
 		converged = sample_mcmc_los(model, l, b, *(data.star.begin()), data, multibinner, stats, N_steps, N_threads);
 	} else {
+		MCMCParams p(l, b, *data.star.begin(), model, data);
 		unsigned int count = 0;
 		unsigned int N_nonconverged = 0;
 		for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
@@ -247,7 +250,7 @@ int main(int argc, char **argv)
 				TChainLogger chainlogger(outfn.str(), 4, 1, true);
 				converged = sample_brute_force(model, l, b, *it, data, multibinner, chainlogger, stats, N_samples, N_threads);
 			} else {
-				converged = sample_mcmc(model, l, b, *it, data, multibinner, stats, N_steps, N_threads);
+				converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
 			}
 			if(!converged) { N_nonconverged++; }
 			// Write out the marginalized posteriors

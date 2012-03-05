@@ -248,7 +248,7 @@ int main(int argc, char **argv)
 				stringstream outfn("");
 				outfn << statsfn << "_" << count << ".chain";
 				TChainLogger chainlogger(outfn.str(), 4, 1, true);
-				converged = sample_brute_force(model, l, b, *it, data, multibinner, chainlogger, stats, N_samples, N_threads);
+				converged = sample_brute_force(model, p, *it, multibinner, chainlogger, stats, N_samples, N_threads);
 			} else {
 				converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
 			}

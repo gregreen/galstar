@@ -321,9 +321,9 @@ bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitude
 // Functions for individual star
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_mcmc(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
 bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples, unsigned int N_threads);
+bool sample_brute_force(TModel &model,MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples, unsigned int N_threads);
 
 // Debugging functions
 void print_logpdf(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, double (&m)[5], double (&err)[5], double DM, double Ar, double Mr, double FeH);

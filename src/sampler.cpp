@@ -564,7 +564,7 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 }
 
 // N_threads	 # of parallel Normal Kernel couplers to run
-bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=15, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_mcmc(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=15, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each Normal Kernel Coupler
 	N_steps *= size;			// # of steps to take in each Normal Kernel Coupler per round
@@ -585,7 +585,8 @@ bool sample_mcmc(TModel &model, double l, double b, TStellarData::TMagnitudes &m
 	scale_0[_FeH] = 0.1;
 	
 	// Set run parameters
-	MCMCParams p(l, b, mag, model, data);
+	//MCMCParams p(l, b, mag, model, data);
+	p.update(mag);
 	TNKC<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
 	TNKC<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
 	
@@ -719,7 +720,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 	return convergence;
 }
 
-bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {
+bool sample_brute_force(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {
 	double Delta[4];
 	//unsigned int N_samples_indiv[4] = {200, 200, 200, 200};
 	for(unsigned int i=0; i<4; i++) {
@@ -731,7 +732,8 @@ bool sample_brute_force(TModel &model, double l, double b, TStellarData::TMagnit
 	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
 	
 	// Set up model parameters
-	MCMCParams p(l, b, mag, model, data);
+	p.update(mag);
+	//MCMCParams p(l, b, mag, model, data);
 	
 	omp_set_num_threads(N_threads);
 	#pragma omp parallel

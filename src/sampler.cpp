@@ -500,6 +500,16 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	// P(Ar|G): Flat prior for Ar > 0. Don't allow DM < 0
 	if((x[_Ar] < 0.) || (x[_DM] < 0.)) { return neginf; }
 	
+	// Make sure star is in range of template spectra
+	if((x[_Mr] < p.model.Mr_min) || (x[_Mr] > p.model.Mr_max) || (x[_FeH] < p.model.FeH_min) || (x[_FeH] > p.model.FeH_max)) { return neginf; }
+	
+	// If the giant or dwarf flag is set, make sure star is appropriate type
+	if(p.giant_flag == 1) {		// Dwarfs only
+		if(x[_Mr] < 4.) { return neginf; }
+	} else if(p.giant_flag == 2) {	// Giants only
+		if(x[_Mr] > 4.) { return neginf; }
+	}
+	
 	// P(Mr|G) from luminosity function
 	double loglf_tmp = p.model.lf(x[_Mr]);
 	logP += loglf_tmp;
@@ -522,34 +532,9 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	
 	//double x_tmp[4] = {x[_DM], x[_Ar], x[_Mr], x[_FeH]};
 	
-	if((x[_Mr] < p.model.Mr_min) || (x[_Mr] > p.model.Mr_max) || (x[_FeH] < p.model.FeH_min) || (x[_FeH] > p.model.FeH_max)) { return neginf; }
 	TSED sed_bilin_interp = (*p.model.sed_interp)(x[_Mr], x[_FeH]);
 	double logL = logL_SED(M, p.err, sed_bilin_interp);
 	logP += logL;
-	
-	/*if(logL > -10.) {
-		std::cout << logL;
-		for(double dp = 0.01; dp <= 0.1; dp += 0.01) {
-			TSED sed_binin_interp_2 = (*p.model.sed_interp)(x[_Mr] + dp, x[_FeH]);
-			double logL_2 = logL_SED(M, p.err, sed_binin_interp_2);
-			std::cout << "\t" << logL_2;
-			if(logL - logL_2 > 100.) {
-				double tmp = 1.;
-				sed_binin_interp_2 = (*p.model.sed_interp)(x[_Mr] + dp, x[_FeH]);
-				logL_2 = logL_SED(M, p.err, sed_binin_interp_2);
-			}
-		}
-		std::cout << std::endl;
-	}*/
-	//double logL = -0.5 * ((x[_Mr] - 5.)*(x[_Mr] - 5.)/(0.1*0.1) + (x[_FeH] + 0.7)*(x[_FeH] + 0.7)/(0.1*0.1));
-	//logL += -0.5 * ((x[_DM] - 10.)*(x[_DM] - 10.)/(0.5*0.5) + (x[_Ar] - 1.5)*(x[_Ar] - 1.5)/(0.1*0.1));
-	//logP += logL;
-	
-	//if(logL > -0.1) {
-	//	#pragma omp critical (cout)
-	//	std::cout << x[_DM] << "\t" << x[_Ar] << "\t" << x[_Mr] << "\t" << x[_FeH] << std::endl;
-	//}
-	//logP += logL;
 	
 	#undef neginf
 	return logP;
@@ -559,7 +544,13 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 	x_0[_DM] = gsl_ran_flat(r, 5.1, 19.9);
 	x_0[_Ar] = gsl_ran_flat(r, 0.1, 3.0);
-	x_0[_Mr] = gsl_ran_flat(r, -0.5, 27.5);
+	if(p.giant_flag == 0) {
+		x_0[_Mr] = gsl_ran_flat(r, -0.5, 27.5);	// Both giants and dwarfs
+	} else if(p.giant_flag == 1) {
+		x_0[_Mr] = gsl_ran_flat(r, 4.5, 27.5);	// Dwarfs only
+	} else {
+		x_0[_Mr] = gsl_ran_flat(r, -0.5, 3.5);	// Giants only
+	}
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
 

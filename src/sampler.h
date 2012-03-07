@@ -245,6 +245,9 @@ struct MCMCParams {
 	double m[NBANDS];
 	double err[NBANDS];
 	
+	// Flag whether to include only giants, only dwarfs, or both
+	unsigned int giant_flag;	// 0 = both, 1 = dwarfs, 2 = giants
+	
 	TLinearInterp *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
 	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &_mag, TModel &_model, TStellarData &_data)
@@ -271,6 +274,9 @@ struct MCMCParams {
 			(*f_halo_arr)[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM_i);
 			(*mu_disk_arr)[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM_i);
 		}
+		
+		// Set the giant flag to include both giants and dwarfs
+		giant_flag = 0;
 	}
 	
 	~MCMCParams() {

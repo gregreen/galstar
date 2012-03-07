@@ -105,6 +105,7 @@ int main(int argc, char **argv)
 	string statsfn("NONE");
 	bool brute_force = false;
 	bool los = false;
+	unsigned int giant_flag = 0;
 	unsigned int N_steps = 200000;
 	unsigned int N_samplers = 15;
 	unsigned int N_samples = 200;
@@ -135,6 +136,8 @@ int main(int argc, char **argv)
 		("samplers", po::value<unsigned int>(&N_samplers), "# of NKC samplers")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
+		("dwarf", "Assume star is a dwarf (Mr > 4)")
+		("giant", "Assume star is a giant (Mr < 4)")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -147,6 +150,11 @@ int main(int argc, char **argv)
 	test = vm.count("test");
 	if(vm.count("brute")) { brute_force = true; }
 	if(vm.count("los")) { los = true; }
+	if(vm.count("dwarf")) { giant_flag = 1; }
+	if(vm.count("giant")) {
+		if(giant_flag == 1) { std::cout << "--dwarf and --giant are incompatible options." << std::endl; return -1; }
+		giant_flag = 2;
+	}
 	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
@@ -228,14 +236,16 @@ int main(int argc, char **argv)
 	
 	
 	// Run sampler ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//std::cout << data.star.size() << std::endl;
 	if(los) {
 		unsigned int N_stars = data.star.size();
 		TStats stats(4*N_stars);
 		bool converged;
 		converged = sample_mcmc_los(model, l, b, *(data.star.begin()), data, multibinner, stats, N_steps, N_threads);
 	} else {
+		// Initialize class passed to sampling function, used to define the model and contain observed stellar magnitudes
 		MCMCParams p(l, b, *data.star.begin(), model, data);
+		p.giant_flag = giant_flag;	// Set flag which determines whether the model should consider only giants, only dwarfs, or both
+		// Pass each star in turn to the sampling function
 		unsigned int count = 0;
 		unsigned int N_nonconverged = 0;
 		for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {

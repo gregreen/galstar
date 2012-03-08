@@ -507,6 +507,8 @@ inline double fast_exp(double y) {
 	return exp(y);
 }
 
+#ifndef __SEED_GSL_RNG_
+#define __SEED_GSL_RNG_
 // Seed a gsl_rng with the Unix time in nanoseconds
 inline void seed_gsl_rng(gsl_rng **r) {
 	timespec t_seed;
@@ -516,6 +518,7 @@ inline void seed_gsl_rng(gsl_rng **r) {
 	*r = gsl_rng_alloc(gsl_rng_taus);
 	gsl_rng_set(*r, seed);
 }
+#endif
 
 // Sample from a Gaussian proposal distribution
 inline void Gaussian_proposal(const double *const x_0, double *x_1, const double *const transform, unsigned int N, const double bandwidth, gsl_rng *r) {

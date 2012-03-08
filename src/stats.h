@@ -11,6 +11,12 @@
 #include <vector>
 #include <math.h>
 
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_blas.h>
+#include <gsl/gsl_eigen.h>
+
 
 class TStats {
 	double *E_k;
@@ -34,15 +40,28 @@ public:
 	TStats& operator+=(const TStats &rhs);				// Add the data in another stats object to this one
 	TStats& operator=(const TStats &rhs);				// Copy data from another stats object to this one, replacing existing data
 	
+	friend TStats operator*(double a, const TStats& stats);
+	friend TStats operator*(const TStats& stats, double a);
+	
 	// Accessors
 	double mean(unsigned int i) const;				// Return < x_i >
 	double cov(unsigned int i, unsigned int j) const;		// Return covariance element Cov(i,j)
+	void get_cov_matrix(gsl_matrix* Sigma, gsl_matrix* invSigma, double* detSigma) const;	// Calculates the covariance matrix Sigma, alongside Sigma^{-1} and det(Sigma)
 	uint64_t get_N_items() const;
+	unsigned int get_dim() const;
 	
 	void print() const;						// Print out statistics
 	bool write_binary(std::string fname, std::ios::openmode writemode = std::ios::out) const;	// Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
 };
 
+// Overloaded arithmetic operations with TStats
+
+TStats operator*(double a, const TStats& stats);
+TStats operator*(const TStats& stats, double a);
+
+
 void Gelman_Rubin_diagnostic(TStats **stats_arr, unsigned int N_chains, double *R, unsigned int N);
+
+double metric_dist2(gsl_matrix* g, double* x_1, double* x_2, unsigned int N);
 
 #endif // _STATS_H__

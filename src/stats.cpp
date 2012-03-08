@@ -26,14 +26,16 @@ void TStats::clear() {
 
 // Update the chain from a an array of doubles with a weight
 void TStats::update(const double *const x, unsigned int weight) {
-	for(unsigned int i=0; i<N; i++) {
-		E_k[i] += x[i] * (double)weight;
-		for(unsigned int j=i; j<N; j++) {
-			E_ij[i+N*j] += x[i] * x[j] * (double)weight;
-			E_ij[N*i+j] = E_ij[i+N*j];
+	if(weight != 0) {
+		for(unsigned int i=0; i<N; i++) {
+			E_k[i] += x[i] * (double)weight;
+			for(unsigned int j=i; j<N; j++) {
+				E_ij[i+N*j] += x[i] * x[j] * (double)weight;
+				E_ij[N*i+j] = E_ij[i+N*j];
+			}
 		}
+		N_items_tot += (uint64_t)weight;
 	}
-	N_items_tot += (uint64_t)weight;
 }
 
 // Update the chain from the statistics in another TStats object
@@ -79,6 +81,27 @@ TStats& TStats::operator=(const TStats &rhs) {
 	return *this;
 }
 
+// Multiply a statistics operator by a scalar
+TStats operator*(double a, const TStats &stats) {
+	TStats tmp(stats.N);
+	tmp.N_items_tot = floor(a * stats.N_items_tot + 0.5);
+	for(unsigned int i=0; i<stats.N; i++) {
+		tmp.E_k[i] = a * stats.E_k[i];
+		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] += a * stats.E_ij[i+stats.N*j]; }
+	}
+	return tmp;
+}
+
+TStats operator*(const TStats &stats, double a) {
+	TStats tmp(stats.N);
+	tmp.N_items_tot = floor(a * stats.N_items_tot + 0.5);
+	for(unsigned int i=0; i<stats.N; i++) {
+		tmp.E_k[i] = a * stats.E_k[i];
+		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] += a * stats.E_ij[i+stats.N*j]; }
+	}
+	return tmp;
+}
+
 // Return covariance element Cov(i,j)
 double TStats::cov(unsigned int i, unsigned int j) const { return (E_ij[i+N*j] - E_k[i]*E_k[j]/(double)N_items_tot)/(double)N_items_tot; }
 
@@ -86,6 +109,42 @@ double TStats::cov(unsigned int i, unsigned int j) const { return (E_ij[i+N*j] -
 double TStats::mean(unsigned int i) const { return E_k[i] / (double)N_items_tot; }
 
 uint64_t TStats::get_N_items() const { return N_items_tot; }
+
+unsigned int TStats::get_dim() const { return N; }
+
+// Calculates the covariance matrix Sigma, alongside Sigma^{-1} and det(Sigma)
+void TStats::get_cov_matrix(gsl_matrix* Sigma, gsl_matrix* invSigma, double* detSigma) const {
+	// Check that the matrices are the correct size
+	assert(Sigma->size1 == N);
+	assert(Sigma->size2 == N);
+	assert(invSigma->size1 == N);
+	assert(invSigma->size2 == N);
+	
+	// Calculate the covariance matrix Sigma
+	double tmp;
+	for(unsigned int i=0; i<N; i++) {
+		for(unsigned int j=i; j<N; j++) {
+			tmp = cov(i,j);
+			gsl_matrix_set(Sigma, i, j, tmp);
+			if(i != j) { gsl_matrix_set(Sigma, j, i, tmp); }
+		}
+	}
+	
+	// Get the inverse of Sigma
+	int s;
+	gsl_permutation* p = gsl_permutation_alloc(N);
+	gsl_matrix* LU = gsl_matrix_alloc(N, N);
+	gsl_matrix_memcpy(LU, Sigma);
+	gsl_linalg_LU_decomp(LU, p, &s);
+	gsl_linalg_LU_invert(LU, p, invSigma);
+	
+	// Get the determinant of sigma
+	*detSigma = gsl_linalg_LU_det(LU, s);
+	
+	// Cleanup
+	gsl_matrix_free(LU);
+	gsl_permutation_free(p);
+}
 
 // Print out statistics
 void TStats::print() const {
@@ -160,4 +219,14 @@ void Gelman_Rubin_diagnostic(TStats **stats_arr, unsigned int N_chains, double *
 	
 	// Calculate estimated variance
 	for(unsigned int k=0; k<N; k++) { R[k] = 1. - 1./(double)N_items_tot + B[k]/W[k]; }
+}
+
+double metric_dist2(gsl_matrix* g, double* x_1, double* x_2, unsigned int N) {
+	double dist2 = 0.;
+	for(unsigned int i=0; i<N; i++) {
+		for(unsigned int j=0; j<N; j++) {
+			dist2 += (x_2[i] - x_1[i]) * (x_2[j] - x_1[j]) * gsl_matrix_get(g, i, j);
+		}
+	}
+	return dist2;
 }

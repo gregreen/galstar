@@ -24,16 +24,18 @@
 
 #include <boost/cstdint.hpp>
 
+#include "chain.h"
 #include "stats.h"
 
 
 /*************************************************************************
- *   Prototypes
+ *   Function Prototypes
  *************************************************************************/
 
 void seed_gsl_rng(gsl_rng **r);
 
 static void Gelman_Rubin_diagnostic(TStats **stats_arr, unsigned int N_chains, double *R);
+
 
 /*************************************************************************
  *   Affine Sampler class protoype
@@ -60,7 +62,8 @@ class TAffineSampler {
 	TParams& params;	// Constant model parameters
 	
 	// Information about chain
-	TStats stats;		// Stores expectation values, covariance, etc.
+	//TStats stats;		// Stores expectation values, covariance, etc.
+	TChain chain;		// Contains the entire chain
 	TLogger& logger;	// Object which logs states in the chain
 	TState X_ML;		// Maximum likelihood point encountered
 	boost::uint64_t N_accepted, N_rejected;		// # of steps which have been accepted and rejected. Used to tune and track acceptance rate.
@@ -88,9 +91,11 @@ public:
 	// Accessors
 	TLogger& get_logger() { return logger; }
 	TParams& get_params() { return params; }
-	TStats& get_stats() { return stats; }
+	TStats& get_stats() { return chain.stats; }
+	TChain& get_chain() { return chain; }
 	double get_scale() { return sqrta*sqrta; }
 	double get_acceptance_rate() { return (double)N_accepted/(double)(N_accepted+N_rejected); }
+	double get_Z_harmonic(double nsigma=1.) { return chain.get_Z_harmonic(nsigma); }
 	void print_state();
 	
 private:
@@ -100,57 +105,43 @@ private:
 
 
 /*************************************************************************
- *   Constructor and destructor
+ *   Parallel Affine Sampler Prototype
  *************************************************************************/
 
-// Constructor
-// Inputs:
-// 	_pdf		Target distribution, up to a normalization constant
-// 	_rand_state	Function which generates a random state, used for initialization of the chain
-// 	_L		# of concurrent states in the ensemble
-// 	_params		Misc. constant model parameters needed by _pdf
-// 	_logger		Object which logs the chain in some way. It must have an operator()(double state[N], unsigned int weight).
-// 			The logger could, for example, bin the chain, or just push back each state into a vector.
 template<class TParams, class TLogger>
-TAffineSampler<TParams, TLogger>::TAffineSampler(pdf_t _pdf, rand_state_t _rand_state, unsigned int _N, unsigned int _L, TParams& _params, TLogger& _logger, bool _use_log)
-	: pdf(_pdf), rand_state(_rand_state), params(_params), logger(_logger), N(_N), L(_L), X(NULL), Y(NULL), accept(NULL), r(NULL), stats(_N), use_log(_use_log)
-{
-	// Seed the random number generator
-	seed_gsl_rng(&r);
+class TParallelAffineSampler {
+	TAffineSampler<TParams, TLogger>** sampler;
+	unsigned int N;
+	unsigned int N_samplers;
+	TStats stats;
+	TStats** component_stats;
+	TLogger& logger;
+	TParams& params;
+	double *R;
 	
-	// Generate the initial state and record the most likely point
-	X = new TState[L];
-	Y = new TState[L];
-	accept = new bool[L];
-	for(unsigned int i=0; i<L; i++) {
-		X[i].initialize(N);
-		Y[i].initialize(N);
-	}
-	unsigned int index_of_best = 0;
-	for(unsigned int i=0; i<L; i++) {
-		rand_state(X[i].element, N, r, params);
-		X[i].pi = pdf(X[i].element, N, params);
-		X[i].weight = 1;
-		if(X[i] > X[index_of_best]) { index_of_best = i; }
-	}
-	X_ML = X[index_of_best];
+public:
+	// Constructor & Destructor
+	TParallelAffineSampler(typename TAffineSampler<TParams, TLogger>::pdf_t _pdf, typename TAffineSampler<TParams, TLogger>::rand_state_t _rand_state, unsigned int _N, unsigned int _L, TParams& _params, TLogger& _logger, unsigned int _N_samplers, bool _use_log=true);
+	~TParallelAffineSampler();
 	
-	// Set the initial step scale. 2 is good for most situations.
-	set_scale(2);
+	// Mutators
+	void step(unsigned int N_steps, bool record_steps, double cycle=0);					// Take the given number of steps in each affine sampler
+	void set_scale(double a) { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->set_scale(a); } };	// Set the dimensionless step size a
+	void clear() { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->clear(); }; stats.clear(); };
 	
-	// Initialize number of accepted and rejected steps to zero
-	N_accepted = 0;
-	N_rejected = 0;
-}
-
-// Destructor
-template<class TParams, class TLogger>
-TAffineSampler<TParams, TLogger>::~TAffineSampler() {
-	gsl_rng_free(r);
-	if(X != NULL) { delete[] X; X = NULL; }
-	if(Y != NULL) { delete[] Y; Y = NULL; }
-	if(accept != NULL) { delete[] accept; accept = NULL; }
-}
+	// Accessors
+	TLogger& get_logger() { return logger; }
+	TParams& get_params() { return params; }
+	TStats& get_stats() { return stats; }
+	TStats& get_stats(unsigned int index) { assert(index < N_samplers); return sampler[index]->get_stats(); }
+	TChain get_chain();
+	void get_GR_diagnostic(double *const GR) { for(unsigned int i=0; i<N; i++) { GR[i] = R[i]; } }
+	double get_GR_diagnostic(unsigned int index) { return R[index]; }
+	double get_scale(unsigned int index) { assert(index < N_samplers); return sampler[index]->get_scale(); }
+	void print_stats();
+	void print_state() { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->print_state(); } }
+	TAffineSampler<TParams, TLogger>* const get_sampler(unsigned int index) { assert(index < N_samplers); return sampler[index]; }
+};
 
 
 /*************************************************************************
@@ -204,6 +195,65 @@ struct TAffineSampler<TParams, TLogger>::TState {
 	bool operator>(const double& rhs) { return pi > rhs; }
 	bool operator<(const double& rhs) { return pi < rhs; }
 };
+
+
+
+/*************************************************************************
+ *   Affine Sampler Class Member Functions
+ *************************************************************************/
+
+/*************************************************************************
+ *   Constructor and destructor
+ *************************************************************************/
+
+// Constructor
+// Inputs:
+// 	_pdf		Target distribution, up to a normalization constant
+// 	_rand_state	Function which generates a random state, used for initialization of the chain
+// 	_L		# of concurrent states in the ensemble
+// 	_params		Misc. constant model parameters needed by _pdf
+// 	_logger		Object which logs the chain in some way. It must have an operator()(double state[N], unsigned int weight).
+// 			The logger could, for example, bin the chain, or just push back each state into a vector.
+template<class TParams, class TLogger>
+TAffineSampler<TParams, TLogger>::TAffineSampler(pdf_t _pdf, rand_state_t _rand_state, unsigned int _N, unsigned int _L, TParams& _params, TLogger& _logger, bool _use_log)
+	: pdf(_pdf), rand_state(_rand_state), params(_params), logger(_logger), N(_N), L(_L), X(NULL), Y(NULL), accept(NULL), r(NULL), use_log(_use_log), chain(_N, 1000*_L)
+{
+	// Seed the random number generator
+	seed_gsl_rng(&r);
+	
+	// Generate the initial state and record the most likely point
+	X = new TState[L];
+	Y = new TState[L];
+	accept = new bool[L];
+	for(unsigned int i=0; i<L; i++) {
+		X[i].initialize(N);
+		Y[i].initialize(N);
+	}
+	unsigned int index_of_best = 0;
+	for(unsigned int i=0; i<L; i++) {
+		rand_state(X[i].element, N, r, params);
+		X[i].pi = pdf(X[i].element, N, params);
+		X[i].weight = 1;
+		if(X[i] > X[index_of_best]) { index_of_best = i; }
+	}
+	X_ML = X[index_of_best];
+	
+	// Set the initial step scale. 2 is good for most situations.
+	set_scale(2);
+	
+	// Initialize number of accepted and rejected steps to zero
+	N_accepted = 0;
+	N_rejected = 0;
+}
+
+// Destructor
+template<class TParams, class TLogger>
+TAffineSampler<TParams, TLogger>::~TAffineSampler() {
+	gsl_rng_free(r);
+	if(X != NULL) { delete[] X; X = NULL; }
+	if(Y != NULL) { delete[] Y; Y = NULL; }
+	if(accept != NULL) { delete[] accept; accept = NULL; }
+}
 
 
 /*************************************************************************
@@ -287,7 +337,8 @@ void TAffineSampler<TParams, TLogger>::step(bool record_step) {
 		// Update sampler j
 		if(accept[j]) {
 			if(record_step) {
-				stats(X[j].element, X[j].weight);
+				//stats(X[j].element, X[j].weight);
+				chain.add_point(X[j].element, X[j].pi, (double)(X[j].weight));
 				#pragma omp critical (logger)
 				logger(X[j].element, X[j].weight);
 			}
@@ -310,7 +361,8 @@ template<class TParams, class TLogger>
 void TAffineSampler<TParams, TLogger>::flush(bool record_steps) {
 	for(unsigned int i=0; i<L; i++) {
 		if(record_steps) {
-			stats(X[i].element, X[i].weight);
+			//stats(X[i].element, X[i].weight);
+			chain.add_point(X[i].element, X[i].pi, (double)(X[i].weight));
 			#pragma omp critical (logger)
 			logger(X[i].element, X[i].weight);
 		}
@@ -324,7 +376,8 @@ void TAffineSampler<TParams, TLogger>::clear() {
 	for(unsigned int i=0; i<L; i++) {
 		X[i].weight = 0;
 	}
-	stats.clear();
+	//stats.clear();
+	chain.clear();
 	N_accepted = 0;
 	N_rejected = 0;
 }
@@ -345,56 +398,10 @@ void TAffineSampler<TParams, TLogger>::print_state() {
 }
 
 
+
 /*************************************************************************
- *   Auxiliary Functions
+ *   Parallel Affine Sampler Class Member Functions
  *************************************************************************/
-
-// Seed a gsl_rng with the Unix time in nanoseconds
-/*inline void seed_gsl_rng(gsl_rng **r) {
-	timespec t_seed;
-	clock_gettime(CLOCK_REALTIME, &t_seed);
-	long unsigned int seed = 1e9*(long unsigned int)t_seed.tv_sec;
-	seed += t_seed.tv_nsec;
-	*r = gsl_rng_alloc(gsl_rng_taus);
-	gsl_rng_set(*r, seed);
-}*/
-
-
-
-
-template<class TParams, class TLogger>
-class TParallelAffineSampler {
-	TAffineSampler<TParams, TLogger>** sampler;
-	unsigned int N;
-	unsigned int N_samplers;
-	TStats stats;
-	TStats** component_stats;
-	TLogger& logger;
-	TParams& params;
-	double *R;
-	
-public:
-	// Constructor & Destructor
-	TParallelAffineSampler(typename TAffineSampler<TParams, TLogger>::pdf_t _pdf, typename TAffineSampler<TParams, TLogger>::rand_state_t _rand_state, unsigned int _N, unsigned int _L, TParams& _params, TLogger& _logger, unsigned int _N_samplers, bool _use_log=true);
-	~TParallelAffineSampler();
-	
-	// Mutators
-	void step(unsigned int N_steps, bool record_steps=true, double cycle=0);				// Take the given number of steps in each affine sampler
-	void set_scale(double a) { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->set_scale(a); } };	// Set the dimensionless step size a
-	void clear() { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->clear(); }; stats.clear(); };
-	
-	// Accessors
-	TLogger& get_logger() { return logger; }
-	TParams& get_params() { return params; }
-	TStats& get_stats() { return stats; }
-	TStats& get_stats(unsigned int index) { assert(index < N_samplers); return sampler[index]->get_stats(); }
-	void get_GR_diagnostic(double *const GR) { for(unsigned int i=0; i<N; i++) { GR[i] = R[i]; } }
-	double get_GR_diagnostic(unsigned int index) { return R[index]; }
-	double get_scale(unsigned int index) { assert(index < N_samplers); return sampler[index]->get_scale(); }
-	void print_stats();
-	void print_state() { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->print_state(); } }
-	TAffineSampler<TParams, TLogger>* const get_sampler(unsigned int index) { assert(index < N_samplers); return sampler[index]; }
-};
 
 template<class TParams, class TLogger>
 TParallelAffineSampler<TParams, TLogger>::TParallelAffineSampler(typename TAffineSampler<TParams, TLogger>::pdf_t _pdf, typename TAffineSampler<TParams, TLogger>::rand_state_t _rand_state, unsigned int _N, unsigned int _L, TParams& _params, TLogger& _logger, unsigned int _N_samplers, bool _use_log)
@@ -459,6 +466,37 @@ void TParallelAffineSampler<TParams, TLogger>::print_stats() {
 	for(unsigned int i=0; i<N_samplers; i++) { std::cout << std::setprecision(3) << 100.*get_sampler(i)->get_acceptance_rate() << "%" << (i != N_samplers - 1 ? " " : ""); }
 	std::cout << std::endl;
 }
+
+template<class TParams, class TLogger>
+TChain TParallelAffineSampler<TParams, TLogger>::get_chain() {
+	unsigned int capacity = 0;
+	for(unsigned int i=0; i<N_samplers; i++) {
+		capacity += sampler[i]->get_chain().get_length();
+	}
+	TChain tmp(N, capacity);
+	for(unsigned int i=0; i<N_samplers; i++) {
+		tmp += sampler[i]->get_chain();
+	}
+	return tmp;
+}
+
+
+/*************************************************************************
+ *   Auxiliary Functions
+ *************************************************************************/
+
+#ifndef __SEED_GSL_RNG_
+#define __SEED_GSL_RNG_
+// Seed a gsl_rng with the Unix time in nanoseconds
+inline void seed_gsl_rng(gsl_rng **r) {
+	timespec t_seed;
+	clock_gettime(CLOCK_REALTIME, &t_seed);
+	long unsigned int seed = 1e9*(long unsigned int)t_seed.tv_sec;
+	seed += t_seed.tv_nsec;
+	*r = gsl_rng_alloc(gsl_rng_taus);
+	gsl_rng_set(*r, seed);
+}
+#endif
 
 
 #endif // _AFFINE_SAMPLER_H__

@@ -56,7 +56,7 @@ Name=galstar debug
 Type=Native Application
 
 [Launch][Launch Configuration 2][Data]
-Arguments=mcmcout.txt:DM,Ar --datafile ../test_input/90_10.in --threads 1
+Arguments=mcmcout.txt:DM,Ar --datafile ../test_input/90_10.in
 Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
 Dependency Action=Nothing
 EnvironmentGroup=default

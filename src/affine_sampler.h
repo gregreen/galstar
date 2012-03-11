@@ -499,4 +499,17 @@ inline void seed_gsl_rng(gsl_rng **r) {
 #endif
 
 
+/*************************************************************************
+ *   Null logger:
+ * 	Fulfills the role of a logger for the affine sampler,
+ * 	but doesn't actually log anything.
+ *************************************************************************/
+
+struct TNullLogger {
+	void operator()(double* element, double weight) {}
+};
+
+
+
+
 #endif // _AFFINE_SAMPLER_H__

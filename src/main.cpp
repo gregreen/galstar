@@ -106,8 +106,8 @@ int main(int argc, char **argv)
 	bool brute_force = false;
 	bool los = false;
 	unsigned int giant_flag = 0;
-	unsigned int N_steps = 200000;
-	unsigned int N_samplers = 15;
+	unsigned int N_steps = 1000;
+	unsigned int N_samplers = 25;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
@@ -260,7 +260,11 @@ int main(int argc, char **argv)
 				TChainLogger chainlogger(outfn.str(), 4, 1, true);
 				converged = sample_brute_force(model, p, *it, multibinner, chainlogger, stats, N_samples, N_threads);
 			} else {
-				converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+				if(giant_flag != 0) {
+					converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+				} else {
+					converged = sample_affine_both(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+				}
 			}
 			if(!converged) { N_nonconverged++; }
 			// Write out the marginalized posteriors

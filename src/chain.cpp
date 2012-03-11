@@ -5,6 +5,7 @@
  *   Chain Class Member Functions
  *************************************************************************/
 
+// Standard constructor
 TChain::TChain(unsigned int _N, unsigned int _capacity)
 	: stats(_N)
 {
@@ -12,6 +13,20 @@ TChain::TChain(unsigned int _N, unsigned int _capacity)
 	length = 0;
 	total_weight = 0;
 	set_capacity(_capacity);
+}
+
+// Copy constructor
+TChain::TChain(const TChain& c)
+	: stats(1)
+{
+	stats = c.stats;
+	x = c.x;
+	L = c.L;
+	w = c.w;
+	total_weight = c.total_weight;
+	N = c.N;
+	length = c.length;
+	capacity = c.capacity;
 }
 
 TChain::~TChain() {}
@@ -55,7 +70,7 @@ double TChain::get_total_weight() const {
 	return total_weight;
 }
 
-double* TChain::get_element(unsigned int i) {
+const double* TChain::get_element(unsigned int i) const {
 	return &(x[i*N]);
 }
 
@@ -67,8 +82,14 @@ double TChain::get_w(unsigned int i) const {
 	return w[i];
 }
 
-void TChain::append(TChain& chain, bool reweight, double nsigma) {
+void TChain::append(const TChain& chain, bool reweight, double nsigma) {
 	assert(chain.N == N);	// Make sure the two chains have the same dimensionality
+	
+	// Weight each chain according to Bayesian evidence, if requested
+	double a = 1.;
+	if(reweight) {
+		a = chain.get_Z_harmonic(nsigma) / get_Z_harmonic(nsigma) * total_weight / chain.total_weight;
+	}
 	
 	// Append the last chain to this one
 	if(capacity < length + chain.length) { set_capacity(1.5*(length + chain.length)); }
@@ -77,10 +98,8 @@ void TChain::append(TChain& chain, bool reweight, double nsigma) {
 	L.insert(L.end(), chain.L.begin(), chain.L.end());
 	w.insert(w.end(), chain.w.begin(), chain.w.end());
 	
-	// Weight each chain according to Bayesian evidence, if requested
-	double a = 1.;
 	if(reweight) {
-		a = chain.get_Z_harmonic(nsigma) / get_Z_harmonic(nsigma) * total_weight / chain.total_weight;
+		std::cout << "a = " << a << std::endl;
 		std::vector<double>::iterator w_end = w.end();
 		for(std::vector<double>::iterator it = w_end_old; it != w_end; ++it) {
 			*it *= a;
@@ -90,17 +109,42 @@ void TChain::append(TChain& chain, bool reweight, double nsigma) {
 	stats += a * chain.stats;
 	length += chain.length;
 	total_weight += a * chain.total_weight;
+	
+	//stats.clear();
+	//for(unsigned int i=0; i<length; i++) {
+	//	stats(get_element(i), 1.e10*w[i]);
+	//}
 }
 
 double* TChain::operator [](unsigned int i) {
 	return &(x[i*N]);
 }
 
-void TChain::operator +=(TChain& rhs) {
+void TChain::operator +=(const TChain& rhs) {
 	append(rhs);
 }
 
-double TChain::get_Z_harmonic(double nsigma) {
+TChain& TChain::operator =(const TChain& rhs) {
+	if(&rhs != this) {
+		stats = rhs.stats;
+		x = rhs.x;
+		L = rhs.L;
+		w = rhs.w;
+		total_weight = rhs.total_weight;
+		N = rhs.N;
+		length = rhs.length;
+		capacity = rhs.capacity;
+	}
+	return *this;
+}
+
+
+// Uses a variant of the harmonic mean approximation to determine the evidence.
+// Essentially, the regulator chosen is an ellipsoid with radius nsigma standard deviations
+// along each principal axis. The regulator is then 1/V inside the ellipsoid and 0 without,
+// where V is the volume of the ellipsoid. In this form, the harmonic mean approximation
+// has finite variance. See Gelfand & Dey (1994) and Robert & Wraith (2009) for details.
+double TChain::get_Z_harmonic(double nsigma) const {
 	// Get the covariance and determinant of the chain
 	gsl_matrix* Sigma = gsl_matrix_alloc(N, N);
 	gsl_matrix* invSigma = gsl_matrix_alloc(N, N);
@@ -114,18 +158,15 @@ double TChain::get_Z_harmonic(double nsigma) {
 	}
 	
 	// Determine the volume normalization (the prior volume)
-	double V = 1. / sqrt(detSigma) * 2. * pow(SQRTPI * nsigma, (double)N) / (double)(N) / gsl_sf_gamma((double)(N)/2.);
+	double V = sqrt(detSigma) * 2. * pow(SQRTPI * nsigma, (double)N) / (double)(N) / gsl_sf_gamma((double)(N)/2.);
 	
 	// Determine <1/L> inside the prior volume
 	double dist2;
 	double sum_invL = 0;
-	//double sum_weights = 0;
 	for(unsigned int i=0; i<length; i++) {
 		dist2 = metric_dist2(invSigma, get_element(i), mu, N);
-		//std::cout << dist2 << std::endl;
 		if(dist2 < nsigma*nsigma) {
 			sum_invL += w[i] / exp(L[i]);
-			//sum_weights += w[i];
 		}
 	}
 	
@@ -137,12 +178,3 @@ double TChain::get_Z_harmonic(double nsigma) {
 	// Return the estimate of Z
 	return V / sum_invL * total_weight;
 }
-
-
-/*double vect_dist(double* x_1, double *x_2, unsigned int N) {
-	double tmp = 0;
-	for(unsigned int i=0; i<N; i++) {
-		tmp += (x_1[i] - x_2[i]) * (x_1[i] - x_2[i]);
-	}
-	return sqrt(tmp);
-}*/

@@ -48,23 +48,24 @@ public:
 	TStats stats;				// Keeps track of statistics of chain
 	
 	TChain(unsigned int _N, unsigned int _capacity);
+	TChain(const TChain& c);
 	TChain(std::string filename);			// Construct the chain from a file	// TODO
 	~TChain();
 	
 	// Mutators
-	void add_point(double* element, double L_i, double w_i);		// Add a point to the end of the chain
-	void clear();								// Remove all the points from the chain
-	void set_capacity(unsigned int _capacity);				// Set the capacity of the vectors used in the chain
-	double* get_element(unsigned int i);					// Return the i-th point in the chain
-	double get_Z_harmonic(double nsigma=1.);				// Estimate the Bayesian Evidence of the posterior using the Harmonic Mean Approximation
-	void append(TChain& chain, bool reweight=false, double nsigma=1.);	// Append a second chain to this one
+	void add_point(double* element, double L_i, double w_i);			// Add a point to the end of the chain
+	void clear();									// Remove all the points from the chain
+	void set_capacity(unsigned int _capacity);					// Set the capacity of the vectors used in the chain
+	void append(const TChain& chain, bool reweight=false, double nsigma=1.);	// Append a second chain to this one
 	
 	// Accessors
-	unsigned int get_capacity() const;		// Return the capacity of the vectors used in the chain
-	unsigned int get_length() const;		// Return the number of unique points in the chain
-	double get_total_weight() const;		// Return the sum of the weights in the chain
-	double get_L(unsigned int i) const;		// Return the likelihood of the i-th point
-	double get_w(unsigned int i) const;		// Return the weight of the i-th point
+	unsigned int get_capacity() const;			// Return the capacity of the vectors used in the chain
+	unsigned int get_length() const;			// Return the number of unique points in the chain
+	double get_total_weight() const;			// Return the sum of the weights in the chain
+	const double* get_element(unsigned int i) const;	// Return the i-th point in the chain
+	double get_L(unsigned int i) const;			// Return the likelihood of the i-th point
+	double get_w(unsigned int i) const;			// Return the weight of the i-th point
+	double get_Z_harmonic(double nsigma=1.) const;		// Estimate the Bayesian Evidence of the posterior using the Harmonic Mean Approximation
 	
 	// File IO
 	bool save(std::string filename) const;		// Save the chain to file	// TODO
@@ -72,7 +73,8 @@ public:
 	
 	// Operators
 	double* operator [](unsigned int i);		// Calls get_element
-	void operator +=(TChain& rhs);		// Calls append
+	void operator +=(const TChain& rhs);			// Calls append
+	TChain& operator =(const TChain& rhs);		// Assignment operator
 };
 
 

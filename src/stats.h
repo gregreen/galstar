@@ -27,6 +27,7 @@ class TStats {
 public:
 	// Constructor & Destructor
 	TStats(unsigned int _N);
+	TStats(const TStats& s);	// Copy
 	~TStats();
 	
 	// Mutators
@@ -62,6 +63,6 @@ TStats operator*(const TStats& stats, double a);
 
 void Gelman_Rubin_diagnostic(TStats **stats_arr, unsigned int N_chains, double *R, unsigned int N);
 
-double metric_dist2(gsl_matrix* g, double* x_1, double* x_2, unsigned int N);
+double metric_dist2(gsl_matrix* g, const double* x_1, const double* x_2, unsigned int N);
 
 #endif // _STATS_H__

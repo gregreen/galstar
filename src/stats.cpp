@@ -1,6 +1,7 @@
 
 #include "stats.h"
 
+// Standard constructor
 TStats::TStats(unsigned int _N)
 	: E_k(NULL), E_ij(NULL), N(_N)
 {
@@ -9,6 +10,21 @@ TStats::TStats(unsigned int _N)
 	clear();
 }
 
+// Copy constructor
+TStats::TStats(const TStats& s)
+	: E_k(NULL), E_ij(NULL)
+{
+	N = s.N;
+	E_k = new double[N];
+	E_ij = new double[N*N];
+	N_items_tot = s.N_items_tot;
+	for(unsigned int i=0; i<N; i++) {
+		E_k[i] = s.E_k[i];
+		for(unsigned int j=0; j<N; j++) { E_ij[i+N*j] = s.E_ij[i+N*j]; }
+	}
+}
+
+// Destructor
 TStats::~TStats() {
 	delete[] E_k;
 	delete[] E_ij;
@@ -70,8 +86,16 @@ TStats& TStats::operator+=(const TStats &rhs) {
 
 // Copy data from another stats object to this one, replacing existing data
 TStats& TStats::operator=(const TStats &rhs) {
-	assert(rhs.N == N);
 	if(&rhs != this) {
+		// Resize the expectation-value arrays if necessary
+		if(rhs.N != N) {
+			delete[] E_k;
+			delete[] E_ij;
+			N = rhs.N;
+			E_k = new double[N];
+			E_ij = new double[N*N];
+		}
+		// Copy in the data from the rhs object
 		N_items_tot = rhs.N_items_tot;
 		for(unsigned int i=0; i<N; i++) {
 			E_k[i] = rhs.E_k[i];
@@ -82,12 +106,12 @@ TStats& TStats::operator=(const TStats &rhs) {
 }
 
 // Multiply a statistics operator by a scalar
-TStats operator*(double a, const TStats &stats) {
+TStats operator*(double a, const TStats& stats) {
 	TStats tmp(stats.N);
 	tmp.N_items_tot = floor(a * stats.N_items_tot + 0.5);
 	for(unsigned int i=0; i<stats.N; i++) {
 		tmp.E_k[i] = a * stats.E_k[i];
-		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] += a * stats.E_ij[i+stats.N*j]; }
+		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] = a * stats.E_ij[i+stats.N*j]; }
 	}
 	return tmp;
 }
@@ -97,7 +121,7 @@ TStats operator*(const TStats &stats, double a) {
 	tmp.N_items_tot = floor(a * stats.N_items_tot + 0.5);
 	for(unsigned int i=0; i<stats.N; i++) {
 		tmp.E_k[i] = a * stats.E_k[i];
-		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] += a * stats.E_ij[i+stats.N*j]; }
+		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] = a * stats.E_ij[i+stats.N*j]; }
 	}
 	return tmp;
 }
@@ -221,7 +245,7 @@ void Gelman_Rubin_diagnostic(TStats **stats_arr, unsigned int N_chains, double *
 	for(unsigned int k=0; k<N; k++) { R[k] = 1. - 1./(double)N_items_tot + B[k]/W[k]; }
 }
 
-double metric_dist2(gsl_matrix* g, double* x_1, double* x_2, unsigned int N) {
+double metric_dist2(gsl_matrix* g, const double* x_1, const double* x_2, unsigned int N) {
 	double dist2 = 0.;
 	for(unsigned int i=0; i<N; i++) {
 		for(unsigned int j=0; j<N; j++) {

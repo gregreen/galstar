@@ -647,17 +647,13 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
 	bool convergence;
 	
-	//timespec t_start, t_end;
-	//clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	timespec t_start, t_end;
+	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
 	
 	// Set run parameters
-	//MCMCParams p(l, b, mag, model, data);
 	p.update(mag);
 	TAffineSampler<MCMCParams, TMultiBinner<4> >::pdf_t pdf_ptr = &calc_logP;
 	TAffineSampler<MCMCParams, TMultiBinner<4> >::rand_state_t rand_state_ptr = &ran_state;
-	
-	timespec t_start, t_end;
-	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
 	
 	unsigned int count, tmp_max_rounds;
 	double highest_GR, tmp_GR;
@@ -689,6 +685,11 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		}
 		
 		sampler.print_stats();
+		std::cout << "(n_sigma, Z):" << std::endl;
+		TChain chain = sampler.get_chain();
+		//for(double nsigma=0.5; nsigma < 2.6; nsigma += 0.5) {
+		std::cout << 0.8 << "\t" << chain.get_Z_harmonic(0.8) << std::endl;
+		//}
 		stats = sampler.get_stats();
 		
 		if(convergence) { break; } else { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
@@ -709,6 +710,89 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 	std::cout << std::endl << "Time elapsed for " << stats.get_N_items()/size << " steps (" << count << " rounds) on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
 	
 	return convergence;
+}
+
+// Sample both dwarfs and giants
+// N_threads	 # of parallel affine samplers to run
+bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+{
+	unsigned int size = N_samplers;		// # of chains in each affine sampler
+	unsigned int max_rounds = 5;		// After <max_rounds> rounds, the Markov chains are terminated
+	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
+	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
+	bool convergence[2];
+	
+	timespec t_start, t_end;
+	clock_gettime(CLOCK_REALTIME, &t_start); // Start timer
+	
+	// Set run parameters
+	p.update(mag);
+	TNullLogger nulllogger;
+	TAffineSampler<MCMCParams, TNullLogger >::pdf_t pdf_ptr = &calc_logP;
+	TAffineSampler<MCMCParams, TNullLogger >::rand_state_t rand_state_ptr = &ran_state;
+	
+	unsigned int count, tmp_max_rounds;
+	double highest_GR, tmp_GR;
+	
+	TChain chain(4, 2*N_steps*N_samplers);
+	
+	// Sample the dwarf posterior, then the giant posterior
+	for(unsigned int giant_flag=1; giant_flag<3; giant_flag++) {
+		p.giant_flag = giant_flag;
+		TParallelAffineSampler<MCMCParams, TNullLogger > sampler(pdf_ptr, rand_state_ptr, 4, size, p, nulllogger, N_threads);
+		
+		// Burn-in
+		sampler.set_scale(5.);
+		sampler.step(N_steps, false, 4.);
+		sampler.clear();
+		
+		// Main run
+		sampler.set_scale(3.);
+		count = 0;
+		convergence[giant_flag-1] = false;
+		while((count < max_rounds) && !convergence[giant_flag-1]) {
+			sampler.step(N_steps, true, 10.);
+			highest_GR = -1.;
+			for(unsigned int i=0; i<4; i++) {
+				tmp_GR = sampler.get_GR_diagnostic(i);
+				if(tmp_GR > highest_GR) { highest_GR = tmp_GR; }
+			}
+			if(highest_GR < convergence_threshold) { convergence[giant_flag-1] = true; }
+			count++;
+		}
+		
+		sampler.print_stats();
+		
+		TChain tmp_chain = sampler.get_chain();
+		if(giant_flag == 1) {
+			chain.append(tmp_chain, false);
+		} else {
+			chain.append(tmp_chain, true, 1.);
+		}
+		
+		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }
+		std::cout << std::endl;
+	}
+	
+	// Log the results
+	stats = chain.stats;
+	for(unsigned int i=0; i<chain.get_length(); i++) {
+		multibinner(chain[i], 1.e10*chain.get_w(i));
+	}
+	
+	// Normalize bins to peak value
+	for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+		multibinner.get_binner(i)->normalize();
+	}
+	
+	clock_gettime(CLOCK_REALTIME, &t_end);	// End timer
+	
+	// Print stats and run time
+	stats.print();
+	if((!convergence[0]) || (!convergence[1])) { std::cout << std::endl << "Did not converge." << std::endl; }
+	std::cout << std::endl << "Time elapsed for " << chain.get_length() << " samples on " << N_threads << " threads: " << std::setprecision(3) << (double)(t_end.tv_sec-t_start.tv_sec + (t_end.tv_nsec - t_start.tv_nsec)/1e9) << " s" << std::endl << std::endl;
+	
+	return (convergence[0] && convergence[1]);
 }
 
 bool sample_brute_force(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples=150, unsigned int N_threads=4) {

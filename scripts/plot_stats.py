@@ -212,7 +212,7 @@ def main():
 		if values.errorbars:
 			ax.errorbar(x, y, xerr, yerr, linestyle='None')
 		else:
-			ax.plot(x, y, '.', linestyle='None', markersize=1)
+			ax.plot(x, y, '.', linestyle='None', markersize=2)
 		ax.set_xlabel(r'$\mu$', fontsize=18)
 		ax.set_ylabel(r'$A_r$', fontsize=18)
 		ax.set_title(r'$\mathrm{Scatter\ Plot\ of\ } ( \mu , A_r )$', fontsize=22)
@@ -231,7 +231,7 @@ def main():
 		if values.errorbars:
 			ax.errorbar(x, y, xerr, yerr, linestyle='None')
 		else:
-			ax.plot(x, y, '.', linestyle='None', markersize=1)
+			ax.plot(x, y, '.', linestyle='None', markersize=2)
 		ax.set_xlabel(r'$\mu$', fontsize=18)
 		ax.set_ylabel(r'$A_r$', fontsize=18)
 		ax.set_title(r'$\mathrm{Galfast\ Catalog}$', fontsize=22)
@@ -287,8 +287,8 @@ def main():
 			if values.norm:
 				x = x/xerr
 				y = y/yerr
-			ax_scatter.plot(x[conv], y[conv], 'b.', linestyle='None', markersize=1)
-			ax_scatter.plot(x[not_conv], y[not_conv], 'r.', linestyle='None', markersize=1)
+			ax_scatter.plot(x[conv], y[conv], 'b.', linestyle='None', markersize=2)
+			ax_scatter.plot(x[not_conv], y[not_conv], 'r.', linestyle='None', markersize=2)
 		# Create histograms
 		xmin, xmax = ax_scatter.get_xlim()
 		ymin, ymax = ax_scatter.get_ylim()

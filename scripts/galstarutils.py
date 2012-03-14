@@ -25,11 +25,15 @@
 
 import numpy as np
 import pyfits
+import sys
 from scipy import interpolate
 from struct import unpack
 from os.path import abspath
 from operator import itemgetter
-from math import sqrt
+from math import sqrt, isnan
+
+import matplotlib.pyplot as plt;
+import matplotlib as mplib
 
 
 def read_stats(fname):
@@ -120,6 +124,81 @@ def sort_filenames(fn_list):
 		sorted_fn_list.append(z[n][0])
 	return sorted_fn_list
 
+def load_stacked(fn_list):
+	N = len(fn_list)
+	
+	# Load the first pdf
+	img, x, y, p = loadimage(fn_list[0])
+	x_len, y_len = len(x), len(y)
+	
+	# Stack the remaining pdfs onto this one
+	maxticks = 50.
+	progress = 1./float(N)
+	ticks = 0
+	sys.stdout.write('Stacking pdfs: '); sys.stdout.flush()
+	for i in range(1,N):
+		# Update the progress bar
+		progress += 1./float(N)
+		while ticks < progress*maxticks:
+			sys.stdout.write('#'); sys.stdout.flush()
+			ticks += 1
+		# Load and stack the current pdf
+		if (len(x) == x_len) and (len(y) == y_len):
+			img_tmp, x, y, p_tmp = loadimage(fn_list[i])
+			img += img_tmp
+			p += p_tmp
+		else:
+			print 'Error: Image #%d of has different dimensions than first image' % i
+			return False
+	sys.stdout.write('\n'); sys.stdout.flush()
+	# Normalize probability densities to peak and return
+	img -= np.max(img)
+	p -= np.max(p)
+	return img, x, y, p
+
+# Load true parameter values from ascii file
+def load_true_values(fn):
+	params = np.loadtxt(fn, usecols=(0,1,2,3))
+	return params
+
+# Load SM-formatted image and return an array
+def loadimage(fn):
+	x, y, p = np.loadtxt(fn, usecols=(0, 1, 2), unpack=True)
+	# Determine minumum nonzero probability
+	ln_minp = p[0]
+	for p_i in p:
+		if (not isnan(p_i)) and (p_i < ln_minp):
+			ln_minp = p_i
+	# Replace points with zero probability with minimum nonzero probability
+	for i,p_i in enumerate(p):
+		if isnan(p_i): p[i] = ln_minp
+	# Sort x and y and get dx and dy
+	xs = x.copy(); xs.sort(); dx = xs[1:xs.size] - xs[0:xs.size-1]; dx = dx.max();
+	ys = y.copy(); ys.sort(); dy = ys[1:ys.size] - ys[0:ys.size-1]; dy = dy.max();
+	# Nearest-neighbor interpolation
+	i = ((x - xs[0]) / dx).round().astype(int)
+	j = ((y - ys[0]) / dy).round().astype(int)
+	# Determine width and height of image
+	nx = i.max() + 1
+	ny = j.max() + 1
+	# Fill in the image
+	img = np.zeros([nx, ny]); img[:,:] = p.min();
+	img[i,j] = p
+	return img, x, y, p
+
+def plotimg(img, x, y, ax, axis_labels=None, xlim=(None,None), ylim=(None,None), params=None):
+	bounds = [x.min(), x.max(), y.min(), y.max()]
+	for i in range(2):
+		if xlim[i] != None: bounds[i] = xlim[i]
+		if ylim[i] != None: bounds[i+2]= ylim[i]
+	ax.imshow(img.transpose(), origin='lower', aspect='auto', interpolation='nearest', cmap='hot', extent=(x.min(),x.max(),y.min(),y.max()))
+	# Set canvas size
+	ax.set_xlim(bounds[0:2])
+	ax.set_ylim(bounds[2:])
+	# Set axis labels
+	if axis_labels != None:
+		ax.set_xlabel(r'$\mathrm{%s}$'%axis_labels[0])
+		ax.set_ylabel(r'$\mathrm{%s}$'%axis_labels[1])
 
 def main():
 	

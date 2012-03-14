@@ -72,6 +72,14 @@ void TBinnerND::write_to_file(std::string fname, bool ascii, bool log_pdf) {
 	}
 	if(ascii) {
 		std::ofstream outfile(fname.c_str());
+		// Write general info about bins in first line
+		outfile << N << "\t";
+		for(unsigned int i=0; i<N; i++) {					// This second section gives the dimensions of the mesh
+			unsigned int width_i = bin->get_width(i);
+			outfile << bin->get_width(i) << "\t" << min[i] << "\t" << max[i] << "\t" << dx[i] << (i != N-1 ? "\t" : "");
+		}
+		outfile << "\n";
+		// Write each bin
 		NDArray<double>::iterator i_end = bin->end();
 		for(NDArray<double>::iterator i=bin->begin(); i != i_end; ++i) {
 			tmp_bin = *i;
@@ -85,9 +93,9 @@ void TBinnerND::write_to_file(std::string fname, bool ascii, bool log_pdf) {
 		outfile.close();
 	} else {
 		std::fstream outfile(fname.c_str(), std::ios::binary | std::ios::out);
+		outfile.write(reinterpret_cast<char *>(&N), sizeof(unsigned int));
 		for(unsigned int i=0; i<N; i++) {					// This second section gives the dimensions of the mesh
 			unsigned int width_i = bin->get_width(i);
-			outfile.write(reinterpret_cast<char *>(&N), sizeof(unsigned int));
 			outfile.write(reinterpret_cast<char *>(&width_i), sizeof(unsigned int));
 			outfile.write(reinterpret_cast<char *>(&min[i]), sizeof(double));
 			outfile.write(reinterpret_cast<char *>(&max[i]), sizeof(double));

@@ -751,7 +751,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		count = 0;
 		convergence[giant_flag-1] = false;
 		while((count < max_rounds) && !convergence[giant_flag-1]) {
-			sampler.step(N_steps, true, 10.);
+			sampler.step(N_steps, true, 0);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);
@@ -765,9 +765,9 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		
 		TChain tmp_chain = sampler.get_chain();
 		if(giant_flag == 1) {
-			chain.append(tmp_chain, false);
+			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			chain.append(tmp_chain, true, 1.);
+			chain.append(tmp_chain, true, 1.);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }

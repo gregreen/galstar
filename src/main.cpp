@@ -32,7 +32,7 @@ void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &pa
 	cerr << "# MOCK:   m_obs :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<     m[i]; }; cerr << "\n";
 }
 
-bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs) {
+bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs, unsigned int N_bins=50) {
 	#define G(name)         varname2int(name)
 	static const regex e("([^:]+):([^,]+)(?:,([^,]+))?(?:,([^,]+))?");
 	for(vector<string>::const_iterator i = output_pdfs.begin(); i != output_pdfs.end(); ++i) {
@@ -73,7 +73,7 @@ bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns,
 				double max[2];
 				for(unsigned int k=0; k<ndim; k++) {
 					bin_dim[k] = G(what[k+2]);
-					width[k] = 50;//std_bin_width(what[k+2]);
+					width[k] = N_bins;//std_bin_width(what[k+2]);
 					min[k] = std_bin_min(what[k+2]);
 					max[k] = std_bin_max(what[k+2]);
 				}
@@ -108,6 +108,7 @@ int main(int argc, char **argv)
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 1000;
 	unsigned int N_samplers = 25;
+	unsigned int N_bins = 50;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
@@ -133,7 +134,8 @@ int main(int argc, char **argv)
 		("brute", "Use brute-force sampling")
 		("los", "Sample entire line of sight at once")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
-		("samplers", po::value<unsigned int>(&N_samplers), "# of NKC samplers")
+		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
+		("bins", po::value<unsigned int>(&N_bins), "# of bins along each axis")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
 		("dwarf", "Assume star is a dwarf (Mr > 4)")
@@ -158,7 +160,7 @@ int main(int argc, char **argv)
 	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
-	if(!construct_binners(multibinner, output_fns, output_pdfs)) { return -1; }
+	if(!construct_binners(multibinner, output_fns, output_pdfs, N_bins)) { return -1; }
 	
 	////////////// Construct Model
 	TModel model(lf_fn, seds_fn);

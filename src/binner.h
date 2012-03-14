@@ -79,9 +79,10 @@ struct TBinner2D {
 	void operator ()(const double *const pos, double weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
-	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true);	// Write the binned data to a binary file
-	void print_bins();								// Print out the bins to cout
-	void get_ML(double (&ML)[2]);							// Return maximum likelihood
+	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true, double zero_diff=-10.);	// Write binned data to file
+	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=true, double zero_diff=-10.);	// Load binned data from file
+	void print_bins();											// Print out the bins to cout
+	void get_ML(double (&ML)[2]);										// Return maximum likelihood
 };
 
 
@@ -187,7 +188,7 @@ void TBinner2D<N>::get_ML(double (&ML)[2]) {
 
 // Write the binned data to a binary file
 template<unsigned int N>
-void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf) {
+void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, double zero_diff) {
 	double log_bin_min = std::numeric_limits<double>::infinity();
 	double tmp_bin;
 	if(log_pdf) {
@@ -196,16 +197,16 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf) {
 		}
 		log_bin_min = log(log_bin_min);
 	}
-	if(ascii) {
+	if(ascii) {	// Write ASCII
 		std::ofstream outfile(fname.c_str());
 		for(unsigned int j=0; j<width[0]; j++) {
 			for(unsigned int k=0; k<width[1]; k++) {
-				if(!log_pdf) { tmp_bin = bin[j][k]; } else if(bin[j][k] == 0.) { tmp_bin = log_bin_min - 2.; } else { tmp_bin = log(bin[j][k]); }
+				if(!log_pdf) { tmp_bin = bin[j][k]; } else if(bin[j][k] == 0.) { tmp_bin = log_bin_min + zero_diff; } else { tmp_bin = log(bin[j][k]); }
 				outfile << min[0]+dx[0]*((double)j+0.5) << "\t" << min[1]+dx[1]*((double)k+0.5) << "\t" << tmp_bin << "\n";
 			}
 		}
 		outfile.close();
-	} else {
+	} else {	// Write binary
 		std::fstream outfile(fname.c_str(), std::ios::binary | std::ios::out);
 		unsigned int tmp;
 		for(unsigned int i=0; i<2; i++) {					// This second section gives the dimensions of the mesh
@@ -217,7 +218,7 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf) {
 		}
 		for(unsigned int j=0; j<width[0]; j++) {
 			for(unsigned int k=0; k<width[1]; k++) {
-				if(!log_pdf) { tmp_bin = bin[j][k]; } else if(bin[j][k] == 0.) { tmp_bin = log_bin_min - 2.; } else { tmp_bin = log(bin[j][k]); }
+				if(!log_pdf) { tmp_bin = bin[j][k]; } else if(bin[j][k] == 0.) { tmp_bin = log_bin_min + zero_diff; } else { tmp_bin = log(bin[j][k]); }
 				outfile.write(reinterpret_cast<char *>(&tmp_bin), sizeof(double));
 			}
 		}

@@ -43,7 +43,7 @@ public:
 	void operator ()(double *pos, double weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
-	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true);	// Write the binned data to a binary file
+	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false);	// Write the binned data to a binary file
 	void print_bins();								// Print out the bins to cout
 };
 
@@ -79,8 +79,8 @@ struct TBinner2D {
 	void operator ()(const double *const pos, double weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
-	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=true, double zero_diff=-10.);	// Write binned data to file
-	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=true, double zero_diff=-10.);	// Load binned data from file
+	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Write binned data to file
+	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Load binned data from file
 	void print_bins();											// Print out the bins to cout
 	void get_ML(double (&ML)[2]);										// Return maximum likelihood
 };

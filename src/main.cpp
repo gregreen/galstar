@@ -23,7 +23,7 @@ void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &pa
 	for(unsigned int i=0; i<NBANDS; i++) {
 		mtrue[i] = par.SED->v[i] + par.get_DM();
 		mext[i]  = mtrue[i] + par.get_Ar() * TModel::Acoef[i];
-		m[i]     = mext[i] + gsl_ran_gaussian(rng, err[i]);
+		m[i] = mext[i] + gsl_ran_gaussian(rng, err[i]);
 	}
 
 	cerr << "# MOCK:    input: " << "Ar=" << par.get_Ar() << ", DM=" << par.get_DM() << ", Mr=" << par.get_Mr() << ", FeH=" << par.get_FeH() << "\n";
@@ -103,6 +103,7 @@ int main(int argc, char **argv)
 	range<double> DM_range(5,20,0.02), Ar_range(0,5,0.02);
 	string datafn("NONE");
 	string statsfn("NONE");
+	string chainfn("NONE");
 	bool brute_force = false;
 	bool los = false;
 	unsigned int giant_flag = 0;
@@ -131,6 +132,7 @@ int main(int argc, char **argv)
 		("range-Ar",   po::value<range<double> >(&Ar_range), "Ar grid to sample")
 		("datafile", po::value<string>(&datafn), "Stellar magnitudes and errors file")
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
+		("chainfile", po::value<string>(&chainfn), "Base filename for chain output")
 		("brute", "Use brute-force sampling")
 		("los", "Sample entire line of sight at once")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
@@ -262,10 +264,14 @@ int main(int argc, char **argv)
 				TChainLogger chainlogger(outfn.str(), 4, 1, true);
 				converged = sample_brute_force(model, p, *it, multibinner, chainlogger, stats, N_samples, N_threads);
 			} else {
+				stringstream outfn("");
+				if(chainfn != "NONE") {
+					outfn << chainfn << "_" << count << ".chain";
+				}
 				if(giant_flag != 0) {
-					converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+					converged = sample_affine(model, p, *it, multibinner, stats, outfn.str(), N_samplers, N_steps, N_threads);
 				} else {
-					converged = sample_affine_both(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+					converged = sample_affine_both(model, p, *it, multibinner, stats, outfn.str(), N_samplers, N_steps, N_threads);
 				}
 			}
 			if(!converged) { N_nonconverged++; }

@@ -6,7 +6,7 @@ BuildDirs=/home/greg/projects/galstar/build
 CMakeDir=/usr/share/cmake-2.8/Modules
 Current CMake Binary=file:///usr/bin/cmake
 CurrentBuildDir=file:///home/greg/projects/galstar/build
-CurrentBuildType=Release
+CurrentBuildType=Debug
 CurrentInstallDir=file:///home/greg/projects/galstar/staging
 ProjectRootRelative=./
 

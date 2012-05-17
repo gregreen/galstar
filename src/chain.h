@@ -43,13 +43,13 @@ private:
 	std::vector<double> w;			// Weight of each point in chain
 	double total_weight;			// Sum of the weights
 	unsigned int N, length, capacity;	// # of dimensions, length and capacity of chain
-
+	
 public:
 	TStats stats;				// Keeps track of statistics of chain
 	
 	TChain(unsigned int _N, unsigned int _capacity);
-	TChain(const TChain& c);
-	TChain(std::string filename);			// Construct the chain from a file	// TODO
+	TChain(const TChain& c);				// Copy constructor
+	TChain(std::string filename, bool reserve_extra=false);	// Construct the chain from a file
 	~TChain();
 	
 	// Mutators
@@ -68,12 +68,12 @@ public:
 	double get_Z_harmonic(double nsigma=1.) const;		// Estimate the Bayesian Evidence of the posterior using the Harmonic Mean Approximation
 	
 	// File IO
-	bool save(std::string filename) const;		// Save the chain to file	// TODO
-	bool load(std::string filename);		// Load the chain from file	// TODO
+	bool save(std::string filename) const;				// Save the chain to file
+	bool load(std::string filename, bool reserve_extra=false);	// Load the chain from file
 	
 	// Operators
 	double* operator [](unsigned int i);		// Calls get_element
-	void operator +=(const TChain& rhs);			// Calls append
+	void operator +=(const TChain& rhs);		// Calls append
 	TChain& operator =(const TChain& rhs);		// Assignment operator
 };
 

@@ -187,15 +187,17 @@ bool TStats::write_binary(std::string fname, std::ios::openmode writemode) const
 	std::fstream f;
 	f.open(fname.c_str(), writemode | std::ios::out | std::ios::binary);
 	if(!f) { f.close(); return false; }	// Return false if the file could not be opened
+	
 	// Write number of dimensions
-	unsigned int dim = N;
-	f.write(reinterpret_cast<char*>(&dim), sizeof(dim));
+	f.write(reinterpret_cast<const char*>(&N), sizeof(N));
+	
 	// Write mean values
 	double tmp;
 	for(unsigned int i=0; i<N; i++) {
 		tmp = mean(i);
 		f.write(reinterpret_cast<char*>(&tmp), sizeof(tmp));
 	}
+	
 	// Write upper triangle (including diagonal) of covariance matrix
 	for(unsigned int i=0; i<N; i++) {
 		for(unsigned int j=i; j<N; j++) {
@@ -203,8 +205,51 @@ bool TStats::write_binary(std::string fname, std::ios::openmode writemode) const
 			f.write(reinterpret_cast<char*>(&tmp), sizeof(tmp));
 		}
 	}
+	
+	// Write raw data
+	f.write(reinterpret_cast<char*>(E_k), N * sizeof(double));
+	f.write(reinterpret_cast<char*>(E_ij), N*N * sizeof(double));
+	f.write(reinterpret_cast<const char*>(&N_items_tot), sizeof(N_items_tot));
+	
 	// Return false if there was a write error, else true
 	if(!f) { f.close(); return false; }
+	f.close();
+	return true;
+}
+
+// Read statistics from a binary file
+bool TStats::read_binary(std::string fname, std::streampos read_offset) {	
+	std::fstream f;
+	f.open(fname.c_str(), std::ios::in | std::ios::binary);
+	// Skip to the point in the file designated by read_offset
+	f.seekg(read_offset);
+	
+	if(!f.good()) { f.close(); return false; }	// Return false if the file could not be opened or read_offset was past the end of the file
+	
+	// Read the number of dimensions
+	unsigned int N_tmp;
+	f.read(reinterpret_cast<char*>(&N_tmp), sizeof(N_tmp));
+	
+	// If necessary, resize arrays in stats object
+	if(N_tmp != N) {
+		N = N_tmp;
+		delete[] E_k;
+		delete[] E_ij;
+		E_k = new double[N];
+		E_ij = new double[N*N];
+	}
+	
+	// Skip past summary information
+	f.ignore((N + N*(N+1)/2) * sizeof(double));
+	
+	// Read in raw data
+	f.read(reinterpret_cast<char*>(E_k), N * sizeof(double));
+	f.read(reinterpret_cast<char*>(E_ij), N*N * sizeof(double));
+	f.read(reinterpret_cast<char*>(&N_items_tot), sizeof(N_items_tot));
+	
+	// Return false if there was a write error, else true
+	if(!f.good()) { f.close(); return false; }
+	
 	f.close();
 	return true;
 }

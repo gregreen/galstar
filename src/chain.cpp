@@ -29,6 +29,16 @@ TChain::TChain(const TChain& c)
 	capacity = c.capacity;
 }
 
+// Construct the string from file
+TChain::TChain(std::string filename, bool reserve_extra)
+	: stats(1)
+{
+	bool load_success = load(filename, reserve_extra);
+	if(!load_success) {
+		std::cout << "Failed to load " << filename << " into chain." << std::endl;
+	}
+}
+
 TChain::~TChain() {}
 
 void TChain::add_point(double* element, double L_i, double w_i) {
@@ -115,6 +125,73 @@ void TChain::append(const TChain& chain, bool reweight, double nsigma) {
 	//	stats(get_element(i), 1.e10*w[i]);
 	//}
 }
+
+bool TChain::save(std::string filename) const {
+	std::fstream out(filename.c_str(), std::ios::out | std::ios::binary);
+	
+	if(!out.good()) { return false; }
+	
+	out.write(reinterpret_cast<const char *>(&N), sizeof(unsigned int));
+	out.write(reinterpret_cast<const char *>(&length), sizeof(unsigned int));
+	out.write(reinterpret_cast<const char *>(&capacity), sizeof(unsigned int));
+	out.write(reinterpret_cast<const char *>(&total_weight), sizeof(double));
+	
+	out.write(reinterpret_cast<const char *>(&(x[0])), N * length * sizeof(double));
+	out.write(reinterpret_cast<const char *>(&(L[0])), length * sizeof(double));
+	out.write(reinterpret_cast<const char *>(&(w[0])), length * sizeof(double));
+	
+	if(out.fail()) {
+		out.close();
+		return false;
+	}
+	
+	out.close();
+	
+	bool stats_success = stats.write_binary(filename.c_str(), std::ios::app);
+	
+	return stats_success;
+}
+
+
+bool TChain::load(std::string filename, bool reserve_extra){
+	std::fstream in(filename.c_str(), std::ios::in | std::ios::binary);
+	
+	if(!in.good()) { return false; }
+	
+	in.read(reinterpret_cast<char *>(&N), sizeof(unsigned int));
+	in.read(reinterpret_cast<char *>(&length), sizeof(unsigned int));
+	in.read(reinterpret_cast<char *>(&capacity), sizeof(unsigned int));
+	in.read(reinterpret_cast<char *>(&total_weight), sizeof(double));
+	
+	if(!reserve_extra) {
+		capacity = length;
+	}
+	
+	x.reserve(N*capacity);
+	L.reserve(capacity);
+	w.reserve(capacity);
+	
+	x.resize(length);
+	L.resize(length);
+	w.resize(length);
+	
+	in.read(reinterpret_cast<char *>(&(x[0])), N * length * sizeof(double));
+	in.read(reinterpret_cast<char *>(&(L[0])), length * sizeof(double));
+	in.read(reinterpret_cast<char *>(&(w[0])), length * sizeof(double));
+	
+	if(in.fail()) {
+		in.close();
+		return false;
+	}
+	
+	std::streampos read_offset = in.tellg();
+	in.close();
+	
+	bool stats_success = stats.read_binary(filename, read_offset);
+	
+	return stats_success;
+}
+
 
 double* TChain::operator [](unsigned int i) {
 	return &(x[i*N]);

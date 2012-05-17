@@ -21,6 +21,9 @@ def main():
 	parser.add_argument('--xmax', type=float, default=None, help='Upper bound of x in plots')
 	parser.add_argument('--ymin', type=float, default=None, help='Lower bound of y in plots')
 	parser.add_argument('--ymax', type=float, default=None, help='Upper bound of y in plots')
+	parser.add_argument('--linear', action='store_true', help='Sum the pdfs linearly')
+	parser.add_argument('--norm', action='store_true', help='Normalize the pdf at each distance')
+	parser.add_argument('--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
 	if sys.argv[0] == 'python':
 		offset = 2
 	else:
@@ -65,25 +68,51 @@ def main():
 	ylim = (values.ymin, values.ymax)
 	
 	# Load the stacked pdfs
-	tmp = load_stacked(files)
+	tmp = load_stacked(files, values.linear, values.norm)
 	img, x, y, p = None, None, None, None
-	if len(tmp) = 3:
+	if len(tmp) == 4:
 		img, x, y, p = tmp
+	
+	# Load the true positions of the stars to overlplot
+	if values.overplot != None:
+		ra_dec, mags, errs, params = get_objects(abspath(values.overplot))
+		for i in range(len(params)):
+			if params[i,0] > 16.:
+				print i
 	
 	# Determine the output filename
 	out_fn = values.output
 	if '.png' not in out_fn:
 		out_fn += '.png'
 	
+	# Determine the title and vmin
+	figtitle = None
+	vmin = None
+	if values.norm:
+		if values.linear:
+			figtitle = r'$\sum_i p_i (' + param_labels[0] + '\, , \,' + param_labels[1] + ') \mathrm{, \ peak \ normalized \ to \ unity \ at \ each \ distance}$'
+		else:
+			figtitle = r'$\sum_i \ln p_i (' + param_labels[0] + '\, , \,' + param_labels[1] + ') \mathrm{, \ normalized \ and \ stretched \ at \ each \ distance}$'
+			vmin = np.max(np.min(img, axis=1))
+	else:
+		if values.linear:
+			figtitle = r'$\sum_i p_i (' + param_labels[0] + '\, , \,' + param_labels[1] + ') \mathrm{, \ peak \ normalized \ to \ unity}$'
+		else:
+			figtitle = r'$\sum_i \ln p_i (' + param_labels[0] + '\, , \,' + param_labels[1] + ') \mathrm{, \ peak \ normalized \ to \ zero}$'
+	
 	# Make figure
-	print '\nGenerating plot...'
+	print 'Generating plot...'
 	mplib.rc('text', usetex=True)
 	mplib.rc('xtick', direction='out')
 	mplib.rc('ytick', direction='out')
 	fig = plt.figure(figsize=(8.5,11.))
 	ax = fig.add_subplot(1, 1, 1, axisbg='k')
-	plotimg(img, x, y, p, ax, param_labels, xlim, ylim)
-	fig.suptitle(r'$\sum_i \ln p_i (' + param_labels[0] + '\, , \,' + param_labels[1] + ') \mathrm{, \ normalized \ to \ peak}$', y=0.95, fontsize=16)
+	plotimg(img, x, y, ax, param_labels, xlim, ylim, vmin=vmin)
+	if values.overplot != None:
+		x = params[:,0]
+		y = params[:,1]
+		ax.plot(x, y, 'g.', linestyle='None', markersize=2)
+	fig.suptitle(figtitle, y=0.95, fontsize=18)
 	fig.savefig(out_fn, transparent=False, dpi=300)
 	
 	print 'Done.'

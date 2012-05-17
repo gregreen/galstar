@@ -225,7 +225,7 @@ def main():
 			xerr[i] = sqrt(cov[i,DM,DM])
 			yerr[i] = sqrt(cov[i,Ar,Ar])
 		params = params[idx]				# Apply same filter to galfast catalog as to galstar output
-		x, y = None, None
+		#x, y = None, None
 		x = params[:,DM]
 		y = params[:,Ar]
 		if values.errorbars:

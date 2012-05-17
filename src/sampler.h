@@ -328,8 +328,8 @@ bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitude
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
 bool sample_mcmc(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, std::string chain_out, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, std::string chain_out, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
 bool sample_brute_force(TModel &model,MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples, unsigned int N_threads);
 
 // Debugging functions

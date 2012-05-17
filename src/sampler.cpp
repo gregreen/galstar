@@ -638,7 +638,7 @@ bool sample_mcmc(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, T
 }
 
 // N_threads	 # of parallel affine samplers to run
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, std::string chain_out, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
 	unsigned int max_rounds = 3;		// After <max_rounds> rounds, the Markov chains are terminated
@@ -692,7 +692,18 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		//}
 		stats = sampler.get_stats();
 		
-		if(convergence) { break; } else { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
+		if(convergence) {
+			if(chain_out != "NONE") {
+				chain.save(chain_out);
+			}
+			break;
+		} else {
+			std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl;
+		}
+		
+		if((n+1 == max_attempts) && (chain_out != "NONE")) {
+			chain.save(chain_out);
+		}
 	}
 	
 	//stats = sampler.get_stats();
@@ -714,7 +725,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 
 // Sample both dwarfs and giants
 // N_threads	 # of parallel affine samplers to run
-bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, std::string chain_out, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
 	unsigned int max_rounds = 5;		// After <max_rounds> rounds, the Markov chains are terminated
@@ -778,6 +789,9 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 	stats = chain.stats;
 	for(unsigned int i=0; i<chain.get_length(); i++) {
 		multibinner(chain[i], 1.e10*chain.get_w(i));
+	}
+	if(chain_out != "NONE") {
+		chain.save(chain_out);
 	}
 	
 	// Normalize bins to peak value

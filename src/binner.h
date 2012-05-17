@@ -80,7 +80,8 @@ struct TBinner2D {
 	void operator ()(const double *const pos, double weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
-	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Write binned data to file
+	bool write_binary(std::string fname, bool append_to_file=false);					// Write binned data to file, possibly appending to existing file
+	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10., std::ios::openmode writemode = std::ios::out);	// Write binned data to file
 	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Load binned data from file
 	void write_npz(std::string fname);									// Write numpy .npz file
 	void print_bins();											// Print out the bins to cout
@@ -190,7 +191,7 @@ void TBinner2D<N>::get_ML(double (&ML)[2]) {
 
 // Write the binned data to a binary file
 template<unsigned int N>
-void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, double zero_diff) {
+void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, double zero_diff, std::ios::openmode writemode) {
 	double log_bin_min = std::numeric_limits<double>::infinity();
 	double tmp_bin;
 	if(log_pdf) {
@@ -209,7 +210,7 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, do
 		}
 		outfile.close();
 	} else {	// Write binary
-		std::fstream outfile(fname.c_str(), std::ios::binary | std::ios::out);
+		std::fstream outfile(fname.c_str(), std::ios::binary | writemode);
 		unsigned int tmp;
 		for(unsigned int i=0; i<2; i++) {					// This second section gives the dimensions of the mesh
 			tmp = width[i];
@@ -232,6 +233,73 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, do
 		}
 		outfile.close();
 	}
+}
+
+// Write binary output, possibly appending to existing file. The structure of the created file is as follows:
+//
+// Header (60 Bytes):
+// 	N_files		(unsigned int)
+// 	width[2]	(unsigned int)
+// 	min[2]		(double)
+// 	max[2]		(double)
+// 	dx[2]		(double)
+// Data (8*N_files*width[0]*width[1] Bytes):
+// 	bin[N_files][width[0]][width[1]]	(double)
+template<unsigned int N>
+bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file) {
+	// If appending to existing file, increment the number of objects in file
+	unsigned int tmp_N_files;
+	if(append_to_file) {
+		std::fstream peekfile(fname.c_str(), std::ios::binary | std::ios::in | std::ios::out);
+		if(peekfile.fail()) {
+			std::cout << "Failed to open " << fname << "." << std::endl;
+			return false;
+		}
+		peekfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		tmp_N_files++;
+		peekfile.seekp(std::ios_base::beg);
+		peekfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		peekfile.close();
+	}
+	
+	// Determine write mode and open file
+	std::ios::openmode writemode;
+	if(append_to_file) {
+		writemode = std::ios::out;
+	} else {
+		writemode = std::ios::app;
+	}
+	std::fstream outfile(fname.c_str(), std::ios::binary | writemode);
+	if(outfile.fail()) {
+		std::cout << "Failed to open " << fname << "." << std::endl;
+		return false;
+	}
+	
+	// Write header if not appending to existing file
+	if(append_to_file) {
+		tmp_N_files = 1;
+		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		outfile.write(reinterpret_cast<char *>(&(width[0])), 2*sizeof(unsigned int));
+		outfile.write(reinterpret_cast<char *>(&(min[0])), 2*sizeof(double));
+		outfile.write(reinterpret_cast<char *>(&(max[0])), 2*sizeof(double));
+		outfile.write(reinterpret_cast<char *>(&(dx[0])), 2*sizeof(double));
+	}
+	
+	// Write the binned data
+	for(unsigned int i=0; i<width[0]; i++) {
+		outfile.write(reinterpret_cast<char *>(bin[i]), width[0]*sizeof(double));
+	}
+	
+	// Return false if something has gone wrong in the writing
+	if(outfile.bad()) {
+		std::cout << "Something has gone wrong in writing to " << fname << "." << std::endl;
+		outfile.close();
+		return false;
+	}
+	
+	outfile.close();
+	
+	return true;
 }
 
 

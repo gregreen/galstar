@@ -1,6 +1,8 @@
 #ifndef _BINNER_H__
 #define _BINNER_H__
 
+//#include "npy.h"
+
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -8,13 +10,12 @@
 #include <math.h>
 #include <limits>
 #include <vector>
+#include <string.h>
+#include <stdint.h>
 #include <omp.h>
 #include <boost/shared_ptr.hpp>
 
 #include "ndarray.h"
-#include <string.h>
-
-#include <stdint.h>
 
 
 /** **************************************************************************************************************************************************************************
@@ -81,6 +82,7 @@ struct TBinner2D {
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
 	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Write binned data to file
 	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Load binned data from file
+	void write_npz(std::string fname);									// Write numpy .npz file
 	void print_bins();											// Print out the bins to cout
 	void get_ML(double (&ML)[2]);										// Return maximum likelihood
 };
@@ -217,14 +219,35 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, do
 			outfile.write(reinterpret_cast<char *>(&dx[i]), sizeof(double));
 		}
 		for(unsigned int j=0; j<width[0]; j++) {
-			for(unsigned int k=0; k<width[1]; k++) {
-				if(!log_pdf) { tmp_bin = bin[j][k]; } else if(bin[j][k] == 0.) { tmp_bin = log_bin_min + zero_diff; } else { tmp_bin = log(bin[j][k]); }
-				outfile.write(reinterpret_cast<char *>(&tmp_bin), sizeof(double));
+			if(log_pdf) {
+				for(unsigned int k=0; k<width[1]; k++) {
+					//if(!log_pdf) { tmp_bin = bin[j][k]; } else if(bin[j][k] == 0.) { tmp_bin = log_bin_min + zero_diff; } else { tmp_bin = log(bin[j][k]); }
+					//outfile.write(reinterpret_cast<char *>(&tmp_bin), sizeof(double));
+					if(bin[j][k] == 0.) { tmp_bin = log_bin_min + zero_diff; } else { tmp_bin = log(bin[j][k]); }
+					outfile.write(reinterpret_cast<char *>(&tmp_bin), sizeof(double));
+				}
+			} else {
+				outfile.write(reinterpret_cast<char *>(bin[j]), width[0]*sizeof(double));
 			}
 		}
 		outfile.close();
 	}
 }
+
+
+// Write the binned data to a numpy .npz file
+template<unsigned int N>
+void TBinner2D<N>::write_npz(std::string fname) {
+	// Flatten the bin array
+	double *tmp_bin = new double[width[0]*width[1]];
+	for(unsigned int i=0; i<width[0]; i++) {
+		memcpy(&(tmp_bin[i*width[0]]), bin[i], width[0]*sizeof(bin[i][0]));
+	}
+	// Write the bin array to npz
+	int fortran_order = 0;
+	//npy_save_double(fname, fortran_order, 2, width, tmp_bin);
+}
+
 
 template<unsigned int N>
 void TBinner2D<N>::print_bins() {

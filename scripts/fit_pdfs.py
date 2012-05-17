@@ -1,7 +1,7 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 #
-#       smooth_pdfs.py
+#       fit_pdfs.py
 #       
 #       Copyright 2012 Greg <greg@greg-G53JW>
 #       
@@ -22,6 +22,11 @@
 #       
 #       
 
+# TODO:
+#     1. Add command-line arguments
+#     2. Read pdfs from .npz file (requires galstar to write .npz files)
+
+
 import numpy as np
 import scipy.ndimage.filters as filters
 from scipy import weave
@@ -30,6 +35,55 @@ from arraypad import pad
 
 import matplotlib as mplib
 import matplotlib.pyplot as plt
+
+
+
+# Load stats from file
+def read_stats(fname_list):
+	N_files = len(fname_list)
+	
+	# Set up data structures to house statistics
+	mean = np.empty((N_files, 4), dtype=np.float64)
+	cov = np.empty((N_files, 4, 4), dtype=np.float64)
+	converged = np.empty(N_files, dtype=np.bool)
+	
+	# Extract stats from each file
+	for i,fname in enumerate(fname_list):
+		f = open(fname, 'rb')
+		
+		converged[i] = unpack('?', f.read(1))[0]			# Whether fit converged
+		
+		# Skip over Max. Likelihood information
+		N_MLs = unpack('I', f.read(4))[0]					# Number of max. likelihoods to read
+		for i in range(2*N_MLs):
+			tmp = unpack('I', f.read(4))					# Dimension of this ML
+			tmp = unpack('d', f.read(8))					# Pos. of max. likelihood along this axis
+		
+		# Skip # of dimensions in fit (which we know to be 4)
+		tmp = f.read(4)
+		
+		# Read in mean
+		mean[i] = np.fromfile(f, dtype=np.float64, count=4)
+		
+		# Read in covariance matrix (complicated because only the upper triangle is stored)
+		tmp = np.fromfile(f, dtype=np.float64, count=10)
+		cov[i, 0, :4] = tmp[:4]
+		cov[i, 1, 0] = tmp[1]
+		cov[i, 1, 1:4] = tmp[4:7]
+		cov[i, 2, 0] = tmp[2]
+		cov[i, 2, 1] = tmp[5]
+		cov[i, 2, 2:4] = tmp[7:9]
+		cov[i, 3, 0] = tmp[3]
+		cov[i, 3, 1] = tmp[6]
+		cov[i, 3, 2] = tmp[8]
+		cov[i, 3, 3] = tmp[9]
+		
+		f.close()
+		for i in range(4):
+			for j in range(i):
+				cov[i][j] = cov[j][i]
+	
+	return converged, mean, cov, ML_dim, ML
 
 
 # Load bins from file
@@ -104,6 +158,36 @@ def load_bins_stacked(fname_list, is_log=False, return_log=False, min_p=None):
 	bounds[3] += dy/2.
 	
 	return bounds, p
+
+
+def load_bins_binary(fname_list, is_log=False, return_log=False, min_p=None):
+	bin_width = np.empty(2, dtype=np.uint32)
+	bin_min = np.empty(2, dtype=np.float64)
+	bin_max = np.empty(2, dtype=np.float64)
+	bin_dx = np.empty(2, dtype=np.float64)
+	bin_data = None
+	
+	for i,fname in enumerate(fname_list):
+		f = open(fname, 'rb')
+		
+		# Read in header
+		for j in xrange(2):
+			bin_width[j] = np.fromfile(f, dtype=np.uint32, count=1)
+			bin_min[j] = np.fromfile(f, dtype=np.float64, count=1)
+			bin_max[j] = np.fromfile(f, dtype=np.float64, count=1)
+			bin_dx[j] = np.fromfile(f, dtype=np.float64, count=1)
+		
+		# Read in binned pdf
+		if i == 0:
+			bin_data = np.empty([len(fname_list), bin_width[0]*bin_width[1]], dtype=np.float64)
+		bin_data[i] = np.fromfile(f, dtype=np.float64, count=-1)
+	
+	bin_data.shape = (len(fname_list), bin_width[0], bin_width[1])
+	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
+	
+	return bounds, bin_data
+	
+	
 
 
 # Smooth binned data with Gaussian kernel
@@ -236,9 +320,14 @@ def line_integral_stacked(Delta_y, img):
 	return line_int_ret
 		
 
-def chistacked(log_Delta_y, pdfs=None, chimax=5.):
-	chi_tmp = np.sqrt(-2. * np.log(line_integral_stacked(np.exp(log_Delta_y), pdfs)))
+def chistacked(log_Delta_y, pdfs=None, chimax=5., regulator=10000.):
+	Delta_y = np.exp(log_Delta_y)
+	
+	chi_tmp = np.sqrt(-2. * np.log(line_integral_stacked(Delta_y, pdfs)))
 	chiscaled = chimax * np.tanh(chi_tmp / chimax)
+	
+	chiscaled += np.sum(Delta_y/regulator)
+	
 	return chiscaled
 
 
@@ -324,12 +413,12 @@ def test_fit():
 	
 	# Load pdfs
 	print 'Loading pdfs...'
-	fname_list = ['/home/greg/projects/galstar/output/90_10/DM_Ar_%d.txt' % i for i in xrange(4887)]
-	bounds, p = load_bins_stacked(fname_list)
+	fname_list = ['/home/greg/projects/galstar/output/90_10/DM_Ar_%d.dat' % i for i in xrange(4050)]
+	bounds, p = load_bins_binary(fname_list)
 	p_smooth = smooth_bins_stacked(p, [2,2])
 	print 'Done.'
 	
-	N_regions = 10
+	N_regions = 15
 	
 	# Fit reddening profile
 	print 'Fitting reddening profile...'

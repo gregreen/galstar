@@ -42,6 +42,11 @@ configure_file(
 include_directories("${PROJECT_BINARY_DIR}/src")
 
 #
+# libnpy (for writing numpy arrays)
+#
+#include_directories("/home/greg/projects/libnpy-0.5/include")
+
+#
 # galstar executable
 #
 add_executable(galstar src/main.cpp src/sampler.cpp src/binner.cpp src/stats.cpp src/interpolation.cpp src/chain.cpp)
@@ -51,6 +56,7 @@ target_link_libraries(galstar ${Boost_LIBRARIES})
 target_link_libraries(galstar ${CFITSIO_LIBRARIES})
 target_link_libraries(galstar ${GSL_LIBRARIES})
 target_link_libraries(galstar ${libpeyton_LIBRARIES})
+#target_link_libraries(galstar "/home/greg/projects/libnpy-0.5/lib/libnpy.a")
 
 #
 # install info

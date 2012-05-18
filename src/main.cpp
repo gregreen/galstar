@@ -277,13 +277,8 @@ int main(int argc, char **argv)
 			if(!converged) { N_nonconverged++; }
 			// Write out the marginalized posteriors
 			for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
-				stringstream outfn("");
-				if(test) {								// Determine filename
-					outfn << output_fns.at(i) << ".dat";
-				} else {
-					outfn << output_fns.at(i) << "_" << count << ".dat";
-				}
-				multibinner.get_binner(i)->write_to_file(outfn.str(), false, false);
+				bool append_to_file = (count != 0);
+				bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file);
 			}
 			// Write out summary of statistics
 			if(statsfn != "NONE") {

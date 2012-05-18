@@ -31,7 +31,7 @@ import numpy as np
 import scipy.ndimage.filters as filters
 from scipy import weave
 from scipy.optimize import leastsq
-from arraypad import pad
+import gzip
 
 import matplotlib as mplib
 import matplotlib.pyplot as plt
@@ -181,8 +181,58 @@ def load_bins_binary(fname_list, is_log=False, return_log=False, min_p=None):
 		if i == 0:
 			bin_data = np.empty([len(fname_list), bin_width[0]*bin_width[1]], dtype=np.float64)
 		bin_data[i] = np.fromfile(f, dtype=np.float64, count=-1)
+		
+		f.close()
 	
 	bin_data.shape = (len(fname_list), bin_width[0], bin_width[1])
+	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
+	
+	return bounds, bin_data
+
+
+def load_bins_binary_unified(fname):
+	f = open(fname, 'rb')
+	
+	# Read in header
+	N_files = np.fromfile(f, dtype=np.uint32, count=1)
+	bin_width = np.fromfile(f, dtype=np.uint32, count=2)
+	bin_min = np.fromfile(f, dtype=np.float64, count=2)
+	bin_max = np.fromfile(f, dtype=np.float64, count=2)
+	bin_dx = np.fromfile(f, dtype=np.float64, count=2)
+	
+	# Read in pdfs
+	bin_data = np.fromfile(f, dtype=np.float64)#, count=N_files*bin_width[0]*bin_width[1])
+	N_files_empirical = bin_data.size / bin_width[0] / bin_width[1]
+	bin_data.shape = (N_files_empirical, bin_width[0], bin_width[1])
+	#print N_files, N_files_empirical
+	
+	f.close()
+	
+	# Create list containing bounds
+	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
+	
+	return bounds, bin_data
+
+
+def load_bins_binary_unified_gzip(fname):
+	f_tmp = gzip.open(fname, 'rb')
+	f = f_tmp.read()
+	f_tmp.close()
+	
+	# Read in header
+	N_files = np.fromstring(f[0:4], dtype=np.uint32, count=1)
+	bin_width = np.fromstring(f[4:12], dtype=np.uint32, count=2)
+	bin_min = np.fromstring(f[12:28], dtype=np.float64, count=2)
+	bin_max = np.fromstring(f[28:44], dtype=np.float64, count=2)
+	bin_dx = np.fromstring(f[44:60], dtype=np.float64, count=2)
+	
+	# Read in pdfs
+	bin_data = np.fromstring(f[60:], dtype=np.float64)
+	N_files_empirical = bin_data.size / bin_width[0] / bin_width[1]
+	bin_data.shape = (N_files_empirical, bin_width[0], bin_width[1])
+	#print N_files, N_files_empirical
+	
+	# Create list containing bounds
 	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
 	
 	return bounds, bin_data
@@ -334,7 +384,7 @@ def chistacked(log_Delta_y, pdfs=None, chimax=5., regulator=10000.):
 def minimize(pdfs, N_regions=5, chimax=5.):
 	guess = np.log(np.random.ranf(N_regions) * 2.*150./float(N_regions))
 	print 'guess:', guess
-	x, success = leastsq(chistacked, guess, args=(pdfs, chimax), maxfev=10000)
+	x, success = leastsq(chistacked, guess, args=(pdfs, chimax), ftol=1.e-6, maxfev=10000)
 	
 	return x, success
 
@@ -413,8 +463,10 @@ def test_fit():
 	
 	# Load pdfs
 	print 'Loading pdfs...'
-	fname_list = ['/home/greg/projects/galstar/output/90_10/DM_Ar_%d.dat' % i for i in xrange(4050)]
-	bounds, p = load_bins_binary(fname_list)
+	#fname_list = ['/home/greg/projects/galstar/output/90_10/DM_Ar_%d.dat' % i for i in xrange(4050)]
+	#bounds, p = load_bins_binary(fname_list)
+	fname = '/home/greg/projects/galstar/output/90_10/DM_Ar.dat.gz'
+	bounds, p = load_bins_binary_unified_gzip(fname)
 	p_smooth = smooth_bins_stacked(p, [2,2])
 	print 'Done.'
 	
@@ -460,6 +512,7 @@ def test_fit():
 
 
 def main():
+	#bounds, p = load_bins_binary_unified('/home/greg/projects/galstar/output/90_10/DM_Ar.dat.bak')
 	test_fit()
 	
 	return 0

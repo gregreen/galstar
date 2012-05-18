@@ -260,14 +260,17 @@ bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file) {
 		peekfile.seekp(std::ios_base::beg);
 		peekfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
 		peekfile.close();
+	} else {
+		// If writing to new file, delete file, if it already exists
+		std::remove(fname.c_str());
 	}
 	
 	// Determine write mode and open file
 	std::ios::openmode writemode;
 	if(append_to_file) {
-		writemode = std::ios::out;
+		writemode = std::ios::out | std::ios::app;
 	} else {
-		writemode = std::ios::app;
+		writemode = std::ios::out;
 	}
 	std::fstream outfile(fname.c_str(), std::ios::binary | writemode);
 	if(outfile.fail()) {
@@ -276,7 +279,7 @@ bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file) {
 	}
 	
 	// Write header if not appending to existing file
-	if(append_to_file) {
+	if(!append_to_file) {
 		tmp_N_files = 1;
 		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
 		outfile.write(reinterpret_cast<char *>(&(width[0])), 2*sizeof(unsigned int));

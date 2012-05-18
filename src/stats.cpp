@@ -183,7 +183,42 @@ void TStats::print() const {
 }
 
 // Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
-bool TStats::write_binary(std::string fname, std::ios::openmode writemode) const {
+bool TStats::write_binary_old(std::string fname, std::ios::openmode writemode) const {
+	std::fstream f;
+	f.open(fname.c_str(), writemode | std::ios::out | std::ios::binary);
+	if(!f) { f.close(); return false; }	// Return false if the file could not be opened
+	
+	// Write number of dimensions
+	f.write(reinterpret_cast<const char*>(&N), sizeof(N));
+	
+	// Write mean values
+	double tmp;
+	for(unsigned int i=0; i<N; i++) {
+		tmp = mean(i);
+		f.write(reinterpret_cast<char*>(&tmp), sizeof(tmp));
+	}
+	
+	// Write upper triangle (including diagonal) of covariance matrix
+	for(unsigned int i=0; i<N; i++) {
+		for(unsigned int j=i; j<N; j++) {
+			tmp = cov(i, j);
+			f.write(reinterpret_cast<char*>(&tmp), sizeof(tmp));
+		}
+	}
+	
+	// Write raw data
+	f.write(reinterpret_cast<char*>(E_k), N * sizeof(double));
+	f.write(reinterpret_cast<char*>(E_ij), N*N * sizeof(double));
+	f.write(reinterpret_cast<const char*>(&N_items_tot), sizeof(N_items_tot));
+	
+	// Return false if there was a write error, else true
+	if(!f) { f.close(); return false; }
+	f.close();
+	return true;
+}
+
+// Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
+bool TStats::write_binary(std::string fname, bool append_to_file) const {
 	std::fstream f;
 	f.open(fname.c_str(), writemode | std::ios::out | std::ios::binary);
 	if(!f) { f.close(); return false; }	// Return false if the file could not be opened

@@ -51,7 +51,7 @@ def load_stats(fname):
 	# Set up arrays to hold statistics
 	converged = np.empty(N_files, dtype=np.bool)
 	mean = np.empty((N_files, N_dim), dtype=np.float64)
-	cov = np.emtpy((N_files, N_dim*N_dim), dtype=np.float64)
+	cov = np.empty((N_files, N_dim*N_dim), dtype=np.float64)
 	
 	# Read in statistics one at a time
 	for i in xrange(N_files):

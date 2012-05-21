@@ -25,6 +25,7 @@
 import sys, argparse
 from os.path import abspath
 import gzip
+from time import time
 
 import numpy as np
 import scipy.ndimage.filters as filters
@@ -216,7 +217,7 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-2, regulator=10000.):
 	# Disfavor larger values of ln(Delta_y) slightly
 	measure += np.sum(log_Delta_y*log_Delta_y) / (regulator*regulator)
 	
-	print measure
+	#print measure
 	return measure
 
 
@@ -360,7 +361,10 @@ def main():
 	
 	np.seterr(all='ignore')
 	
+	tstart = time()
 	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method)
+	duration = time() - tstart
+	print 'Time elapsed: %.1f s' % duration
 	
 	if values.outfn != None:
 		save_profile(values.outfn, bounds, Delta_Ar)

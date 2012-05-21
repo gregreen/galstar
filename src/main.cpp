@@ -107,9 +107,9 @@ int main(int argc, char **argv)
 	bool brute_force = false;
 	bool los = false;
 	unsigned int giant_flag = 0;
-	unsigned int N_steps = 1000;
+	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 25;
-	unsigned int N_bins = 50;
+	unsigned int N_bins = 150;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	

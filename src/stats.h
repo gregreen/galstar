@@ -53,7 +53,8 @@ public:
 	
 	// I/O
 	void print() const;										// Print out statistics
-	bool write_binary(std::string fname, std::ios::openmode writemode = std::ios::out) const;	// Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
+	bool write_binary(std::string fname, bool converged, bool append_to_file=false) const;	// Write statistics to binary file, possibly appending to existing file
+	bool write_binary_old(std::string fname, std::ios::openmode writemode = std::ios::out) const;	// Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
 	bool read_binary(std::string fname, std::streampos read_offset=std::streampos(0));		// Read statistics from file. Pass read_offset if the stats object is offset in the binary file.
 };
 

@@ -275,44 +275,16 @@ int main(int argc, char **argv)
 				}
 			}
 			if(!converged) { N_nonconverged++; }
+			
+			// Output binned pdfs and statistics for current star
+			bool append_to_file = (count != 0);
 			// Write out the marginalized posteriors
 			for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
-				bool append_to_file = (count != 0);
 				bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file);
 			}
 			// Write out summary of statistics
 			if(statsfn != "NONE") {
-				bool success = true;
-				stringstream outfn("");
-				if(test) {								// Determine filename
-					outfn << statsfn << ".dat";
-				} else {
-					outfn << statsfn << "_" << count << ".dat";
-				}
-				std::fstream f;
-				f.open(outfn.str().c_str(), std::ios::out | std::ios::binary);		// Write whether the fit converged as first byte
-				f.write(reinterpret_cast<char*>(&converged), sizeof(converged));
-				// Write max. likelihoods
-				double ML[2];
-				unsigned int N_binners = multibinner.get_num_binners();
-				f.write(reinterpret_cast<char*>(&N_binners), sizeof(N_binners));	// Write # of max. likelihoods that follow
-				for(unsigned int i=0; i<N_binners; i++) {
-					TBinner2D<4> *binner = multibinner.get_binner(i);
-					binner->get_ML(ML);
-					for(unsigned int k=0; k<2; k++) {
-						f.write(reinterpret_cast<char*>(&(binner->bin_dim[k])), sizeof(unsigned int));	// Write coordinate index
-						f.write(reinterpret_cast<char*>(&(ML[k])), sizeof(double));			// Write position of max. likelihood for this coord.
-					}
-				}
-				// Write means and covariance
-				if(!f) {
-					f.close();
-					success = false;
-				} else {
-					f.close();
-					success = stats.write_binary(outfn.str(), std::ios::app);
-				}
-				if(!success) { std::cerr << "# Could not write " << outfn.str() << std::endl; }
+				bool write_success = stats.write_binary(statsfn, converged, append_to_file);
 			}
 			multibinner.clear();
 		}

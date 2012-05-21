@@ -218,37 +218,77 @@ bool TStats::write_binary_old(std::string fname, std::ios::openmode writemode) c
 }
 
 // Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
-bool TStats::write_binary(std::string fname, bool append_to_file) const {
-	std::fstream f;
-	f.open(fname.c_str(), writemode | std::ios::out | std::ios::binary);
-	if(!f) { f.close(); return false; }	// Return false if the file could not be opened
+bool TStats::write_binary(std::string fname, bool converged, bool append_to_file) const {
+	// If appending to existing file, increment the number of objects in file
+	unsigned int tmp_N_files;
+	if(append_to_file) {
+		std::fstream peekfile(fname.c_str(), std::ios::binary | std::ios::in | std::ios::out);
+		if(peekfile.fail()) {
+			std::cout << "Failed to open " << fname << "." << std::endl;
+			return false;
+		}
+		peekfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		tmp_N_files++;
+		peekfile.seekp(std::ios_base::beg);
+		peekfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		peekfile.close();
+	} else {
+		// If writing to new file, delete file, if it already exists
+		std::remove(fname.c_str());
+	}
 	
-	// Write number of dimensions
-	f.write(reinterpret_cast<const char*>(&N), sizeof(N));
+	// Determine write mode and open file
+	std::ios::openmode writemode;
+	if(append_to_file) {
+		writemode = std::ios::out | std::ios::app;
+	} else {
+		writemode = std::ios::out;
+	}
+	std::fstream outfile(fname.c_str(), std::ios::binary | writemode);
+	if(outfile.fail()) {
+		std::cout << "Failed to open " << fname << "." << std::endl;
+		return false;
+	}
+	
+	// Write header if not appending to existing file
+	if(!append_to_file) {
+		tmp_N_files = 1;
+		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		outfile.write(reinterpret_cast<const char *>(&N), sizeof(unsigned int));
+	}
+	
+	// Write whether converged
+	outfile.write(reinterpret_cast<char *>(&converged), sizeof(bool));
 	
 	// Write mean values
 	double tmp;
 	for(unsigned int i=0; i<N; i++) {
 		tmp = mean(i);
-		f.write(reinterpret_cast<char*>(&tmp), sizeof(tmp));
+		outfile.write(reinterpret_cast<char*>(&tmp), sizeof(double));
 	}
 	
-	// Write upper triangle (including diagonal) of covariance matrix
+	// Write covariance matrix
 	for(unsigned int i=0; i<N; i++) {
-		for(unsigned int j=i; j<N; j++) {
+		for(unsigned int j=0; j<N; j++) {
 			tmp = cov(i, j);
-			f.write(reinterpret_cast<char*>(&tmp), sizeof(tmp));
+			outfile.write(reinterpret_cast<char*>(&tmp), sizeof(double));
 		}
 	}
 	
 	// Write raw data
-	f.write(reinterpret_cast<char*>(E_k), N * sizeof(double));
-	f.write(reinterpret_cast<char*>(E_ij), N*N * sizeof(double));
-	f.write(reinterpret_cast<const char*>(&N_items_tot), sizeof(N_items_tot));
+	outfile.write(reinterpret_cast<char*>(E_k), N * sizeof(double));
+	outfile.write(reinterpret_cast<char*>(E_ij), N*N * sizeof(double));
+	outfile.write(reinterpret_cast<const char*>(&N_items_tot), sizeof(N_items_tot));
 	
-	// Return false if there was a write error, else true
-	if(!f) { f.close(); return false; }
-	f.close();
+	// Return false if something has gone wrong in the writing
+	if(outfile.bad()) {
+		std::cout << "Something has gone wrong in writing stats to " << fname << "." << std::endl;
+		outfile.close();
+		return false;
+	}
+	
+	outfile.close();
+	
 	return true;
 }
 

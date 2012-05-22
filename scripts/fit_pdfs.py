@@ -139,7 +139,7 @@ def smooth_bins(p, sigma):
 def line_integral(Delta_y, img):
 	# Determine the number of bins per piecewise linear region
 	if img.shape[1] % Delta_y.shape[0] != 0:
-		raise Exception('Number of samples in mu not integer multiple of number of piecewise linear regions.')
+		raise Exception('Number of samples in mu (%d) not integer multiple of number of piecewise linear regions (%d).' % (img.shape[1], Delta_y.shape[0]))
 	N_images = img.shape[0]
 	y_max = img.shape[2]
 	N_regions = Delta_y.shape[0]
@@ -254,7 +254,6 @@ def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal',
 		p = smooth_bins(p[converged], [smooth,smooth])
 	else:
 		p = smooth_bins(p, [smooth,smooth])
-	print 'Done.'
 	
 	# Fit reddening profile
 	x, succes, guess, measure = None, None, None, None
@@ -303,7 +302,7 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None):
 	mplib.rc('axes', grid=False)
 	
 	# Make figure
-	fig = plt.figure(figsize=(7,5))
+	fig = plt.figure(figsize=(7,5), dpi=100)
 	ax = fig.add_subplot(1,1,1)
 	img = np.average(p, axis=0).T
 	img /= np.max(img, axis=0)
@@ -355,7 +354,7 @@ def main():
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-sm', '--smooth', type=int, default=1, help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1).')
 	parser.add_argument('-reg', '--regulator', type=float, default=10000., help='Width of support of prior on ln(Delta_Ar) (default: 10000).')
-	if sys.argv[0] == 'python':
+	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
 		offset = 1

@@ -303,7 +303,7 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None):
 	mplib.rc('axes', grid=False)
 	
 	# Make figure
-	fig = plt.figure(figsize=(8,6))
+	fig = plt.figure(figsize=(7,5))
 	ax = fig.add_subplot(1,1,1)
 	img = np.average(p, axis=0).T
 	img /= np.max(img, axis=0)
@@ -317,7 +317,7 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None):
 	fig.subplots_adjust(bottom=0.10)
 	
 	if plot_fn != None:
-		fig.savefig(abspath(plot_fn), dpi=300)
+		fig.savefig(abspath(plot_fn), dpi=150)
 
 
 # Save the reddening profile to an ASCII file

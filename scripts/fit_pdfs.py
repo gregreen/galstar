@@ -234,7 +234,7 @@ def min_anneal(pdfs, N_regions=15, p0=1.e-3, regulator=10000.):
 	upper.fill(0.01)
 	
 	# Run simulated annealing
-	x, success = opt.anneal(anneal_measure, guess, args=(pdfs, p0, regulator), lower=lower, upper=upper, feps=1.e-12)
+	x, success = opt.anneal(anneal_measure, guess, args=(pdfs, p0, regulator), lower=lower, upper=upper, feps=1.e-12, maxiter=1000, dwell=200)
 	measure = anneal_measure(x, pdfs, p0, regulator)
 	
 	return x, success, guess, measure

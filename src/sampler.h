@@ -394,7 +394,7 @@ inline double std_bin_max(unsigned int i) {
 	if(i == _DM) {
 		return 20.;
 	} else if(i == _Ar) {
-		return 5.;
+		return 10.;
 	} else if(i == _Mr) {
 		return 28.;
 	} else if(i == _FeH) {

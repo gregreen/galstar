@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 25;
-	unsigned int N_bins = 150;
+	unsigned int N_bins = 120;	// Chosen because it has nice factorization properties, being 5! This allows splitting the domain into 10, 12, 15, 20, 24, or 30 regions
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	

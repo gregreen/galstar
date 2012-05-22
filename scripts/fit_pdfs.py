@@ -204,7 +204,7 @@ def min_leastsq(pdfs, N_regions=15, chimax=5., regulator=10000.):
 
 
 # Return a measure to minimize by simulated annealing
-def anneal_measure(log_Delta_y, pdfs, p0=1.e-2, regulator=10000.):
+def anneal_measure(log_Delta_y, pdfs, p0=1.e-3, regulator=10000.):
 	Delta_y = np.exp(log_Delta_y)
 	
 	measure = line_integral(Delta_y, pdfs)				# Begin with line integral through each stellar pdf
@@ -215,14 +215,14 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-2, regulator=10000.):
 	#measure += np.sum(Delta_y*Delta_y) / (regulator*regulator)
 	
 	# Disfavor larger values of ln(Delta_y) slightly
-	measure += np.sum(log_Delta_y*log_Delta_y) / (regulator*regulator)
+	measure += np.sum(log_Delta_y*log_Delta_y) / (2.*regulator*regulator)
 	
 	#print measure
 	return measure
 
 
 # Maximize the line integral by simulated annealing
-def min_anneal(pdfs, N_regions=15, p0=1.e-2, regulator=10000.):
+def min_anneal(pdfs, N_regions=15, p0=1.e-3, regulator=10000.):
 	# Start with random guess
 	width = float(pdfs.shape[1])
 	guess = np.log(np.random.ranf(N_regions) * 2.* width/float(N_regions))
@@ -241,7 +241,7 @@ def min_anneal(pdfs, N_regions=15, p0=1.e-2, regulator=10000.):
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal'):
+def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal', smooth=1, regulator=10000.):
 	# Load pdfs
 	print 'Loading binned pdfs...'
 	bounds, p = None, None
@@ -251,19 +251,19 @@ def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal')
 		bounds, p = load_bins(abspath(bin_fname))
 	if converged:
 		converged, means, cov = load_stats(abspath(stats_fname))
-		p = smooth_bins(p[converged], [2,2])
+		p = smooth_bins(p[converged], [smooth,smooth])
 	else:
-		p = smooth_bins(p, [2,2])
+		p = smooth_bins(p, [smooth,smooth])
 	print 'Done.'
 	
 	# Fit reddening profile
 	x, succes, guess, measure = None, None, None, None
 	if method == 'leastsq':
 		print 'Fitting reddening profile using the LM method (scipy.optimize.leastsq)...'
-		x, success, guess, measure = min_leastsq(p, N_regions=N_regions, chimax=5., regulator=10000.)
+		x, success, guess, measure = min_leastsq(p, N_regions=N_regions, chimax=5., regulator=regulator)
 	elif method == 'anneal':
 		print 'Fitting reddening profile using simulated annealing (scipy.optimize.anneal)...'
-		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-3, regulator=10000.)
+		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-3, regulator=regulator)
 	
 	# Convert output into physical coordinates (rather than pixel coordinates)
 	Delta_Ar = np.exp(x) * ((bounds[3] - bounds[2]) / float(p.shape[1]))
@@ -352,7 +352,9 @@ def main():
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out unconverged stars.')
 	parser.add_argument('-o', '--outfn', type=str, default=None, help='Output filename for reddening profile.')
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
-	parser.add_argument('-s', '--show', action='store_true', help='Show plot of result.')
+	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
+	parser.add_argument('-sm', '--smooth', type=int, default=1, help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1).')
+	parser.add_argument('-reg', '--regulator', type=float, default=10000., help='Width of support of prior on ln(Delta_Ar) (default: 10000).')
 	if sys.argv[0] == 'python':
 		offset = 2
 	else:
@@ -362,7 +364,7 @@ def main():
 	np.seterr(all='ignore')
 	
 	tstart = time()
-	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method)
+	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator)
 	duration = time() - tstart
 	print 'Time elapsed: %.1f s' % duration
 	

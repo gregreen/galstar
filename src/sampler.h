@@ -368,7 +368,7 @@ inline double std_bin_max(const std::string &varname) {
 	if(varname == "DM") {
 		return 20.;
 	} else if(varname == "Ar") {
-		return 5.;
+		return 10.;
 	} else if(varname == "Mr") {
 		return 28.;
 	} else if(varname == "FeH") {

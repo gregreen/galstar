@@ -32,61 +32,67 @@ void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &pa
 	cerr << "# MOCK:   m_obs :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<     m[i]; }; cerr << "\n";
 }
 
-bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs, unsigned int N_bins=50) {
+
+// Construct binners from commandline input
+bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs) {
 	#define G(name)         varname2int(name)
-	static const regex e("([^:]+):([^,]+)(?:,([^,]+))?(?:,([^,]+))?");
+	
+	// Accepts input of the form "DM_Ar.dat:DM[5,20,100],Ar[0,10,200]", where "DM_Ar.dat" is the output filename,
+	// "DM[5,20,100]" indicates that DM should be binned from 5 to 20, with 100 bins, and "Ar[0,10,100]" is intepreted analogously.
+	// The following regular expression would parse our example input as
+	// 1: DM_Ar.dat
+	// 2: DM
+	// 3: 5
+	// 4: 20
+	// 5: 100
+	// 6: Ar
+	// 7: 0
+	// 8: 10
+	// 9: 200
+	static const regex e("([^:]+):([^,^\\[^\\]]+)\\[(-?\\d+|-?\\d+.\\d),(-?\\d+|-?\\d+.\\d),(\\d+)\\],([^,^\\(^\\)]+)\\[(-?\\d+|-?\\d+.\\d),(-?\\d+|-?\\d+.\\d),(\\d+)\\]");
+	
+	// Loop though each binner specification
 	for(vector<string>::const_iterator i = output_pdfs.begin(); i != output_pdfs.end(); ++i) {
-		ostringstream msg;
-		msg << "# Outputting P(";
-		
-		// check overall format
+		// Check that input format matches input
 		const std::string &pdfspec = *i;
 		cmatch what;
-		if(!regex_match(pdfspec.c_str(), what, e))
-		{
+		if(!regex_match(pdfspec.c_str(), what, e)) {
 			cerr << "Incorrect parameter format ('" << pdfspec << "')\n";
 			return false;
 		}
 		
-		// deduce size and check variables
-		int ndim = 0;
-		for(int i = 2; i != what.size() && what[i] != ""; ndim++, i++)
-		{
-			if(!(G(what[i])+1))
-			{
-				cerr << "Unrecognized model parameter '" << what[i] << "'\n";
+		// Store the filename for this binner
+		output_fns.push_back(what[1]);
+		
+		// Construct the binner
+		unsigned int bin_dim[2];
+		unsigned int width[2];
+		double min[2];
+		double max[2];
+		for(unsigned int k=0; k<2; k++) {
+			if(!G(what[4*k+2]+1)) {		// Check that the variable name is valid
+				cerr << "Unrecognized model parameter: '" << what[4*k+2] << "'" << endl;
 				return false;
 			}
-			msg << (i > 2 ? ", " : "") << what[i];
+			bin_dim[k] = G(what[4*k+2].str().c_str());
+			min[k] = atof(what[4*k+3].str().c_str());
+			max[k] = atof(what[4*k+4].str().c_str());
+			if(atoi(what[4*k+5].str().c_str()) < 0) {	// Check that the # of bins specified is nonzero
+				cerr << "Negative # of bins specified for model parameter '" << what[4*k+2] << "'" << endl;
+				return false;
+			}
+			width[k] = atoi(what[4*k+5].str().c_str());
 		}
-		msg << ")";
+		multibinner.add_binner( new TBinner2D<4>(min, max, width, bin_dim) );
 		
-		// construct marginalizer. TODO: Add binners for dimensions other than 2
-		output_fns.push_back(what[1]);
-		switch(ndim)
-		{
-			//case 1:
-			case 2:
-				unsigned int bin_dim[2];
-				unsigned int width[2];
-				double min[2];
-				double max[2];
-				for(unsigned int k=0; k<ndim; k++) {
-					bin_dim[k] = G(what[k+2]);
-					width[k] = N_bins;//std_bin_width(what[k+2]);
-					min[k] = std_bin_min(what[k+2]);
-					max[k] = std_bin_max(what[k+2]);
-				}
-				multibinner.add_binner( new TBinner2D<4>(min, max, width, bin_dim) ); break;
-			//case 3:
-		}
-		cerr << msg.str() << " into file " << what[1] << "\n";
+		cerr << "# Outputting P(" << what[2] << ", " << what[6] << ") into file " << what[1] << endl;
 	}
+	
 	#undef G
 	return true;
 }
 
-// Output
+
 int main(int argc, char **argv)
 {
 	vector<string> output_pdfs;
@@ -109,13 +115,12 @@ int main(int argc, char **argv)
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 25;
-	unsigned int N_bins = 120;	// Chosen because it has nice factorization properties, being 5! This allows splitting the domain into 10, 12, 15, 20, 24, or 30 regions
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
 	// parse command line arguments
 	namespace po = boost::program_options;
-	po::options_description desc(std::string("Usage: ") + argv[0] + " <outfile1.txt:X1[,Y1]> [outfile2.txt:X2[,Y2] [...]]\n\nOptions");
+	po::options_description desc(std::string("Usage: ") + argv[0] + " <outfile1.dat:X1[min,max,bins],Y1[min,max,bins]> [outfile2.dat:X2[min,max,bins],Y2[min,max,bins] [...]]\n\nOptions");
 	desc.add_options()
 		("help", "produce this help message")
 		("pdfs", po::value<vector<string> >(&output_pdfs)->multitoken(), "marginalized PDF to produce (can be given as the command line argument)")
@@ -137,7 +142,6 @@ int main(int argc, char **argv)
 		("los", "Sample entire line of sight at once")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
-		("bins", po::value<unsigned int>(&N_bins), "# of bins along each axis")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
 		("dwarf", "Assume star is a dwarf (Mr > 4)")
@@ -162,7 +166,7 @@ int main(int argc, char **argv)
 	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
-	if(!construct_binners(multibinner, output_fns, output_pdfs, N_bins)) { return -1; }
+	if(!construct_binners(multibinner, output_fns, output_pdfs)) { return -1; }
 	
 	////////////// Construct Model
 	TModel model(lf_fn, seds_fn);

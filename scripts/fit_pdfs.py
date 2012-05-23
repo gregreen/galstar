@@ -24,7 +24,6 @@
 
 import sys, argparse
 from os.path import abspath
-import gzip
 from time import time
 
 import numpy as np
@@ -35,99 +34,8 @@ import scipy.optimize as opt
 import matplotlib as mplib
 import matplotlib.pyplot as plt
 
-
-#
-# FILE I/O
-#
-
-# Load multiple stats from one file
-def load_stats(fname):
-	f = open(fname, 'rb')
-	
-	# Read in header
-	N_files = np.fromfile(f, dtype=np.uint32, count=1)[0]
-	N_dim = np.fromfile(f, dtype=np.uint32, count=1)[0]
-	
-	# Set up arrays to hold statistics
-	converged = np.empty(N_files, dtype=np.bool)
-	mean = np.empty((N_files, N_dim), dtype=np.float64)
-	cov = np.empty((N_files, N_dim*N_dim), dtype=np.float64)
-	
-	# Read in statistics one at a time
-	for i in xrange(N_files):
-		converged[i] = np.fromfile(f, dtype=np.bool, count=1)[0]
-		mean[i] = np.fromfile(f, dtype=np.float64, count=N_dim)
-		cov[i] = np.fromfile(f, dtype=np.float64, count=N_dim*N_dim)
-		tmp = np.fromfile(f, dtype=np.float64, count=N_dim*(N_dim+1))
-		tmp = np.fromfile(f, dtype=np.uint64, count=1)
-	
-	cov.shape = (N_files, N_dim, N_dim)
-	
-	return converged, mean, cov
-
-
-# Load binned probability density functions (pdfs) from a galstar bin output file
-def load_bins(fname):
-	f = open(fname, 'rb')
-	
-	# Read in header
-	N_files = np.fromfile(f, dtype=np.uint32, count=1)
-	bin_width = np.fromfile(f, dtype=np.uint32, count=2)
-	bin_min = np.fromfile(f, dtype=np.float64, count=2)
-	bin_max = np.fromfile(f, dtype=np.float64, count=2)
-	bin_dx = np.fromfile(f, dtype=np.float64, count=2)
-	
-	# Read in pdfs
-	bin_data = np.fromfile(f, dtype=np.float64)#, count=N_files*bin_width[0]*bin_width[1])
-	N_files_empirical = bin_data.size / bin_width[0] / bin_width[1]
-	bin_data.shape = (N_files_empirical, bin_width[0], bin_width[1])
-	#print N_files, N_files_empirical
-	
-	f.close()
-	
-	# Create list containing bounds
-	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
-	
-	return bounds, bin_data
-
-
-# Same as above, but for a gzipped file
-def load_bins_gzip(fname):
-	f_tmp = gzip.open(fname, 'rb')
-	f = f_tmp.read()
-	f_tmp.close()
-	
-	# Read in header
-	N_files = np.fromstring(f[0:4], dtype=np.uint32, count=1)
-	bin_width = np.fromstring(f[4:12], dtype=np.uint32, count=2)
-	bin_min = np.fromstring(f[12:28], dtype=np.float64, count=2)
-	bin_max = np.fromstring(f[28:44], dtype=np.float64, count=2)
-	bin_dx = np.fromstring(f[44:60], dtype=np.float64, count=2)
-	
-	# Read in pdfs
-	bin_data = np.fromstring(f[60:], dtype=np.float64)
-	N_files_empirical = bin_data.size / bin_width[0] / bin_width[1]
-	bin_data.shape = (N_files_empirical, bin_width[0], bin_width[1])
-	#print N_files, N_files_empirical
-	
-	# Create list containing bounds
-	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
-	
-	return bounds, bin_data
-
-
-# Smooth binned data with Gaussian kernel
-def smooth_bins(p, sigma):
-	# Apply Gaussian smoothing to each image
-	p_smooth = np.empty(p.shape, dtype=np.float64)
-	filters.gaussian_filter(p, np.insert(sigma, 0, 0), output=p_smooth, mode='nearest')
-	
-	# Normalize each image to unit probability
-	for i in xrange(p_smooth.shape[0]):
-		p_smooth[i] /= np.sum(p_smooth[i])
-	
-	return p_smooth
-
+from galstar_io import *
+from galstarutils import get_objects
 
 
 
@@ -189,8 +97,7 @@ def min_leastsq(pdfs, N_regions=15, chimax=5., regulator=10000.):
 	pdf_stacked = np.average(pdfs, axis=0).T
 	pdf_stacked /= np.max(pdf_stacked, axis=0)
 	pdf_stacked.shape = (1, pdfs.shape[1], pdfs.shape[2])
-	width = float(pdfs.shape[1])
-	guess = np.log(np.random.ranf(N_regions) * 2.*width/float(N_regions))	# Zeroeth-order guess
+	guess = np.log(np.random.ranf(N_regions) * 2.*float(pdfs.shape[2])/float(N_regions))	# Zeroeth-order guess
 	guess = opt.fmin(chi_leastsq, guess, args=(pdf_stacked, chimax, regulator), ftol=1.e-6, maxiter=100000, maxfun=1e8)	# A better guess
 	print 'guess:', np.exp(guess)
 	chi = chi_leastsq(guess, pdfs, chimax=5.)
@@ -204,12 +111,12 @@ def min_leastsq(pdfs, N_regions=15, chimax=5., regulator=10000.):
 
 
 # Return a measure to minimize by simulated annealing
-def anneal_measure(log_Delta_y, pdfs, p0=1.e-3, regulator=10000.):
+def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 	Delta_y = np.exp(log_Delta_y)
 	
-	measure = line_integral(Delta_y, pdfs)				# Begin with line integral through each stellar pdf
-	measure = p0 * np.log(2. * np.cosh(measure / p0))	# Soften around zero (measure -> positive const. below scale p0)
-	measure = -np.sum(np.log(measure))					# Sum logarithms of line integrals
+	measure = line_integral(Delta_y, pdfs).astype(np.float128)	# Begin with line integral through each stellar pdf
+	measure = p0 * np.log(2. * np.cosh(measure / p0))			# Soften around zero (measure -> positive const. below scale p0)
+	measure = -np.sum(np.log(measure))							# Sum logarithms of line integrals
 	
 	# Disfavor larger values of Delta_y slightly
 	#measure += np.sum(Delta_y*Delta_y) / (regulator*regulator)
@@ -222,10 +129,9 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-3, regulator=10000.):
 
 
 # Maximize the line integral by simulated annealing
-def min_anneal(pdfs, N_regions=15, p0=1.e-3, regulator=10000.):
+def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000.):
 	# Start with random guess
-	width = float(pdfs.shape[1])
-	guess = np.log(np.random.ranf(N_regions) * 2.* width/float(N_regions))
+	guess = np.log(np.random.ranf(N_regions) * 2.* float(pdfs.shape[2])/float(N_regions))
 	
 	# Set bounds on step size in Delta_Ar
 	lower = np.empty(N_regions, dtype=np.float64)
@@ -234,26 +140,24 @@ def min_anneal(pdfs, N_regions=15, p0=1.e-3, regulator=10000.):
 	upper.fill(0.01)
 	
 	# Run simulated annealing
-	x, success = opt.anneal(anneal_measure, guess, args=(pdfs, p0, regulator), lower=lower, upper=upper, feps=1.e-12, maxiter=1000, dwell=200)
+	#feps=1.e-12
+	x, success = opt.anneal(anneal_measure, guess, args=(pdfs, p0, regulator), lower=lower, upper=upper, maxiter=1000, dwell=200)
 	measure = anneal_measure(x, pdfs, p0, regulator)
 	
 	return x, success, guess, measure
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal', smooth=1, regulator=10000.):
+def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal', smooth=(1,1), regulator=10000.):
 	# Load pdfs
 	print 'Loading binned pdfs...'
 	bounds, p = None, None
-	if '.gzip' in bin_fname:
-		bounds, p = load_bins_gzip(abspath(bin_fname))
-	else:
-		bounds, p = load_bins(abspath(bin_fname))
+	bounds, p = load_bins(bin_fname)
 	if converged:
-		converged, means, cov = load_stats(abspath(stats_fname))
-		p = smooth_bins(p[converged], [smooth,smooth])
+		converged, means, cov = load_stats(stats_fname)
+		p = smooth_bins(p[converged], smooth)
 	else:
-		p = smooth_bins(p, [smooth,smooth])
+		p = smooth_bins(p, smooth)
 	
 	# Fit reddening profile
 	x, succes, guess, measure = None, None, None, None
@@ -262,11 +166,11 @@ def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal',
 		x, success, guess, measure = min_leastsq(p, N_regions=N_regions, chimax=5., regulator=regulator)
 	elif method == 'anneal':
 		print 'Fitting reddening profile using simulated annealing (scipy.optimize.anneal)...'
-		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-3, regulator=regulator)
+		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-4, regulator=regulator)
 	
 	# Convert output into physical coordinates (rather than pixel coordinates)
-	Delta_Ar = np.exp(x) * ((bounds[3] - bounds[2]) / float(p.shape[1]))
-	guess = np.exp(guess) * ((bounds[3] - bounds[2]) / float(p.shape[1]))
+	Delta_Ar = np.exp(x) * ((bounds[3] - bounds[2]) / float(p.shape[2]))
+	guess = np.exp(guess) * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	
 	# Output basic information about fit
 	print 'Delta_Ar:', Delta_Ar
@@ -283,7 +187,7 @@ def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal',
 #
 
 # Overplot reddening profile on stacked pdfs
-def plot_profile(bounds, p, Delta_Ar, plot_fn=None):
+def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	# Calculate reddening profile
 	N_regions = Delta_Ar.size
 	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
@@ -306,11 +210,22 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None):
 	ax = fig.add_subplot(1,1,1)
 	img = np.average(p, axis=0).T
 	img /= np.max(img, axis=0)
-	img.shape = (1, p.shape[1], p.shape[2])
+	img.shape = (1, p.shape[2], p.shape[1])
 	ax.imshow(img[0], extent=bounds, origin='lower', aspect='auto', cmap='hot')
 	ax.plot(mu_anchors, Ar_anchors)
+	
+	# Overplot locations of stars from galfast
+	if overplot != None:
+		# Load the true positions of the stars to overlplot
+		ra_dec, mags, errs, params = get_objects(abspath(overplot))
+		x = params[:,0]
+		y = params[:,1]
+		ax.plot(x, y, 'g.', linestyle='None', markersize=2, alpha=0.5)
+	
+	# Set axis limits and labels
+	y_max = min([bounds[3], 2.*np.max(Ar_anchors)])
 	ax.set_xlim(bounds[0], bounds[1])
-	ax.set_ylim(bounds[2], bounds[3])	
+	ax.set_ylim(bounds[2], y_max)
 	ax.set_xlabel(r'$\mu$', fontsize=18)
 	ax.set_ylabel(r'$A_r$', fontsize=18)
 	fig.subplots_adjust(bottom=0.10)
@@ -349,11 +264,12 @@ def main():
 	parser.add_argument('-N', '--N', type=int, default=15, help='# of piecewise-linear regions in DM-Ar relation')
 	parser.add_argument('-mtd', '--method', type=str, choices=('anneal', 'leastsq'), default='anneal', help='Optimization method (default: anneal)')
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out unconverged stars.')
+	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(1,1), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1 1).')
+	parser.add_argument('-reg', '--regulator', type=float, default=10000., help='Width of support of prior on ln(Delta_Ar) (default: 10000).')
 	parser.add_argument('-o', '--outfn', type=str, default=None, help='Output filename for reddening profile.')
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
-	parser.add_argument('-sm', '--smooth', type=int, default=1, help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1).')
-	parser.add_argument('-reg', '--regulator', type=float, default=10000., help='Width of support of prior on ln(Delta_Ar) (default: 10000).')
+	parser.add_argument('-ovp', '--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -363,22 +279,22 @@ def main():
 	np.seterr(all='ignore')
 	
 	tstart = time()
+	
+	# Fit the line of sight
 	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator)
 	duration = time() - tstart
 	print 'Time elapsed: %.1f s' % duration
 	
+	# Save the reddening profile to an ASCII file
 	if values.outfn != None:
 		save_profile(values.outfn, bounds, Delta_Ar)
 	
+	# Plot the reddening profile on top of the stacked stellar probability densities
 	if (values.plotfn != None) or (values.show != None):
-		plot_profile(bounds, p, Delta_Ar, values.plotfn)
+		plot_profile(bounds, p, Delta_Ar, values.plotfn, values.overplot)
 	
 	if values.show:
 		plt.show()
-	
-	# Show the guess
-	#plot_profile(bounds, p, guess)
-	#plt.show()
 	
 	return 0
 

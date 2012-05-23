@@ -1,192 +1,155 @@
 #!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
+#
+#       plotpdf.py
+#       
+#       Copyright 2012 Greg <greg@greg-G53JW>
+#       
+#       This program is free software; you can redistribute it and/or modify
+#       it under the terms of the GNU General Public License as published by
+#       the Free Software Foundation; either version 2 of the License, or
+#       (at your option) any later version.
+#       
+#       This program is distributed in the hope that it will be useful,
+#       but WITHOUT ANY WARRANTY; without even the implied warranty of
+#       MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#       GNU General Public License for more details.
+#       
+#       You should have received a copy of the GNU General Public License
+#       along with this program; if not, write to the Free Software
+#       Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#       MA 02110-1301, USA.
+#       
+#       
 
-import numpy as np;
-import matplotlib.pyplot as plt;
+import sys, argparse
+from os.path import abspath
+
+from galstar_io import *
+
+import numpy as np
+
 import matplotlib as mplib
-import sys
-import argparse
-from operator import itemgetter
-from math import isnan
-import galstarutils
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 
-# Load true parameter values from ascii file
-def load_true_values(fn):
-	params = np.loadtxt(fn, usecols=(0,1,2,3))
-	return params
+# Plot the given probability surfaces (p) to a single figure, saving if given a filename
+def plot_surfs(p, bounds, clip=None, shape=(3,2), fname=None, labels=None, converged=None):
+	# Set up the figure
+	fig = plt.figure(figsize=(8.5,11.), dpi=100)
+	grid = ImageGrid(fig, 111, nrows_ncols=shape, axes_pad=0.2, share_all=True, aspect=False)
+	
+	# Show the probability surfaces
+	N_plots = min(p.shape[0], shape[0]*shape[1])
+	for i in xrange(N_plots):
+		grid[i].imshow(p[i].T, extent=bounds, origin='lower', aspect='auto', cmap='hot', interpolation='nearest')
+	
+	# Clip domain and range
+	if clip != None:
+		grid[0].set_xlim(clip[0:2])
+		grid[0].set_ylim(clip[2:4])
+	
+	# Label axes
+	if labels != None:
+		for ax in grid.axes_row[-1]:
+			ax.set_xlabel(r'$%s$' % labels[0], fontsize=16)
+		for ax in grid.axes_column[0]:
+			ax.set_ylabel(r'$%s$' % labels[1], fontsize=16)
+	
+	# Mark whether each star converged
+	if converged != None:
+		for i in xrange(N_plots):
+			if not converged[i]:
+				xmax, ymax = grid[i].get_xlim()[1], grid[i].get_ylim()[1]
+				x, y = 0.95*xmax, 0.95*ymax
+				grid[i].text(x, y, '!', color='white', fontsize=24, horizontalalignment='right', verticalalignment='top')
+				#grid[i].scatter(x, y, color='r', s=10)
+	
+	if fname != None:
+		print 'Saving figure to %s ...' % fname
+		fig.savefig(abspath(fname), dpi=150)
+	
+	return fig
 
-# Load SM-formatted image and return an array
-def loadimage(fn):
-	x, y, p = np.loadtxt(fn, usecols=(0, 1, 2), unpack=True)
-	for i,p_i in enumerate(p):
-		if isnan(p_i): p[i] = -999.
-	#print 'loading %s' % fn, p[0:10]
-	# Sort x and y and get dx and dy
-	xs = x.copy(); xs.sort(); dx = xs[1:xs.size] - xs[0:xs.size-1]; dx = dx.max();
-	ys = y.copy(); ys.sort(); dy = ys[1:ys.size] - ys[0:ys.size-1]; dy = dy.max();
-	# Nearest-neighbor interpolation
-	i = ((x - xs[0]) / dx).round().astype(int)
-	j = ((y - ys[0]) / dy).round().astype(int)
-	# Determine width and height of image
-	nx = i.max() + 1
-	ny = j.max() + 1
-	# Fill in the image
-	img = np.zeros([nx, ny]); img[:,:] = p.min();
-	img[i,j] = p
-	return img, x, y, p
-
-def plotimg(img, x, y, p, ax, axis_labels=None, xlim=(None,None), ylim=(None,None), params=None):
-	bounds = [x.min(), x.max(), y.min(), y.max()]
-	for i in range(2):
-		if xlim[i] != None: bounds[i] = xlim[i]
-		if ylim[i] != None: bounds[i+2]= ylim[i]
-	# 'YlGn'
-	ax.imshow(img.transpose(), origin='lower', aspect='auto', interpolation='nearest', cmap='hot', extent=(x.min(),x.max(),y.min(),y.max()), vmin=-10)
-	# Maximum likelihood point, and expectation value
-	imax = p.argmax()
-	ax.scatter(x[imax], y[imax], s=40, marker='x')
-	p_filtered = p.copy()
-	p_min = p.min()
-	for i in range(len(p_filtered)):
-		if p_filtered[i] == p_min: p_filtered[i] = -999.
-	xmean = (np.exp(p_filtered)*x).sum() / np.exp(p_filtered).sum()
-	ymean = (np.exp(p_filtered)*y).sum() / np.exp(p_filtered).sum()
-	#if not (isnan(xmean) or isnan(ymean)):
-	ax.scatter(xmean, ymean, s=40, marker='o')
-	if params != None:
-		ax.scatter(params[0], params[1], s=40, marker='d', c='r')
-	# Contouring at levels of accumulated probability
-	p2 = p.copy(); p2.sort(); cum = (np.exp(p2)/sum(np.exp(p2))).cumsum();
-	cont90 = p2[abs(cum - 0.9).argmin()]
-	cont50 = p2[abs(cum - 0.5).argmin()]
-	cont10 = p2[abs(cum - 0.1).argmin()]
-	cont01 = p2[abs(cum - 0.01).argmin()]
-	levs = [cont01, cont10, cont50, cont90]
-	clabels = {cont01: "1%", cont10: "10%", cont50: "50%", cont90: "90%"}
-	cont = ax.contour(img.transpose(), levs, origin='lower', colors='black', extent=(x.min(),x.max(),y.min(),y.max()), hold=True)
-	ax.clabel(cont, fmt=clabels, fontsize=8)
-	# Set canvas size
-	ax.set_xlim(bounds[0:2])
-	ax.set_ylim(bounds[2:])
-	# Set axis labels
-	if axis_labels != None:
-		ax.set_xlabel(r'$\mathrm{%s}$'%axis_labels[0])
-		ax.set_ylabel(r'$\mathrm{%s}$'%axis_labels[1])
-
-# Draw a figure with multiple plots, laid out in a manner determined by <shape>
-def make_figure(fn_list, img_fname, shape, axis_labels, xlim=(None,None), ylim=(None,None), params_list=None, param_indices=None):
-	fig = plt.figure(figsize=(8.5,11.))
-	ax = []
-	for i,fname in enumerate(fn_list):
-		img, x, y, p = loadimage(fname)
-		ax.append(fig.add_subplot(shape[0], shape[1], i+1, axisbg='k'))
-		if params_list != None:
-			params_i = [params_list[i][param_indices[0]], params_list[i][param_indices[1]]]
-		else:
-			params_i = None
-		plotimg(img, x, y, p, ax[-1], axis_labels, xlim, ylim, params_i)
-	fig.suptitle(r'$\ln \mathrm{P}(' + axis_labels[0] + '\, , \,' + axis_labels[1] + ') \mathrm{, \ normalized \ to \ peak}$', y=0.95, fontsize=16)
-	fig.savefig(img_fname, transparent=False, dpi=300)
-	plt.close(fig)
 
 def main():
 	# Parse commandline arguments
 	parser = argparse.ArgumentParser(prog='plotpdf', description='Plots posterior distributions produced by galstar', add_help=True)
-	parser.add_argument('files', nargs='+', type=str, help='Input posterior distributions')
-	parser.add_argument('--params', nargs=2, type=str, required=True, help='Names of parameters, in order (e.g. "DM Ar")')
-	parser.add_argument('--truth', type=str, default=None, help='File containing true parameter values')
-	parser.add_argument('--converged', nargs='+', type=str, help='Filter out nonconverged stars using provided stats files')
-	parser.add_argument('--output', type=str, required=True, help='Output image filename base (without extension)')
-	parser.add_argument('--imgtype', type=str, default='png', choices=('png','pdf','eps'), help='Output image filetype')
-	parser.add_argument('--shape', nargs=2, type=int, default=(1,1), help='# of rows and columns in figure')
-	parser.add_argument('--xname', type=str, default='X', help='Name of x-axis')
-	parser.add_argument('--yname', type=str, default='Y', help='Name of y-axis')
-	parser.add_argument('--xmin', type=float, default=None, help='Lower bound of x in plots')
-	parser.add_argument('--xmax', type=float, default=None, help='Upper bound of x in plots')
-	parser.add_argument('--ymin', type=float, default=None, help='Lower bound of y in plots')
-	parser.add_argument('--ymax', type=float, default=None, help='Upper bound of y in plots')
-	if sys.argv[0] == 'python':
+	parser.add_argument('binfn', type=str, help='File containing binned probability density functions for each star along l.o.s. (also accepts gzipped files)')
+	parser.add_argument('statsfn', type=str, help='File containing summary statistics for each star.')
+	parser.add_argument('plotfn', type=str, help='Base filename (without extension) for plots.')
+	parser.add_argument('-se', '--startend', type=int, nargs=2, default=(0,6), help='Start and end indices')
+	parser.add_argument('-rc', '--rowcol', type=int, nargs=2, default=(3,2), help='# of rows and columns, respectively (default: 2 3)')
+	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
+	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(1,1), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1 1).')
+	parser.add_argument('-y', '--ymax', type=float, default=None, help='Upper bound on y in plots')
+	parser.add_argument('-p', '--params', type=str, nargs=2, default=('DM','Ar'), help='Name of x- and y-axes, respectively (default: DM Ar). Choices are (DM, Ar, Mr, FeH).')
+	#parser.add_argument('-cv', '--converged', action='store_true', help='Show only converged stars')
+	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
 	
-	# Determine names and indices of parameters
-	param_dict = {'dm':(0, '\mu'), 'ar':(1, 'A_r'), 'mr':(2, 'M_r'), 'feh':(3, 'Z')}
-	param_indices, param_labels = [], []
+	# Determine axis labels
+	param_dict = {'dm':'\mu', 'ar':'A_r', 'mr':'M_r', 'feh':'Z'}
+	labels = []
 	for p in values.params:
 		try:
-			tmp = param_dict[p.lower()]
-			param_indices.append(tmp[0])
-			param_labels.append(tmp[1])
+			labels.append(param_dict[p.lower()])
 		except:
 			print 'Invalid parameter name: "%s"' % p
 			print 'Valid parameter names are DM, Ar, Mr and FeH.'
 			return 1
 	
-	# Sort filenames
-	files = galstarutils.sort_filenames(values.files)
+	# Determine number of figures to make
+	if values.startend[1] <= values.startend[0]:
+		print 'Invalid input for --startend: "%d %d". The ending index must be greater than the starting index.' % values.startend
+	N_stars = values.startend[1] - values.startend[0]
+	N_ax = values.rowcol[0] * values.rowcol[1]
+	N_fig = int(np.ceil(float(N_stars) / float(N_ax)))
 	
-	# Load true stellar parameters
-	params = None
-	if values.truth != None:
-		params = np.loadtxt(values.truth, usecols=(0,1,2,3))
+	np.seterr(all='ignore')
 	
-	# Load stats files and filter out nonconverged stars
-	stats_fn = None
-	N = len(files)
-	convergence_filter = np.empty(N, dtype=bool)
-	convergence_filter.fill(True)
-	if values.converged != None:
-		stats_fn = galstarutils.sort_filenames(values.converged)
-		for i,fn in enumerate(stats_fn):
-			converged, mean, cov, ML_dim, ML = galstarutils.read_stats(fn)
-			convergence_filter[i] = converged
-	files_tmp = []
-	for i,f in enumerate(files):
-		if convergence_filter[i]:
-			files_tmp.append(f)
-	files = files_tmp
-	if params != None:
-		params = params[convergence_filter]
-	
-	# Make figures
-	mplib.rc('text', usetex=True)
+	# Set matplotlib style attributes
+	mplib.rc('text',usetex=True)
+	mplib.rc('xtick.major', size=6)
+	mplib.rc('xtick.minor', size=4)
+	mplib.rc('ytick.major', size=6)
+	mplib.rc('ytick.minor', size=4)
 	mplib.rc('xtick', direction='out')
 	mplib.rc('ytick', direction='out')
+	mplib.rc('axes', grid=False)
 	
-	# Determine # of figures to make
-	N_per_fig = values.shape[0]*values.shape[1]
-	N_figs = int(len(values.files)/N_per_fig)
-	if N_figs*N_per_fig < len(values.files):
-		N_figs += 1
-	
-	# Get x and y bounds for plots
-	xlim = (values.xmin, values.xmax)
-	ylim = (values.ymin, values.ymax)
-	
-	for i in range(N_figs):
-		# Determine range of plots to put on this figure
-		i_min = i*N_per_fig
-		i_max = i_min + N_per_fig
-		if i_max > len(files): i_max = len(files)
-		print 'Plotting files %d through %d...' % (i_min+1, i_max)
-		fn_list = files[i_min:i_max]
-		if params != None:
-			params_list = params[i_min:i_max+1]
+	# For each figure, load in only the necessary probability density functions, and pass each to the plotter
+	for i in xrange(N_fig):
+		print 'Plotting figure %d of %d ...' % (i+1, N_fig)
+		plotfn = None
+		if N_fig != 1:
+			plotfn = '%s_%d.png' % (values.plotfn, i)
 		else:
-			params_list = None
-		
-		print fn_list
-		
-		# Determine output filename for this figure
-		img_fname = str(values.output + '_' + str(i) + '.' + values.imgtype)
-		
-		# Generate this figure
-		make_figure(fn_list, img_fname, values.shape, param_labels, xlim, ylim, params_list, param_indices)
+			plotfn = '%s.png' % (values.plotfn)
+		selection = values.startend[0] + np.arange(i*N_ax, min((i+1)*N_ax, N_stars))
+		bounds, p = load_bins(values.binfn, selection)
+		clip = None
+		if values.ymax != None:
+			clip = list(bounds)
+			clip[3] = values.ymax
+		p = smooth_bins(p, values.smooth)
+		converged, mean, cov = load_stats(values.statsfn, selection)
+		#p[p == 0] = np.min(p[p != 0])
+		#p = np.log(p)
+		#p[np.logical_not(np.isfinite(p))] = np.min(p[np.isfinite(p)])
+		fig = plot_surfs(p, bounds, clip, values.rowcol, plotfn, labels, converged)
+		if not values.show:
+			plt.close(fig)
 	
-	print 'Done.'
+	if values.show:
+		plt.show()
+	
 	return 0
 
 if __name__ == '__main__':
 	main()
+

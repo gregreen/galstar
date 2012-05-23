@@ -290,7 +290,7 @@ bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file) {
 	
 	// Write the binned data
 	for(unsigned int i=0; i<width[0]; i++) {
-		outfile.write(reinterpret_cast<char *>(bin[i]), width[0]*sizeof(double));
+		outfile.write(reinterpret_cast<char *>(bin[i]), width[1]*sizeof(double));
 	}
 	
 	// Return false if something has gone wrong in the writing

@@ -208,11 +208,12 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	# Make figure
 	fig = plt.figure(figsize=(7,5), dpi=100)
 	ax = fig.add_subplot(1,1,1)
+	
+	# Plot the stacked pdfs
 	img = np.average(p, axis=0).T
 	img /= np.max(img, axis=0)
 	img.shape = (1, p.shape[2], p.shape[1])
 	ax.imshow(img[0], extent=bounds, origin='lower', aspect='auto', cmap='hot')
-	ax.plot(mu_anchors, Ar_anchors)
 	
 	# Overplot locations of stars from galfast
 	if overplot != None:
@@ -220,7 +221,10 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		ra_dec, mags, errs, params = get_objects(abspath(overplot))
 		x = params[:,0]
 		y = params[:,1]
-		ax.plot(x, y, 'g.', linestyle='None', markersize=2, alpha=0.5)
+		ax.plot(x, y, 'g.', linestyle='None', markersize=2, alpha=0.3)
+	
+	# Plot the line-of-sight reddening profile
+	ax.plot(mu_anchors, Ar_anchors)
 	
 	# Set axis limits and labels
 	y_max = min([bounds[3], 2.*np.max(Ar_anchors)])

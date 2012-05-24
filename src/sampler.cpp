@@ -60,23 +60,66 @@ void TLF::load(const std::string &fn)
 TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 	: lf(lf_fn), DM_range(5., 20., .02), Ar_range(0.), Mr_range(ALL), FeH_range(ALL), sed_interp(NULL)
 {
-	unsigned int Mr_index, FeH_index;
-	dFeH = 0.05;
+	/*dFeH = 0.05;
 	dMr = 0.01;
 	FeH_min = -2.50;
 	Mr_min = -1.00;
 	N_FeH = 51;
 	N_Mr = 2901;
 	FeH_max = FeH_min + dFeH*(N_FeH-1);
-	Mr_max = Mr_min + dMr*(N_Mr-1);
-	seds = new TSED[N_FeH*N_Mr];
+	Mr_max = Mr_min + dMr*(N_Mr-1);*/
 	
 	// Load the SEDs
+	
+	double Mr, FeH, dMr_tmp, dFeH_tmp;
+	double Mr_last = std::numeric_limits<double>::infinity();
+	double FeH_last = std::numeric_limits<double>::infinity();
+	Mr_min = std::numeric_limits<double>::infinity();
+	Mr_max = -std::numeric_limits<double>::infinity();
+	FeH_min = std::numeric_limits<double>::infinity();
+	FeH_max = -std::numeric_limits<double>::infinity();
+	dMr = std::numeric_limits<double>::infinity();
+	dFeH = std::numeric_limits<double>::infinity();
+	
+	// Do a first pass through the file to get the grid spacing and size
 	std::ifstream in(seds_fn.c_str());
 	if(!in) { std::cerr << "Could not read SEDs from '" << seds_fn << "'\n"; abort(); }
-	
-	double Mr, FeH;
 	std::string line;
+	while(std::getline(in, line))
+	{
+		if(!line.size()) { continue; }		// empty line
+		if(line[0] == '#') { continue; }	// comment
+		
+		std::istringstream ss(line);
+		ss >> Mr >> FeH;
+		
+		// Keep track of values needed to get grid spacing and size
+		if(Mr < Mr_min) { Mr_min = Mr; }
+		if(Mr > Mr_max) { Mr_max = Mr; }
+		if(FeH < FeH_min) { FeH_min = FeH; }
+		if(FeH > FeH_max) { FeH_max = FeH; }
+		
+		dMr_tmp = fabs(Mr_last - Mr);
+		dFeH_tmp = fabs(FeH_last - FeH);
+		if((dMr_tmp != 0) && (dMr_tmp < dMr)) { dMr = dMr_tmp; }
+		if((dFeH_tmp != 0) && (dFeH_tmp < dFeH)) { dFeH = dFeH_tmp; }
+		Mr_last = Mr;
+		FeH_last = FeH;
+	}
+	
+	N_Mr = (unsigned int)(round((Mr_max - Mr_min) / dMr)) + 1;
+	N_FeH = (unsigned int)(round((FeH_max - FeH_min) / dFeH)) + 1;
+	std::cerr << "# " << std::endl;
+	std::cerr << "# N_Mr: " << N_Mr << std::endl << "# dMr: " << dMr << std::endl << "# " << Mr_min << " <= Mr <= " << Mr_max << std::endl;
+	std::cerr << "# N_FeH: " << N_FeH << std::endl << "# dFeH: " << dFeH << std::endl << "# " << FeH_min << " <= FeH <= " << FeH_max << std::endl;
+	std::cerr << "# " << std::endl;
+	seds = new TSED[N_FeH*N_Mr];
+	
+	// Now do a second pass to load the SEDs
+	in.clear();
+	in.seekg(0, std::ios_base::beg);
+	if(!in) { std::cerr << "# Could not seek back to beginning of SED file!" << std::endl; }
+	unsigned int count=0;
 	while(std::getline(in, line))
 	{
 		if(!line.size()) { continue; }		// empty line
@@ -96,8 +139,12 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 		sed->v[0] += sed->v[1];			// Mu
 		sed->v[3]  = sed->v[2] - sed->v[3];	// Mi
 		sed->v[4]  = sed->v[3] - sed->v[4];	// Mz
+		
+		count++;
 	}
+	in.close();
 	
+	// Construct the SED interpolation grid
 	sed_interp = new TBilinearInterp<TSED>(Mr_min, Mr_max, N_Mr, FeH_min, FeH_max, N_FeH);
 	unsigned int idx;
 	for(unsigned int i=0; i<N_Mr*N_FeH; i++) {
@@ -105,6 +152,7 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 		(*sed_interp)[idx] = seds[i];
 	}
 	
+	if(count != N_FeH*N_Mr) { std::cerr << "# Incomplete SED library provided (grid is sparse, i.e. missing some values of (Mr,FeH)). This may cause problems." << std::endl; }
 	std::cerr << "# Loaded " << N_FeH*N_Mr << " SEDs from " << seds_fn << "\n";
 }
 

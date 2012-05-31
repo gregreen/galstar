@@ -39,6 +39,7 @@ public:
 	void operator()(const TStats *const stats);			// proxy for update()
 	
 	TStats& operator+=(const TStats &rhs);				// Add the data in another stats object to this one
+	TStats& operator*=(double a);					// Multiply by scalar
 	TStats& operator=(const TStats &rhs);				// Copy data from another stats object to this one, replacing existing data
 	
 	friend TStats operator*(double a, const TStats& stats);

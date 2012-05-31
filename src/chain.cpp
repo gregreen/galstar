@@ -110,11 +110,10 @@ double TChain::get_w(unsigned int i) const {
 	return w[i];
 }
 
-void TChain::append(const TChain& chain, bool reweight, bool use_peak, double nsigma_max, double nsigma_peak, double chain_frac) {
+void TChain::append(const TChain& chain, bool reweight, bool use_peak, double nsigma_max, double nsigma_peak, double chain_frac, double threshold) {
 	assert(chain.N == N);	// Make sure the two chains have the same dimensionality
 	
 	// Weight each chain according to Bayesian evidence, if requested
-	//double a = 1.;
 	double a1 = 1.;
 	double a2 = 1.;
 	if(reweight) {
@@ -123,43 +122,72 @@ void TChain::append(const TChain& chain, bool reweight, bool use_peak, double ns
 		
 		if(lnZ2 > lnZ1) {
 			a2 = exp(lnZ1 - lnZ2) * total_weight / chain.total_weight;
+			if(isnan(a2)) {
+				std::cout << std::endl;
+				std::cout << "NaN Error: a2 = " << a2 << std::endl;
+				std::cout << "ln(Z1) = " << lnZ1 << std::endl;
+				std::cout << "ln(Z2) = " << lnZ2 << std::endl;
+				std::cout << "total_weight = " << total_weight << std::endl;
+				std::cout << "chain.total_weight = " << chain.total_weight << std::endl;
+				std::cout << std::endl;
+			}
 		} else {
 			a1 = exp(lnZ2 - lnZ1) * chain.total_weight / total_weight;
+			if(isnan(a1)) {
+				std::cout << std::endl;
+				std::cout << "NaN Error: a1 = " << a1 << std::endl;
+				std::cout << "ln(Z1) = " << lnZ1 << std::endl;
+				std::cout << "ln(Z2) = " << lnZ2 << std::endl;
+				std::cout << "total_weight = " << total_weight << std::endl;
+				std::cout << "chain.total_weight = " << chain.total_weight << std::endl;
+				std::cout << std::endl;
+			}
 		}
-		
-		//std::cout << "ln(Z1) = " << lnZ1 << std::endl;
-		//std::cout << "ln(Z2) = " << lnZ2 << std::endl;
-		//a = exp(chain.get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac) - get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac)) * total_weight / chain.total_weight;
 	}
+	
+	if(reweight) { std::cout << "(a1, a2) = " << a1 << ", " << a2 << std::endl; }
 	
 	// Append the last chain to this one
-	if(capacity < length + chain.length) { set_capacity(1.5*(length + chain.length)); }
-	std::vector<double>::iterator w_end_old = w.end();
-	x.insert(x.end(), chain.x.begin(), chain.x.end());
-	L.insert(L.end(), chain.L.begin(), chain.L.end());
-	w.insert(w.end(), chain.w.begin(), chain.w.end());
-	
-	if(reweight) {
-		std::cout << "(a1, a2) = " << a1 << ", " << a2 << std::endl;
-		std::vector<double>::iterator w_end = w.end();
-		for(std::vector<double>::iterator it = w.begin(); it != w_end_old; ++it) {
-			*it *= a1;
+	if(reweight && (a1 < threshold)) {
+		x = chain.x;
+		L = chain.L;
+		w = chain.w;
+		length = chain.length;
+		capacity = chain.capacity;
+		stats = chain.stats;
+		total_weight = chain.total_weight;
+		for(unsigned int i=0; i<N; i++) {
+			x_max[i] = chain.x_max[i];
+			x_min[i] = chain.x_min[i];
 		}
-		for(std::vector<double>::iterator it = w_end_old; it != w_end; ++it) {
-			*it *= a2;
+	} else if(!(reweight && (a2 < threshold))) {
+		if(capacity < length + chain.length) { set_capacity(1.5*(length + chain.length)); }
+		std::vector<double>::iterator w_end_old = w.end();
+		x.insert(x.end(), chain.x.begin(), chain.x.end());
+		L.insert(L.end(), chain.L.begin(), chain.L.end());
+		w.insert(w.end(), chain.w.begin(), chain.w.end());
+		
+		if(reweight) {
+			std::vector<double>::iterator w_end = w.end();
+			for(std::vector<double>::iterator it = w.begin(); it != w_end_old; ++it) {
+				*it *= a1;
+			}
+			for(std::vector<double>::iterator it = w_end_old; it != w_end; ++it) {
+				*it *= a2;
+			}
 		}
-	}
-	
-	stats = a1 * stats;
-	stats += a2 * chain.stats;
-	length += chain.length;
-	total_weight *= a1;
-	total_weight += a2 * chain.total_weight;
-	
-	// Update min/max coordinates
-	for(unsigned int i=0; i<N; i++) {
-		if(chain.x_max[i] > x_max[i]) { x_max[i] = chain.x_max[i]; }
-		if(chain.x_min[i] < x_min[i]) { x_min[i] = chain.x_min[i]; }
+		
+		stats *= a1;
+		stats += a2 * chain.stats;
+		length += chain.length;
+		total_weight *= a1;
+		total_weight += a2 * chain.total_weight;
+		
+		// Update min/max coordinates
+		for(unsigned int i=0; i<N; i++) {
+			if(chain.x_max[i] > x_max[i]) { x_max[i] = chain.x_max[i]; }
+			if(chain.x_min[i] < x_min[i]) { x_min[i] = chain.x_min[i]; }
+		}
 	}
 	
 	//stats.clear();
@@ -232,31 +260,37 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 	} else {	// Get the mean from the stats class
 		for(unsigned int i=0; i<N; i++) { mu[i] = stats.mean(i); }
 	}
-	/*std::cout << std::endl << "mu = ";
-	for(unsigned int i=0; i<N; i++) { std::cout << mu[i] << "\t"; }
-	std::cout << std::endl;*/
+	//std::cout << std::endl << "mu = ";
+	//for(unsigned int i=0; i<N; i++) { std::cout << mu[i] << "\t"; }
+	//std::cout << std::endl;
 	
-	// Sort elements in chain by distance from center
+	// Sort elements in chain by distance from center, filtering out values of L which are not finite
 	std::vector<TChainSort> sorted_indices;
 	sorted_indices.reserve(length);
+	unsigned int filt_length = 0;
 	for(unsigned int i=0; i<length; i++) {
-		TChainSort tmp_el;
-		tmp_el.index = i;
-		tmp_el.dist2 = metric_dist2(invSigma, get_element(i), mu, N);
-		sorted_indices.push_back(tmp_el);
+		if(!(isnan(L[i]) || isinf(L[i]))) {
+			TChainSort tmp_el;
+			tmp_el.index = i;
+			tmp_el.dist2 = metric_dist2(invSigma, get_element(i), mu, N);
+			sorted_indices.push_back(tmp_el);
+			filt_length++;
+		}
 	}
 	std::sort(sorted_indices.begin(), sorted_indices.end());
 	/*for(unsigned int i=0; i<20; i++) {
 		std::cout << sorted_indices[i].index << "\t" << sorted_indices[i].dist2 << std::endl;
 	}*/
+	//std::cout << "filtered: " << length - filt_length << std::endl;
 	
 	// Determine <1/L> inside the prior volume
 	double sum_invL = 0.;
 	double tmp_invL;
-	unsigned int npoints = (unsigned int)(chain_frac * (double)length);
+	unsigned int npoints = (unsigned int)(chain_frac * (double)filt_length);
 	double nsigma = sqrt(sorted_indices[npoints].dist2);
 	unsigned int tmp_index = sorted_indices[0].index;;
 	double L_0 = L[tmp_index];
+	//std::cout << "index_0 = " << sorted_indices[0].index << std::endl;
 	for(unsigned int i=0; i<npoints; i++) {
 		if(sorted_indices[i].dist2 > nsigma_max * nsigma_max) {
 			//std::cout << "Counted only " << i << " elements in chain." << std::endl;
@@ -266,18 +300,22 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 		tmp_index = sorted_indices[i].index;
 		//std::cout << "\t" << tmp_index << "\t" << L[tmp_index] << std::endl;
 		tmp_invL = w[tmp_index] / exp(L[tmp_index] - L_0);
+		if(isnan(tmp_invL)) {
+			std::cout << "\t\tL, L_0 = " << L[tmp_index] << ", " << L_0 << std::endl;
+		}
 		if((tmp_invL + sum_invL > 1.e100) && (i != 0)) {
 			nsigma = sqrt(sorted_indices[i-1].dist2);
 			break;
 		}
 		sum_invL += tmp_invL;
 	}
-	/*std::cout << "sum_invL = e^(" << -L_0 << ") * " << sum_invL << std::endl;
-	std::cout << "nsigma = " << nsigma << std::endl;*/
+	//std::cout << "sum_invL = e^(" << -L_0 << ") * " << sum_invL << " = " << exp(-L_0) * sum_invL << std::endl;
+	//std::cout << "nsigma = " << nsigma << std::endl;
 	
 	// Determine the volume normalization (the prior volume)
 	double V = sqrt(detSigma) * 2. * pow(SQRTPI * nsigma, (double)N) / (double)(N) / gsl_sf_gamma((double)(N)/2.);
-	//std::cout << "V = " << V << std::endl << std::endl;
+	//std::cout << "V = " << V << std::endl;
+	//std::cout << "total_weight = " << total_weight << std::endl << std::endl;
 	
 	// Cleanup
 	gsl_matrix_free(Sigma);
@@ -285,8 +323,30 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 	delete[] mu;
 	
 	// Return an estimate of ln(Z)
-	double ret = log(V) - log(sum_invL) + log(total_weight) - L_0;
-	return ret;
+	double lnZ = log(V) - log(sum_invL) + log(total_weight) + L_0;
+	
+	if(isnan(lnZ)) {
+		std::cout << std::endl;
+		std::cout << "NaN Error! lnZ = " << lnZ << std::endl;
+		std::cout << "\tsum_invL = e^(" << -L_0 << ") * " << sum_invL << " = " << exp(-L_0) * sum_invL << std::endl;
+		std::cout << "\tV = " << V << std::endl;
+		std::cout << "\ttotal_weight = " << total_weight << std::endl;
+		std::cout << std::endl;
+	} else if(isinf(lnZ)) {
+		std::cout << std::endl;
+		std::cout << "inf Error! lnZ = " << lnZ << std::endl;
+		std::cout << "\tsum_invL = e^(" << -L_0 << ") * " << sum_invL << " = " << exp(-L_0) * sum_invL << std::endl;
+		std::cout << "\tV = " << V << std::endl;
+		std::cout << "\ttotal_weight = " << total_weight << std::endl;
+		std::cout << "\tnsigma = " << nsigma << std::endl;
+		std::cout << "\tIndex\tDist^2:" << std::endl;
+		for(unsigned int i=0; i<10; i++) {
+			std::cout << sorted_indices[i].index << "\t\t" << sorted_indices[i].dist2 << std::endl;
+		}
+		std::cout << std::endl;
+	}
+	
+	return lnZ;
 	//return V / sum_invL * total_weight;
 }
 

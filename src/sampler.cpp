@@ -815,7 +815,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		if(giant_flag == 1) {
 			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			chain.append(tmp_chain, true);	// Attach giant solution to dwarf solution, weighting each according to evidence
+			chain.append(tmp_chain, true, true, 1e6, 0.1, 0.01);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }

@@ -84,6 +84,16 @@ TStats& TStats::operator+=(const TStats &rhs) {
 	return *this;
 }
 
+// Multiply stats by a scalar (Changes total weight of stats object, but doesn't change means or covariance)
+TStats& TStats::operator*=(double a) {
+	N_items_tot = ceil(a * (double)N_items_tot);
+	for(unsigned int i=0; i<N; i++) {
+		E_k[i] *= a;
+		for(unsigned int j=0; j<N; j++) { E_ij[i+N*j] *= a; }
+	}
+	return *this;
+}
+
 // Copy data from another stats object to this one, replacing existing data
 TStats& TStats::operator=(const TStats &rhs) {
 	if(&rhs != this) {
@@ -108,7 +118,7 @@ TStats& TStats::operator=(const TStats &rhs) {
 // Multiply a statistics operator by a scalar
 TStats operator*(double a, const TStats& stats) {
 	TStats tmp(stats.N);
-	tmp.N_items_tot = floor(a * stats.N_items_tot + 0.5);
+	tmp.N_items_tot = ceil(a * stats.N_items_tot);
 	for(unsigned int i=0; i<stats.N; i++) {
 		tmp.E_k[i] = a * stats.E_k[i];
 		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] = a * stats.E_ij[i+stats.N*j]; }
@@ -118,7 +128,7 @@ TStats operator*(double a, const TStats& stats) {
 
 TStats operator*(const TStats &stats, double a) {
 	TStats tmp(stats.N);
-	tmp.N_items_tot = floor(a * stats.N_items_tot + 0.5);
+	tmp.N_items_tot = ceil(a * stats.N_items_tot);
 	for(unsigned int i=0; i<stats.N; i++) {
 		tmp.E_k[i] = a * stats.E_k[i];
 		for(unsigned int j=0; j<stats.N; j++) { tmp.E_ij[i+stats.N*j] = a * stats.E_ij[i+stats.N*j]; }
@@ -172,6 +182,7 @@ void TStats::get_cov_matrix(gsl_matrix* Sigma, gsl_matrix* invSigma, double* det
 
 // Print out statistics
 void TStats::print() const {
+	//std::cout << "N_items_tot: " << N_items_tot << std::endl;
 	std::cout << "Mean:" << std::endl;
 	for(unsigned int i=0; i<N; i++) { std::cout << "\t" << std::setprecision(3) << mean(i) << "\t+-\t" << sqrt(cov(i, i)) << std::endl; }
 	std::cout << std::endl;

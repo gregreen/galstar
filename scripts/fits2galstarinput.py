@@ -65,7 +65,9 @@ def main():
 	print 'Loaded %d stars.' % d.shape[0]
 	
 	# Convert (l, b) to spherical coordinates (physics convention)
-	theta, phi = lb2thetaphi(d['l'], d['b'])
+	#theta, phi = lb2thetaphi(d['l'], d['b'])
+	theta = np.pi/180. * (90. - d['b'])
+	phi = np.pi/180. * d['l']
 	
 	# Convert spherical coordinates to healpix
 	N_arr = hp.ang2pix(values.nside, theta, phi, nest=(not values.ring))
@@ -90,7 +92,7 @@ def main():
 		# Output mags and errs to a .in file
 		N_saved += outarr.shape[0]
 		fname = abspath('%s_%d.in' % (values.output, N))
-		np.savetxt(fname, outarr, fmt='%.3f')
+		np.savetxt(fname, outarr, fmt='%.5f')
 		
 		# Prepend the average l, b to the file
 		l_avg = np.mean(d['l'][mask])

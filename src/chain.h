@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <vector>
+#include <map>
+#include <algorithm>
 #include <limits>
 #include <assert.h>
 
@@ -44,11 +46,14 @@ private:
 	double total_weight;			// Sum of the weights
 	unsigned int N, length, capacity;	// # of dimensions, length and capacity of chain
 	
+	std::vector<double> x_min;
+	std::vector<double> x_max;
+
 public:
 	TStats stats;				// Keeps track of statistics of chain
 	
 	TChain(unsigned int _N, unsigned int _capacity);
-	TChain(const TChain& c);				// Copy constructor
+	TChain(const TChain& c);
 	TChain(std::string filename, bool reserve_extra=false);	// Construct the chain from a file
 	~TChain();
 	
@@ -56,7 +61,7 @@ public:
 	void add_point(double* element, double L_i, double w_i);			// Add a point to the end of the chain
 	void clear();									// Remove all the points from the chain
 	void set_capacity(unsigned int _capacity);					// Set the capacity of the vectors used in the chain
-	void append(const TChain& chain, bool reweight=false, double nsigma=1.);	// Append a second chain to this one
+	void append(const TChain& chain, bool reweight=false, bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.05);	// Append a second chain to this one
 	
 	// Accessors
 	unsigned int get_capacity() const;			// Return the capacity of the vectors used in the chain
@@ -65,7 +70,8 @@ public:
 	const double* get_element(unsigned int i) const;	// Return the i-th point in the chain
 	double get_L(unsigned int i) const;			// Return the likelihood of the i-th point
 	double get_w(unsigned int i) const;			// Return the weight of the i-th point
-	double get_Z_harmonic(double nsigma=1.) const;		// Estimate the Bayesian Evidence of the posterior using the Harmonic Mean Approximation
+	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) const;	// Estimate the Bayesian Evidence of the posterior using the Harmonic Mean Approximation
+	void density_peak(double* const peak, double nsigma) const;	// Estimate coordinate with peak density
 	
 	// File IO
 	bool save(std::string filename) const;				// Save the chain to file
@@ -73,7 +79,7 @@ public:
 	
 	// Operators
 	double* operator [](unsigned int i);		// Calls get_element
-	void operator +=(const TChain& rhs);		// Calls append
+	void operator +=(const TChain& rhs);			// Calls append
 	TChain& operator =(const TChain& rhs);		// Assignment operator
 };
 

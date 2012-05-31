@@ -13,6 +13,14 @@ TChain::TChain(unsigned int _N, unsigned int _capacity)
 	length = 0;
 	total_weight = 0;
 	set_capacity(_capacity);
+	
+	// Initialize min/max coordinates
+	x_min.reserve(N);
+	x_max.reserve(N);
+	for(unsigned int i=0; i<N; i++) {
+		x_min.push_back(std::numeric_limits<double>::infinity());
+		x_max.push_back(-std::numeric_limits<double>::infinity());
+	}
 }
 
 // Copy constructor
@@ -27,6 +35,8 @@ TChain::TChain(const TChain& c)
 	N = c.N;
 	length = c.length;
 	capacity = c.capacity;
+	x_min = c.x_min;
+	x_max = c.x_max;
 }
 
 // Construct the string from file
@@ -45,6 +55,8 @@ void TChain::add_point(double* element, double L_i, double w_i) {
 	stats(element, (unsigned int)w_i);
 	for(unsigned int i=0; i<N; i++) {
 		x.push_back(element[i]);
+		if(element[i] < x_min[i]) { x_min[i] = element[i]; }
+		if(element[i] > x_max[i]) { x_max[i] = element[i]; }
 	}
 	L.push_back(L_i);
 	w.push_back(w_i);
@@ -59,6 +71,12 @@ void TChain::clear() {
 	stats.clear();
 	total_weight = 0;
 	length = 0;
+	
+	// Reset min/max coordinates
+	for(unsigned int i=0; i<N; i++) {
+		x_min[i] = std::numeric_limits<double>::infinity();
+		x_max[i] = -std::numeric_limits<double>::infinity();
+	}
 }
 
 void TChain::set_capacity(unsigned int _capacity) {
@@ -92,13 +110,26 @@ double TChain::get_w(unsigned int i) const {
 	return w[i];
 }
 
-void TChain::append(const TChain& chain, bool reweight, double nsigma) {
+void TChain::append(const TChain& chain, bool reweight, bool use_peak, double nsigma_max, double nsigma_peak, double chain_frac) {
 	assert(chain.N == N);	// Make sure the two chains have the same dimensionality
 	
 	// Weight each chain according to Bayesian evidence, if requested
-	double a = 1.;
+	//double a = 1.;
+	double a1 = 1.;
+	double a2 = 1.;
 	if(reweight) {
-		a = chain.get_Z_harmonic(nsigma) / get_Z_harmonic(nsigma) * total_weight / chain.total_weight;
+		double lnZ1 = chain.get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac);
+		double lnZ2 = get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac);
+		
+		if(lnZ2 > lnZ1) {
+			a2 = exp(lnZ1 - lnZ2) * total_weight / chain.total_weight;
+		} else {
+			a1 = exp(lnZ2 - lnZ1) * chain.total_weight / total_weight;
+		}
+		
+		//std::cout << "ln(Z1) = " << lnZ1 << std::endl;
+		//std::cout << "ln(Z2) = " << lnZ2 << std::endl;
+		//a = exp(chain.get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac) - get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac)) * total_weight / chain.total_weight;
 	}
 	
 	// Append the last chain to this one
@@ -109,22 +140,211 @@ void TChain::append(const TChain& chain, bool reweight, double nsigma) {
 	w.insert(w.end(), chain.w.begin(), chain.w.end());
 	
 	if(reweight) {
-		std::cout << "a = " << a << std::endl;
+		std::cout << "(a1, a2) = " << a1 << ", " << a2 << std::endl;
 		std::vector<double>::iterator w_end = w.end();
+		for(std::vector<double>::iterator it = w.begin(); it != w_end_old; ++it) {
+			*it *= a1;
+		}
 		for(std::vector<double>::iterator it = w_end_old; it != w_end; ++it) {
-			*it *= a;
+			*it *= a2;
 		}
 	}
 	
-	stats += a * chain.stats;
+	stats = a1 * stats;
+	stats += a2 * chain.stats;
 	length += chain.length;
-	total_weight += a * chain.total_weight;
+	total_weight *= a1;
+	total_weight += a2 * chain.total_weight;
+	
+	// Update min/max coordinates
+	for(unsigned int i=0; i<N; i++) {
+		if(chain.x_max[i] > x_max[i]) { x_max[i] = chain.x_max[i]; }
+		if(chain.x_min[i] < x_min[i]) { x_min[i] = chain.x_min[i]; }
+	}
 	
 	//stats.clear();
 	//for(unsigned int i=0; i<length; i++) {
 	//	stats(get_element(i), 1.e10*w[i]);
 	//}
 }
+
+double* TChain::operator [](unsigned int i) {
+	return &(x[i*N]);
+}
+
+void TChain::operator +=(const TChain& rhs) {
+	append(rhs);
+}
+
+TChain& TChain::operator =(const TChain& rhs) {
+	if(&rhs != this) {
+		stats = rhs.stats;
+		x = rhs.x;
+		L = rhs.L;
+		w = rhs.w;
+		total_weight = rhs.total_weight;
+		N = rhs.N;
+		length = rhs.length;
+		capacity = rhs.capacity;
+		x_min = rhs.x_min;
+		x_max = rhs.x_max;
+	}
+	return *this;
+}
+
+
+// A structure used to sort the elements of the chain
+struct TChainSort {
+	unsigned int index;
+	double dist2;
+	
+	bool operator<(const TChainSort rhs) const { return dist2 < rhs.dist2; }	// Reversed so that the sort is in ascending order
+};
+
+//bool chainsortcomp(TChainSort a, TChainSort b) { return a.dist2 < b.dist2; }
+
+
+// Uses a variant of the harmonic mean approximation to determine the evidence.
+// Essentially, the regulator chosen is an ellipsoid with radius nsigma standard deviations
+// along each principal axis. The regulator is then 1/V inside the ellipsoid and 0 without,
+// where V is the volume of the ellipsoid. In this form, the harmonic mean approximation
+// has finite variance. See Gelfand & Dey (1994) and Robert & Wraith (2009) for details.
+double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma_peak, double chain_frac) const {
+	// Get the covariance and determinant of the chain
+	gsl_matrix* Sigma = gsl_matrix_alloc(N, N);
+	gsl_matrix* invSigma = gsl_matrix_alloc(N, N);
+	double detSigma;
+	stats.get_cov_matrix(Sigma, invSigma, &detSigma);
+	
+	//std::cout << std::endl << use_peak << "\t" << nsigma_max << "\t" << nsigma_peak << "\t" << chain_frac << std::endl;
+	
+	/*std::cout << "Covariance:" << std::endl;
+	for(unsigned int i=0; i<N; i++) {
+		std::cout << std::endl;
+		for(unsigned int j=0; j<N; j++) { std::cout << gsl_matrix_get(Sigma, i, j) << "\t"; }
+	}
+	std::cout << std::endl << std::endl;*/
+	
+	// Determine the center of the prior volume to use
+	double* mu = new double[N];
+	if(use_peak) {	// Use the peak density as the center
+		density_peak(mu, nsigma_peak);
+	} else {	// Get the mean from the stats class
+		for(unsigned int i=0; i<N; i++) { mu[i] = stats.mean(i); }
+	}
+	/*std::cout << std::endl << "mu = ";
+	for(unsigned int i=0; i<N; i++) { std::cout << mu[i] << "\t"; }
+	std::cout << std::endl;*/
+	
+	// Sort elements in chain by distance from center
+	std::vector<TChainSort> sorted_indices;
+	sorted_indices.reserve(length);
+	for(unsigned int i=0; i<length; i++) {
+		TChainSort tmp_el;
+		tmp_el.index = i;
+		tmp_el.dist2 = metric_dist2(invSigma, get_element(i), mu, N);
+		sorted_indices.push_back(tmp_el);
+	}
+	std::sort(sorted_indices.begin(), sorted_indices.end());
+	/*for(unsigned int i=0; i<20; i++) {
+		std::cout << sorted_indices[i].index << "\t" << sorted_indices[i].dist2 << std::endl;
+	}*/
+	
+	// Determine <1/L> inside the prior volume
+	double sum_invL = 0.;
+	double tmp_invL;
+	unsigned int npoints = (unsigned int)(chain_frac * (double)length);
+	double nsigma = sqrt(sorted_indices[npoints].dist2);
+	unsigned int tmp_index = sorted_indices[0].index;;
+	double L_0 = L[tmp_index];
+	for(unsigned int i=0; i<npoints; i++) {
+		if(sorted_indices[i].dist2 > nsigma_max * nsigma_max) {
+			//std::cout << "Counted only " << i << " elements in chain." << std::endl;
+			nsigma = nsigma_max;
+			break;
+		}
+		tmp_index = sorted_indices[i].index;
+		//std::cout << "\t" << tmp_index << "\t" << L[tmp_index] << std::endl;
+		tmp_invL = w[tmp_index] / exp(L[tmp_index] - L_0);
+		if((tmp_invL + sum_invL > 1.e100) && (i != 0)) {
+			nsigma = sqrt(sorted_indices[i-1].dist2);
+			break;
+		}
+		sum_invL += tmp_invL;
+	}
+	/*std::cout << "sum_invL = e^(" << -L_0 << ") * " << sum_invL << std::endl;
+	std::cout << "nsigma = " << nsigma << std::endl;*/
+	
+	// Determine the volume normalization (the prior volume)
+	double V = sqrt(detSigma) * 2. * pow(SQRTPI * nsigma, (double)N) / (double)(N) / gsl_sf_gamma((double)(N)/2.);
+	//std::cout << "V = " << V << std::endl << std::endl;
+	
+	// Cleanup
+	gsl_matrix_free(Sigma);
+	gsl_matrix_free(invSigma);
+	delete[] mu;
+	
+	// Return an estimate of ln(Z)
+	double ret = log(V) - log(sum_invL) + log(total_weight) - L_0;
+	return ret;
+	//return V / sum_invL * total_weight;
+}
+
+
+// Estimate the coordinate with peak density.
+void TChain::density_peak(double* const peak, double nsigma) const {
+	// Width of bin in each direction
+	double* width = new double[N];
+	uint64_t* index_width = new uint64_t[N];
+	uint64_t* mult = new uint64_t[N];
+	mult[0] = 1;
+	//std::cout << std::endl;
+	for(unsigned int i=0; i<N; i++) {
+		index_width[i] = (uint64_t)ceil((x_max[i] - x_min[i]) / (nsigma * sqrt(stats.cov(i,i))));
+		width[i] = (x_max[i] - x_min[i]) / (double)(index_width[i]);
+		//std::cout << x_min[i] << "\t" << x_max[i] << "\t" << width[i] << "\t" << index_width[i] << std::endl;
+		if(i != 0) { mult[i] = mult[i-1] * index_width[i-1]; }
+	}
+	
+	// Bin the chain
+	std::map<uint64_t, double> bins;
+	uint64_t index;
+	std::map<uint64_t, double>::iterator it;
+	for(unsigned int i=0; i<length; i++) {
+		index = 0;
+		for(unsigned int k=0; k<N; k++) { index += mult[k] * (uint64_t)floor((x[N*i + k] - x_min[k]) / width[k]); }
+		bins[index] += w[i];
+	}
+	
+	// Find the index of the max bin
+	std::map<uint64_t, double>::iterator it_end = bins.end();
+	double w_max = -std::numeric_limits<double>::infinity();
+	for(it = bins.begin(); it != it_end; ++it) {
+		if(it->second > w_max) {
+			//std::cout << "\t" << it->second << "\t" << it->first << std::endl;
+			w_max = it->second;
+			index = it->first;
+		}
+	}
+	
+	// Convert the index to a coordinate
+	//std::cout << index << std::endl;
+	uint64_t coord_index;
+	for(unsigned int i=0; i<N; i++) {
+		coord_index = index % index_width[i];
+		index = (index - coord_index) / index_width[i];
+		//std::cout << "\t" << coord_index;
+		peak[i] = x_min[i] + ((double)coord_index + 0.5) * width[i];
+		//std::cout << "\t" << peak[i];
+	}
+	//std::cout << std::endl;
+	//std::cout << index << std::endl;
+	
+	delete[] width;
+	delete[] index_width;
+	delete[] mult;
+}
+
 
 bool TChain::save(std::string filename) const {
 	std::fstream out(filename.c_str(), std::ios::out | std::ios::binary);
@@ -152,8 +372,7 @@ bool TChain::save(std::string filename) const {
 	return stats_success;
 }
 
-
-bool TChain::load(std::string filename, bool reserve_extra){
+bool TChain::load(std::string filename, bool reserve_extra) {
 	std::fstream in(filename.c_str(), std::ios::in | std::ios::binary);
 	
 	if(!in.good()) { return false; }
@@ -192,66 +411,3 @@ bool TChain::load(std::string filename, bool reserve_extra){
 	return stats_success;
 }
 
-
-double* TChain::operator [](unsigned int i) {
-	return &(x[i*N]);
-}
-
-void TChain::operator +=(const TChain& rhs) {
-	append(rhs);
-}
-
-TChain& TChain::operator =(const TChain& rhs) {
-	if(&rhs != this) {
-		stats = rhs.stats;
-		x = rhs.x;
-		L = rhs.L;
-		w = rhs.w;
-		total_weight = rhs.total_weight;
-		N = rhs.N;
-		length = rhs.length;
-		capacity = rhs.capacity;
-	}
-	return *this;
-}
-
-
-// Uses a variant of the harmonic mean approximation to determine the evidence.
-// Essentially, the regulator chosen is an ellipsoid with radius nsigma standard deviations
-// along each principal axis. The regulator is then 1/V inside the ellipsoid and 0 without,
-// where V is the volume of the ellipsoid. In this form, the harmonic mean approximation
-// has finite variance. See Gelfand & Dey (1994) and Robert & Wraith (2009) for details.
-double TChain::get_Z_harmonic(double nsigma) const {
-	// Get the covariance and determinant of the chain
-	gsl_matrix* Sigma = gsl_matrix_alloc(N, N);
-	gsl_matrix* invSigma = gsl_matrix_alloc(N, N);
-	double detSigma;
-	stats.get_cov_matrix(Sigma, invSigma, &detSigma);
-	
-	// Get the mean from the stats class
-	double* mu = new double[N];
-	for(unsigned int i=0; i<N; i++) {
-		mu[i] = stats.mean(i);
-	}
-	
-	// Determine the volume normalization (the prior volume)
-	double V = sqrt(detSigma) * 2. * pow(SQRTPI * nsigma, (double)N) / (double)(N) / gsl_sf_gamma((double)(N)/2.);
-	
-	// Determine <1/L> inside the prior volume
-	double dist2;
-	double sum_invL = 0;
-	for(unsigned int i=0; i<length; i++) {
-		dist2 = metric_dist2(invSigma, get_element(i), mu, N);
-		if(dist2 < nsigma*nsigma) {
-			sum_invL += w[i] / exp(L[i]);
-		}
-	}
-	
-	// Cleanup
-	gsl_matrix_free(Sigma);
-	gsl_matrix_free(invSigma);
-	delete[] mu;
-	
-	// Return the estimate of Z
-	return V / sum_invL * total_weight;
-}

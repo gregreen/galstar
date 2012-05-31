@@ -79,7 +79,7 @@ def main():
 	parser.add_argument('binfn', type=str, help='File containing binned probability density functions for each star along l.o.s. (also accepts gzipped files)')
 	parser.add_argument('statsfn', type=str, help='File containing summary statistics for each star.')
 	parser.add_argument('plotfn', type=str, help='Base filename (without extension) for plots.')
-	parser.add_argument('-se', '--startend', type=int, nargs=2, default=(0,6), help='Start and end indices')
+	parser.add_argument('-se', '--startend', type=int, nargs=2, default=(0,6), help='Start and end indices (default: 0 6).')
 	parser.add_argument('-rc', '--rowcol', type=int, nargs=2, default=(3,2), help='# of rows and columns, respectively (default: 2 3)')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(1,1), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1 1).')

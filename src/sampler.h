@@ -98,12 +98,6 @@ struct TLF	// the luminosity function
 	double operator()(double Mr) const	// return the LF at position Mr (linear interpolation)
 	{
 		return (*lf_interp)(Mr);
-		/*int idx = (int)floor((Mr - Mr0) / dMr + 0.5);
-		if(idx < 0) { return lf.front(); }
-		if(idx >= lf.size()) { return lf.back(); }
-		double lf_lin_interp = (*lf_interp)(Mr);
-		double lf_nn_interp = lf[idx];
-		return lf[idx];*/
 	}
 
 	void load(const std::string &fn);
@@ -133,7 +127,7 @@ struct TModel
 	double dMr, dFeH, Mr_min, FeH_min, Mr_max, FeH_max;	// Sample spacing for stellar SEDs
 	unsigned int N_FeH, N_Mr;
 	
-	static const double Acoef[NBANDS];	// Extinction coefficients relative to Ar
+	double Acoef[NBANDS];	// Extinction coefficients relative to Ar
 	
 	TBilinearInterp<TSED> *sed_interp;	// Bilinear interpolation of stellar SEDs in Mr and FeH
 	
@@ -155,7 +149,7 @@ struct TModel
 	peyton::util::range<double>      DM_range, Ar_range;
 	peyton::util::interval<double>   Mr_range, FeH_range;
 	
-	TModel(const std::string& lf_, const std::string& seds_);
+	TModel(const std::string& lf_fn, const std::string& seds_fn, const double (&Acoef_)[NBANDS]);
 	~TModel() { delete seds; delete sed_interp; }
 	
 	void computeCartesianPositions(double &X, double &Y, double &Z, double cos_l, double sin_l, double cos_b, double sin_b, double d) const;
@@ -285,8 +279,6 @@ struct MCMCParams {
 		delete mu_disk_arr;
 	}
 	
-	//inline unsigned int DM_index(double DM) { return (unsigned int)((DM-DM_min)/(DM_max-DM_min)*DM_SAMPLES + 0.5); }
-	
 	void update(TStellarData::TMagnitudes &mag) {
 		for(unsigned int i=0; i<NBANDS; i++) {
 			m[i] = mag.m[i];
@@ -296,19 +288,16 @@ struct MCMCParams {
 	
 	inline double log_dn_interp(const double DM) {
 		if((DM < DM_min) || (DM > DM_max)) { return model.log_dn(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		//unsigned int index = DM_index(DM);
 		return (*log_dn_arr)(DM);
 	}
 	
 	inline double f_halo_interp(const double DM) {
 		if((DM < DM_min) || (DM > DM_max)) { return model.f_halo(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		//unsigned int index = DM_index(DM);
 		return (*f_halo_arr)(DM);
 	}
 	
 	inline double mu_disk_interp(const double DM) {
 		if((DM < DM_min) || (DM > DM_max)) { return model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		//unsigned int index = DM_index(DM);
 		return (*mu_disk_arr)(DM);
 	}
 	

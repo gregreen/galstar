@@ -57,17 +57,12 @@ void TLF::load(const std::string &fn)
 // Model
 //////////////////////////////////////////////////////////////////////////////////////
 
-TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
+TModel::TModel(const std::string &lf_fn, const std::string &seds_fn, const double (&Acoef_)[NBANDS])
 	: lf(lf_fn), DM_range(5., 20., .02), Ar_range(0.), Mr_range(ALL), FeH_range(ALL), sed_interp(NULL)
 {
-	/*dFeH = 0.05;
-	dMr = 0.01;
-	FeH_min = -2.50;
-	Mr_min = -1.00;
-	N_FeH = 51;
-	N_Mr = 2901;
-	FeH_max = FeH_min + dFeH*(N_FeH-1);
-	Mr_max = Mr_min + dMr*(N_Mr-1);*/
+	
+	// Set the reddening coefficient for each band
+	for(unsigned int i=0; i<NBANDS; i++){ Acoef[i] = Acoef_[i]; }
 	
 	// Load the SEDs
 	
@@ -156,7 +151,7 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn)
 	std::cerr << "# Loaded " << N_FeH*N_Mr << " SEDs from " << seds_fn << "\n";
 }
 
-const double TModel::Acoef[NBANDS] = {1.8236, 1.4241, 1.0000, 0.7409, 0.5821}; //{5.155/2.751, 3.793/2.751, 1., 2.086/2.751, 1.479/2.751};
+//const double TModel::Acoef[NBANDS] = {1.8236, 1.4241, 1.0000, 0.7409, 0.5821};
 
 // compute Galactocentric XYZ given l,b,d
 inline void TModel::computeCartesianPositions(double &X, double &Y, double &Z, double cos_l, double sin_l, double cos_b, double sin_b, double d) const
@@ -409,7 +404,6 @@ double log_permutation_likelihood(const double *const x, unsigned int N, MCMCPar
 	double logL = 0.;
 	
 	double M[NBANDS];		// Absolute magnitudes
-	//TSED* closest_sed = NULL;	// Closest match in SED template library
 	TSED sed_bilin_interp;
 	
 	unsigned int N_stars = N/4;
@@ -426,11 +420,6 @@ double log_permutation_likelihood(const double *const x, unsigned int N, MCMCPar
 		TSED sed_bilin_interp = (*p.model.sed_interp)(x[_Mr], x[_FeH]);
 		double logL_i = logL_SED(M, p.err, sed_bilin_interp);
 		logL += logL_SED(M, p.err, sed_bilin_interp);						// Update log likelihood from difference between absolute magnitudes and template SED magnitudes
-	}
-	
-	if(logL > -100.) {
-		#pragma omp critical (cout)
-		std::cout << x[_DM] << "\t" << x[_Ar] << "\t" << x[_Mr] << "\t" << x[_FeH] << "\t" << logL << std::endl;
 	}
 	
 	return logL;
@@ -736,7 +725,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		std::cout << "(n_sigma, Z):" << std::endl;
 		TChain chain = sampler.get_chain();
 		//for(double nsigma=0.5; nsigma < 2.6; nsigma += 0.5) {
-		std::cout << 0.8 << "\t" << chain.get_Z_harmonic(0.8) << std::endl;
+		std::cout << 0.5 << "\t" << chain.get_ln_Z_harmonic(true, 1e10, 0.1, 0.01) << std::endl;
 		//}
 		stats = sampler.get_stats();
 		
@@ -826,7 +815,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		if(giant_flag == 1) {
 			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			chain.append(tmp_chain, true, 1.);	// Attach giant solution to dwarf solution, weighting each according to evidence
+			chain.append(tmp_chain, true);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }

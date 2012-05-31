@@ -22,6 +22,10 @@
 #       
 #       
 
+# TODO:
+#   1. Transform luminosity function in similar manner
+
+
 import sys, argparse
 from os.path import abspath
 

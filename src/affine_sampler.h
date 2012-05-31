@@ -95,7 +95,7 @@ public:
 	TChain& get_chain() { return chain; }
 	double get_scale() { return sqrta*sqrta; }
 	double get_acceptance_rate() { return (double)N_accepted/(double)(N_accepted+N_rejected); }
-	double get_Z_harmonic(double nsigma=1.) { return chain.get_Z_harmonic(nsigma); }
+	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) { return chain.get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac); }
 	void print_state();
 	
 private:

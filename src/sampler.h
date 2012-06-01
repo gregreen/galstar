@@ -145,10 +145,6 @@ struct TModel
 		static Getter varname2getter(const std::string &var);
 	};
 	
-	// Parameter ranges over which to sample
-	peyton::util::range<double>      DM_range, Ar_range;
-	peyton::util::interval<double>   Mr_range, FeH_range;
-	
 	TModel(const std::string& lf_fn, const std::string& seds_fn, const double (&Acoef_)[NBANDS]);
 	~TModel() { delete seds; delete sed_interp; }
 	
@@ -343,20 +339,11 @@ struct MCMCParams {
 	#undef DM_SAMPLES
 };
 
-// Functions for line-of-sight calculations
-void ran_state_los(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
-double calc_logP_los(const double *const x, unsigned int N, MCMCParams &p);
-double log_prior(const double *const x, unsigned int N, MCMCParams &p);
-double log_permutation_likelihood(const double *const x, unsigned int N, MCMCParams &p, gsl_permutation *data_order);
-bool sample_mcmc_los(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_steps, unsigned int N_threads);
-
 // Functions for individual star
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-bool sample_mcmc(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, std::string chain_out, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, std::string chain_out, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_brute_force(TModel &model,MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TChainLogger &chainlogger, TStats &stats, unsigned int N_samples, unsigned int N_threads);
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
 
 // Debugging functions
 void print_logpdf(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, double (&m)[5], double (&err)[5], double DM, double Ar, double Mr, double FeH);
@@ -375,58 +362,6 @@ inline int varname2int(const std::string &varname) {
 		return _FeH;
 	}
 	return -1;
-}
-
-inline double std_bin_min(const std::string &varname) {
-	if(varname == "DM") {
-		return 5.;
-	} else if(varname == "Ar") {
-		return 0.;
-	} else if(varname == "Mr") {
-		return -1.;
-	} else if(varname == "FeH") {
-		return -2.5;
-	}
-	return -1.;
-}
-
-inline double std_bin_max(const std::string &varname) {
-	if(varname == "DM") {
-		return 20.;
-	} else if(varname == "Ar") {
-		return 10.;
-	} else if(varname == "Mr") {
-		return 28.;
-	} else if(varname == "FeH") {
-		return 0.;
-	}
-	return -1.;
-}
-
-inline double std_bin_min(unsigned int i) {
-	if(i == _DM) {
-		return 5.;
-	} else if(i == _Ar) {
-		return 0.;
-	} else if(i == _Mr) {
-		return -1.;
-	} else if(i == _FeH) {
-		return -2.5;
-	}
-	return -1.;
-}
-
-inline double std_bin_max(unsigned int i) {
-	if(i == _DM) {
-		return 20.;
-	} else if(i == _Ar) {
-		return 10.;
-	} else if(i == _Mr) {
-		return 28.;
-	} else if(i == _FeH) {
-		return 0.;
-	}
-	return -1.;
 }
 
 

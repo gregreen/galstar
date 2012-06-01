@@ -17,21 +17,6 @@
 using namespace boost;
 using namespace std;
 
-void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &par, const double err[NBANDS], double (&Acoef)[NBANDS])
-{
-	double mtrue[NBANDS], mext[NBANDS];
-	for(unsigned int i=0; i<NBANDS; i++) {
-		mtrue[i] = par.SED->v[i] + par.get_DM();
-		mext[i]  = mtrue[i] + par.get_Ar() * Acoef[i];
-		m[i] = mext[i] + gsl_ran_gaussian(rng, err[i]);
-	}
-	
-	cerr << "# MOCK:    input: " << "Ar=" << par.get_Ar() << ", DM=" << par.get_DM() << ", Mr=" << par.get_Mr() << ", FeH=" << par.get_FeH() << "\n";
-	cerr << "# MOCK:   m_true:"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " << mtrue[i]; }; cerr << "\n";
-	cerr << "# MOCK:   m_ext :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<  mext[i]; }; cerr << "\n";
-	cerr << "# MOCK:   m_obs :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<     m[i]; }; cerr << "\n";
-}
-
 
 // Construct binners from commandline input
 bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns, const vector<string> &output_pdfs) {
@@ -93,8 +78,7 @@ bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns,
 }
 
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 	vector<string> output_pdfs;
 	string lf_fn = DATADIR "/MrLF.MSandRGB_v1.0.dat";
 	string seds_fn = DATADIR "/MSandRGBcolors_v1.3.dat";
@@ -103,16 +87,9 @@ int main(int argc, char **argv)
 	string par_thick = "0.13 3261 743";
 	string par_halo = "0.0051 0.70 -2.62 27.8 -3.8";
 	// TODO: Add in option to set metallicity parameters
-	bool test = false;
-	bool calcpdf = false;
-	interval<double> Mr_range(ALL), FeH_range(ALL);
-	range<double> DM_range(5,20,0.02), Ar_range(0,5,0.02);
 	string datafn("NONE");
 	string statsfn("NONE");
-	string chainfn("NONE");
 	string photometry = "PS";
-	bool brute_force = false;
-	bool los = false;
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 25;
@@ -134,17 +111,8 @@ int main(int argc, char **argv)
 		("thindisk", po::value<string>(&par_thin), "Thin disk model parameters (l1 h1)")
 		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
 		("halo", po::value<string>(&par_halo), "Halo model parameters, (f_halo q n_inner R_br n_outer)")
-		("test", po::value<bool>(&test)->zero_tokens(), "Assume the input contains (l b Ar DM Mr FeH uErr gErr rErr iErr zErr) and generate test data")
-		("calcpdf", po::value<bool>(&calcpdf)->zero_tokens(), "Calculate log(p). Assume input contains l b DM Ar Mr FeH u g r i z uErr gErr rErr iErr zErr.")
-		("range-M",   po::value<interval<double> >(&Mr_range),  "Range of absolute magnitudes to sample")
-		("range-FeH", po::value<interval<double> >(&FeH_range), "Range of Fe/H to consider")
-		("range-DM",   po::value<range<double> >(&DM_range), "DM grid to sample")
-		("range-Ar",   po::value<range<double> >(&Ar_range), "Ar grid to sample")
 		("datafile", po::value<string>(&datafn), "Stellar magnitudes and errors file")
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
-		("chainfile", po::value<string>(&chainfn), "Base filename for chain output")
-		("brute", "Use brute-force sampling")
-		("los", "Sample entire line of sight at once")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
@@ -159,13 +127,11 @@ int main(int argc, char **argv)
 	po::store(po::command_line_parser(argc, argv).options(desc).positional(pd).run(), vm);
 	po::notify(vm);
 	
-	if (vm.count("help") || !output_pdfs.size()) { std::cout << desc << "\n"; return -1; }
-	test = vm.count("test");
-	if(vm.count("brute")) { brute_force = true; }
-	if(vm.count("los")) { los = true; }
+	if(vm.count("help") || !output_pdfs.size()) { cout << desc << endl; return -1; }
+	if(!(vm.count("datafile"))) { cout << "'datafile' is a required argument." << endl; return -1; }
 	if(vm.count("dwarf")) { giant_flag = 1; }
 	if(vm.count("giant")) {
-		if(giant_flag == 1) { std::cout << "--dwarf and --giant are incompatible options." << std::endl; return -1; }
+		if(giant_flag == 1) { cout << "--dwarf and --giant are incompatible options." << endl; return -1; }
 		giant_flag = 2;
 	}
 	
@@ -173,7 +139,7 @@ int main(int argc, char **argv)
 	TMultiBinner<4> multibinner;
 	if(!construct_binners(multibinner, output_fns, output_pdfs)) { return -1; }
 	
-	////////////// Construct Model
+	// Construct Model /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	double Acoef_tmp[NBANDS];
 	if(photometry == "PS") {
 		for(unsigned int i=0; i<NBANDS; i++){ Acoef_tmp[i] = AcoefPS1[i]; }
@@ -200,115 +166,46 @@ int main(int argc, char **argv)
 	TStellarData data;
 	double m[NBANDS], err[NBANDS];
 	double l, b;
-	if(test) {
-		////////////// Load Test Params and generate test data
-		gsl_rng_env_setup();
-		gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-
-		TModel::Params par;
-		double Mr, FeH;
-		// For debugging purposes: ///////////////////////
-		/*l = 90.;
-		b = 10.;
-		par.Ar = 0.2;
-		par.DM = 15.;
-		Mr = 18.;
-		FeH = -0.5;
-		FOR(0, NBANDS) { err[i] = 0.05; }*/
-		//////////////////////////////////////////////////
-		cin >> l >> b >> par.Ar >> par.DM >> Mr >> FeH;
-		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
-		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
-		
-		par.SED = model.get_sed(Mr, FeH);
-		generate_test_data(m, rng, par, err, Acoef_tmp);
-		
-		TStellarData::TMagnitudes mag(m, err);
-		data.star.push_back(mag);
-		
-		gsl_rng_free(rng);
-	} else if(calcpdf) {
-		double DM, Ar, Mr, FeH;
-		cin >> l >> b >> DM >> Ar >> Mr >> FeH;
-		for(unsigned int i=0; i<NBANDS; i++) { cin >> m[i]; }
-		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
-		TStellarData::TMagnitudes mag(m, err);
-		print_logpdf(model, l, b, mag, data, m, err, DM, Ar, Mr, FeH);
-		return 0;
-	} else if(datafn != "NONE") {
-		data.load_data(datafn);
-		l = data.l;
-		b = data.b;
-	} else {
-		////////////// Load Data
-		cin >> l >> b;
-		for(unsigned int i=0; i<NBANDS; i++) { cin >> m[i]; }
-		for(unsigned int i=0; i<NBANDS; i++) { cin >> err[i]; }
-		if(!cin) { cerr << "Error reading input data. Aborting.\n"; return -1; }
-		TStellarData::TMagnitudes mag(m, err);
-		data.star.push_back(mag);
-	}
-	
-	model.DM_range = DM_range;
-	model.Ar_range = Ar_range;
-	model.Mr_range = Mr_range;
-	model.FeH_range = FeH_range;
-	cerr << "# Sampler:" 	<< " DM=[" << model.DM_range << "]" << " Ar=[" << model.Ar_range << "]"
-				<< " Mr=[" << model.Mr_range << "]" << " FeH=[" << model.FeH_range << "]\n";
-	
+	data.load_data(datafn);
+	l = data.l;
+	b = data.b;
 	
 	// Run sampler ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	if(los) {
-		unsigned int N_stars = data.star.size();
-		TStats stats(4*N_stars);
+	
+	// Initialize class passed to sampling function, used to define the model and contain observed stellar magnitudes
+	MCMCParams p(l, b, *data.star.begin(), model, data);
+	p.giant_flag = giant_flag;	// Set flag which determines whether the model should consider only giants, only dwarfs, or both
+	
+	// Pass each star in turn to the sampling function
+	unsigned int count = 0;
+	unsigned int N_nonconverged = 0;
+	for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
+		// Calculate posterior for current star
+		std::cout << "=========================================" << std::endl;
+		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
+		TStats stats(4);
 		bool converged;
-		converged = sample_mcmc_los(model, l, b, *(data.star.begin()), data, multibinner, stats, N_steps, N_threads);
-	} else {
-		// Initialize class passed to sampling function, used to define the model and contain observed stellar magnitudes
-		MCMCParams p(l, b, *data.star.begin(), model, data);
-		p.giant_flag = giant_flag;	// Set flag which determines whether the model should consider only giants, only dwarfs, or both
-		// Pass each star in turn to the sampling function
-		unsigned int count = 0;
-		unsigned int N_nonconverged = 0;
-		for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
-			// Calculate posterior for current star
-			std::cout << "=========================================" << std::endl;
-			std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
-			TStats stats(4);
-			bool converged;
-			if(brute_force) {
-				stringstream outfn("");
-				outfn << statsfn << "_" << count << ".chain";
-				TChainLogger chainlogger(outfn.str(), 4, 1, true);
-				converged = sample_brute_force(model, p, *it, multibinner, chainlogger, stats, N_samples, N_threads);
-			} else {
-				stringstream outfn("");
-				if(chainfn != "NONE") {
-					outfn << chainfn << "_" << count << ".chain";
-				}
-				if(giant_flag != 0) {
-					converged = sample_affine(model, p, *it, multibinner, stats, outfn.str(), N_samplers, N_steps, N_threads);
-				} else {
-					converged = sample_affine_both(model, p, *it, multibinner, stats, outfn.str(), N_samplers, N_steps, N_threads);
-				}
-			}
-			if(!converged) { N_nonconverged++; }
-			
-			// Output binned pdfs and statistics for current star
-			bool append_to_file = (count != 0);
-			// Write out the marginalized posteriors
-			for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
-				bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file);
-			}
-			// Write out summary of statistics
-			if(statsfn != "NONE") {
-				bool write_success = stats.write_binary(statsfn, converged, append_to_file);
-			}
-			multibinner.clear();
+		if(giant_flag != 0) {
+			converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+		} else {
+			converged = sample_affine_both(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
 		}
+		if(!converged) { N_nonconverged++; }
 		
-		std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;
+		// Output binned pdfs and statistics for current star
+		bool append_to_file = (count != 0);
+		// Write out the marginalized posteriors
+		for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
+			bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file);
+		}
+		// Write out summary of statistics
+		if(statsfn != "NONE") {
+			bool write_success = stats.write_binary(statsfn, converged, append_to_file);
+		}
+		multibinner.clear();
 	}
+		
+	std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;
 	
 	return 0;
 }

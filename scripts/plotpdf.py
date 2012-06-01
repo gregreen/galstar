@@ -130,7 +130,7 @@ def main():
 			plotfn = '%s_%d.png' % (values.plotfn, i)
 		else:
 			plotfn = '%s.png' % (values.plotfn)
-		selection = values.startend[0] + np.arange(i*N_ax, min((i+1)*N_ax, N_stars))
+		selection = (values.startend[0] + np.arange(i*N_ax, min((i+1)*N_ax, N_stars))).astype(np.uint32)
 		bounds, p = load_bins(values.binfn, selection)
 		clip = None
 		if values.ymax != None:

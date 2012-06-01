@@ -25,7 +25,7 @@ void generate_test_data(double m[NBANDS], gsl_rng *rng, const TModel::Params &pa
 		mext[i]  = mtrue[i] + par.get_Ar() * Acoef[i];
 		m[i] = mext[i] + gsl_ran_gaussian(rng, err[i]);
 	}
-
+	
 	cerr << "# MOCK:    input: " << "Ar=" << par.get_Ar() << ", DM=" << par.get_DM() << ", Mr=" << par.get_Mr() << ", FeH=" << par.get_FeH() << "\n";
 	cerr << "# MOCK:   m_true:"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " << mtrue[i]; }; cerr << "\n";
 	cerr << "# MOCK:   m_ext :"; for(unsigned int i=0; i<NBANDS; i++) { cerr << " " <<  mext[i]; }; cerr << "\n";

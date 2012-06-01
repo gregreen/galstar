@@ -182,10 +182,10 @@ def load_bins_gzip(fname, selection=None):
 	if selection == None:	# Read everything in at once
 		f = f_gzip.read()
 		f_gzip.close()
-		bin_data = np.fromstring(f[60:], dtype=np.float64)
+		bin_data = np.fromstring(f, dtype=np.float64)
 	else:					# Read in only the selected stars
 		N_files_sel = len(selection)
-		N_pix = np.prod(bin_width)
+		N_pix = int(np.prod(bin_width))
 		offset = lambda index: 60 + 8*N_pix*index
 		bin_data = np.empty((N_files_sel, N_pix), dtype=np.float64)
 		

@@ -208,7 +208,8 @@ struct TStellarData {
 	
 	TMagnitudes& operator[](const unsigned int &index) { return star.at(index); }
 	
-	bool load_data(std::string infile) {
+	// Load magnitudes and errors of stars along one line of sight, along with (l,b) for the given l.o.s.
+	bool load_data(std::string infile, double err_floor=0.001) {
 		std::ifstream fin(infile.c_str());
 		if(!fin.is_open()) {
 			std::cout << "# Cannot open file " << infile << std::endl;
@@ -218,12 +219,48 @@ struct TStellarData {
 		fin >> l >> b;
 		while(!fin.eof()) {
 			TMagnitudes tmp;
+			double err_tmp;
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.m[i]; }
-			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.err[i]; }
+			for(unsigned int i=0; i<NBANDS; i++) { fin >> err_tmp; tmp.err[i] = sqrt(err_tmp*err_tmp + err_floor*err_floor); }
 			star.push_back(tmp);
 		}
 		star.pop_back();
 		fin.close();
+		return true;
+	}
+	
+	// Load magnitudes and errors of stars along one line of sight, along with (l,b) for the given l.o.s. Same as load_data, but for binary files.
+	// Expected format:
+	// 	Header:
+	// 		l		(double)
+	// 		b		(double)
+	// 		N_stars		(uint32)
+	// 	Data - For each star:
+	// 		mag[NBANDS]	(double)
+	// 		err[NBANDS]	(double)
+	bool load_data_binary(std::string infile, double err_floor=0.001) {
+		std::fstream f(infile.c_str(), std::ios::in | std::ios::binary);
+		if(!f) { f.close(); return false; }
+		
+		// Read in header
+		uint32_t N_stars;
+		f.read(reinterpret_cast<char*>(&l), sizeof(l));
+		f.read(reinterpret_cast<char*>(&b), sizeof(b));
+		f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));
+		
+		// Read in each star
+		star.reserve(N_stars);
+		for(uint32_t i=0; i<N_stars; i++) {
+			TMagnitudes tmp;
+			f.read(reinterpret_cast<char*>(&(tmp.m[0])), NBANDS*sizeof(double));
+			f.read(reinterpret_cast<char*>(&(tmp.err[0])), NBANDS*sizeof(double));
+			for(unsigned int i=0; i<NBANDS; i++) { tmp.err[i] = sqrt(tmp.err[i]*tmp.err[i] + err_floor*err_floor); }
+			star.push_back(tmp);
+		}
+		
+		if(f.fail()) { f.close(); return false; }
+		
+		f.close();
 		return true;
 	}
 };

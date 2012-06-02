@@ -81,7 +81,7 @@ bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns,
 int main(int argc, char **argv) {
 	vector<string> output_pdfs;
 	string lf_fn = DATADIR "/MrLF.MSandRGB_v1.0.dat";
-	string seds_fn = DATADIR "/MSandRGBcolors_v1.3.dat";
+	string seds_fn = DATADIR "/PScolors.dat";	// For SDSS, use "/MSandRGBcolors_v1.3.dat"
 	string solar_pos = "8000 25";
 	string par_thin = "2150 245";
 	string par_thick = "0.13 3261 743";

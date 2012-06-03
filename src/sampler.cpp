@@ -107,10 +107,10 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn, const doubl
 	
 	N_Mr = (unsigned int)(round((Mr_max - Mr_min) / dMr)) + 1;
 	N_FeH = (unsigned int)(round((FeH_max - FeH_min) / dFeH)) + 1;
-	std::cerr << "# " << std::endl;
-	std::cerr << "# N_Mr: " << N_Mr << std::endl << "# dMr: " << dMr << std::endl << "# " << Mr_min << " <= Mr <= " << Mr_max << std::endl;
-	std::cerr << "# N_FeH: " << N_FeH << std::endl << "# dFeH: " << dFeH << std::endl << "# " << FeH_min << " <= FeH <= " << FeH_max << std::endl;
-	std::cerr << "# " << std::endl;
+	//std::cerr << "# " << std::endl;
+	//std::cerr << "# N_Mr: " << N_Mr << std::endl << "# dMr: " << dMr << std::endl << "# " << Mr_min << " <= Mr <= " << Mr_max << std::endl;
+	//std::cerr << "# N_FeH: " << N_FeH << std::endl << "# dFeH: " << dFeH << std::endl << "# " << FeH_min << " <= FeH <= " << FeH_max << std::endl;
+	//std::cerr << "# " << std::endl;
 	seds = new TSED[N_FeH*N_Mr];
 	
 	// Now do a second pass to load the SEDs

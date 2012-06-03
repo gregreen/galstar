@@ -88,20 +88,35 @@ def main():
 		mask = (N_arr == N)
 		grizy = d['mean'][mask]
 		err = d['err'][mask]
-		outarr = np.hstack((grizy, err))
+		outarr = np.hstack((grizy, err)).astype(np.float64)
 		
 		# Mask stars with nondetection or infinite variance in any bandpass
 		mask_nan = np.isfinite(np.sum(err, axis=1))
 		mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
 		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
+		# Create binary .in file
+		fname = abspath('%s_%d.in' % (values.prefix, N))
+		f = open(fname, 'wb')
+		
+		# Write Header
+		header_begin = np.array([np.mean(d['l'][mask]), np.mean(d['b'][mask])], dtype=np.float64)
+		N_stars = np.array([outarr.shape[0]], np.uint32)
+		f.write(header_begin.tostring())
+		f.write(N_stars.tostring())
+		
+		# Write magnitudes and errors
+		f.write(outarr.tostring())
+		f.close()
+		
+		'''
 		# Output mags and errs to a .in file
 		fname = abspath('%s_%d.in' % (values.prefix, N))
 		np.savetxt(fname, outarr, fmt='%.5f')
 		
 		# Prepend the average l, b to the file
-		l_avg = np.mean(d['l'][mask])
-		b_avg = np.mean(d['b'][mask])
+		l_avg = np.mean(d['l'][mask]).astype(np.float64)
+		b_avg = np.mean(d['b'][mask]).astype(np.float64)
 		f = open(fname, 'r')
 		ftxt = f.read()
 		f.close()
@@ -109,6 +124,7 @@ def main():
 		ftxt = '%.3f %.3f\n%s' % (l_avg, b_avg, ftxt)
 		f.write(ftxt)
 		f.close()
+		'''
 		
 		# Add the .in file to the tarball
 		dir_tmp, fname_short = os.path.split(fname)

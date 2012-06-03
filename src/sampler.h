@@ -199,7 +199,7 @@ struct TStellarData {
 	double l, b;
 	std::vector<TMagnitudes> star;
 	
-	TStellarData(std::string infile) { load_data(infile); }
+	TStellarData(std::string infile) { load_data_binary(infile); }
 	TStellarData() {}
 	
 	TMagnitudes& operator[](const unsigned int &index) { return star.at(index); }
@@ -219,6 +219,7 @@ struct TStellarData {
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.m[i]; }
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> err_tmp; tmp.err[i] = sqrt(err_tmp*err_tmp + err_floor*err_floor); }
 			star.push_back(tmp);
+			std::cout << std::endl;
 		}
 		star.pop_back();
 		fin.close();
@@ -244,6 +245,13 @@ struct TStellarData {
 		f.read(reinterpret_cast<char*>(&b), sizeof(b));
 		f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));
 		
+		// Exit if N_stars is unrealistically large
+		if(N_stars > 1e6) {
+			std::cout << "Error reading " << infile << ". Header indicates " << N_stars << " stars. Aborting attempt to read file." << std::endl;
+			f.close();
+			return false;
+		}
+		
 		// Read in each star
 		star.reserve(N_stars);
 		for(uint32_t i=0; i<N_stars; i++) {
@@ -252,9 +260,15 @@ struct TStellarData {
 			f.read(reinterpret_cast<char*>(&(tmp.err[0])), NBANDS*sizeof(double));
 			for(unsigned int i=0; i<NBANDS; i++) { tmp.err[i] = sqrt(tmp.err[i]*tmp.err[i] + err_floor*err_floor); }
 			star.push_back(tmp);
+			
+			//for(unsigned int i=0; i<NBANDS; i++) { std::cout << tmp.m[i] << "\t"; }
+			//for(unsigned int i=0; i<NBANDS; i++) { std::cout << tmp.err[i] << "\t"; }
+			//std::cout << std::endl;
 		}
 		
 		if(f.fail()) { f.close(); return false; }
+		
+		std::cerr << "# Loaded " << N_stars << " stars from " << infile << "." << std::endl;
 		
 		f.close();
 		return true;

@@ -162,11 +162,10 @@ int main(int argc, char **argv) {
 	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.qh << " " << model.nh << "\n";
 	
 	
-	// Construct data set //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	TStellarData data;
+	// Construct data set /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	TStellarData data(datafn);
 	double m[NBANDS], err[NBANDS];
 	double l, b;
-	data.load_data(datafn);
 	l = data.l;
 	b = data.b;
 	
@@ -181,8 +180,8 @@ int main(int argc, char **argv) {
 	unsigned int N_nonconverged = 0;
 	for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
 		// Calculate posterior for current star
-		std::cout << "=========================================" << std::endl;
-		std::cout << "Calculating posterior for star #" << count << std::endl << std::endl;
+		cout << "=========================================" << endl;
+		cout << "Calculating posterior for star #" << count << endl << endl;
 		TStats stats(4);
 		bool converged;
 		if(giant_flag != 0) {
@@ -204,8 +203,8 @@ int main(int argc, char **argv) {
 		}
 		multibinner.clear();
 	}
-		
-	std::cout << std::endl << "# Did not converge " << N_nonconverged << " times." << std::endl;
+	
+	cerr << endl << "# Failed to converge " << N_nonconverged << " time(s)." << endl << endl;
 	
 	return 0;
 }

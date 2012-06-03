@@ -41,8 +41,11 @@ void TLF::load(const std::string &fn)
 		std::istringstream ss(line);
 		ss >> Mr >> Phi;
 		
-			if(dMr == -1) { Mr0 = Mr; dMr = 0; }
-		else	if(dMr == 0)  { dMr = Mr - Mr0; }
+		if(dMr == -1) {
+			Mr0 = Mr; dMr = 0;
+		} else if(dMr == 0) {
+			dMr = Mr - Mr0;
+		}
 		
 		lf.push_back(log(Phi));
 	}

@@ -23,12 +23,13 @@
 #       
 
 
-import sys, argparse
+import os, sys, argparse
 from os.path import abspath
 
 import healpy as hp
 import numpy as np
 import pyfits
+import tarfile
 
 
 def lb2thetaphi(l, b):
@@ -49,8 +50,9 @@ def lb2thetaphi(l, b):
 
 def main():
 	parser = argparse.ArgumentParser(prog='fits2galstarinput.py', description='Generate galstar input files from LSD fits output.', add_help=True)
-	parser.add_argument('FITS', type=str, help="FITS output from LSD.")
-	parser.add_argument('output', type=str, help='Base output filename (without extension)')
+	parser.add_argument('FITS', type=str, help='FITS output from LSD.')
+	parser.add_argument('tarout', type=str, help='Tarball output filename.')
+	parser.add_argument('-pf', '--prefix', type=str, default='pix', help='Prefix for pixel names (default: pix).')
 	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 32).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
 	if 'python' in sys.argv[0]:
@@ -58,7 +60,6 @@ def main():
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
-	
 	
 	# Load the stars from the FITS file
 	d,h = pyfits.getdata(abspath(values.FITS), header=True)
@@ -73,10 +74,15 @@ def main():
 	N_arr = hp.ang2pix(values.nside, theta, phi, nest=(not values.ring))
 	print N_arr.shape
 	
+	# Open the tarball which will gather all the output files
+	tar = tarfile.open(values.tarout, 'w')
+	
 	# Generate .in file for each unique pixel number
 	N_saved = 0
 	N_unique = np.unique(N_arr)
 	print '%d unique healpix pixel(s) present.' % N_unique.size
+	N_stars_min = 1.e100
+	N_stars_max = -1.
 	for N in N_unique:
 		# Get stars in this pixel
 		mask = (N_arr == N)
@@ -90,8 +96,7 @@ def main():
 		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
 		# Output mags and errs to a .in file
-		N_saved += outarr.shape[0]
-		fname = abspath('%s_%d.in' % (values.output, N))
+		fname = abspath('%s_%d.in' % (values.prefix, N))
 		np.savetxt(fname, outarr, fmt='%.5f')
 		
 		# Prepend the average l, b to the file
@@ -104,8 +109,21 @@ def main():
 		ftxt = '%.3f %.3f\n%s' % (l_avg, b_avg, ftxt)
 		f.write(ftxt)
 		f.close()
+		
+		# Add the .in file to the tarball
+		dir_tmp, fname_short = os.path.split(fname)
+		tar.add(fname, arcname=fname_short)
+		os.remove(fname)
+		
+		# Record number of stars saved to pixel
+		N_saved += outarr.shape[0]
+		if outarr.shape[0] < N_stars_min:
+			N_stars_min = outarr.shape[0]
+		if outarr.shape[0] > N_stars_max:
+			N_stars_max = outarr.shape[0]
 	
-	print 'Saved %d stars to %d galstar input file(s).' % (N_saved, N_unique.size)
+	tar.close()
+	print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f)' % (N_saved, N_unique.size, N_stars_min, N_stars_max, float(N_saved)/float(N_unique.size))
 	
 	return 0
 

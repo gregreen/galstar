@@ -141,7 +141,7 @@ def save_PS_lf(fname, SDSSlf, SDSSMrFeH, PSr):
 #  Mr        LF
 # (AB) (stars/pc^3/mag)
 """
-	np.savetxt(fname, output, fmt='%.2f %.3g')
+	np.savetxt(fname, output, fmt='%.2f %.4g')
 	f = open(fname, 'r')
 	tmp = f.read()
 	f.close()
@@ -152,7 +152,7 @@ def save_PS_lf(fname, SDSSlf, SDSSMrFeH, PSr):
 
 
 def main():
-	parser = argparse.ArgumentParser(prog='sdss2ps.py', description='Transform template library from SDSS colors to PanSTARRS colors.', add_help=True)
+	parser = argparse.ArgumentParser(prog='sdss2ps.py', description='Transform template library and luminosity function from SDSS bandpasses to PanSTARRS bandpasses.', add_help=True)
 	parser.add_argument('SDSStemp', type=str, help="Mario's SDSS template library.")
 	parser.add_argument('PStemp', type=str, help='Output filename for PanSTARRS template library.')
 	parser.add_argument('SDSSlf', type=str, help="Mario's SDSS luminosity function.")

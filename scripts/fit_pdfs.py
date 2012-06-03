@@ -129,7 +129,7 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 
 
 # Maximize the line integral by simulated annealing
-def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000.):
+def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000., dwell=1000):
 	# Start with random guess
 	guess = np.log(np.random.ranf(N_regions) * 2.* float(pdfs.shape[2])/float(N_regions))
 	
@@ -141,16 +141,16 @@ def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000.):
 	
 	# Run simulated annealing
 	#feps=1.e-12
-	x, success = opt.anneal(anneal_measure, guess, args=(pdfs, p0, regulator), lower=lower, upper=upper, maxiter=1000, dwell=200)
+	x, success = opt.anneal(anneal_measure, guess, args=(pdfs, p0, regulator), lower=lower, upper=upper, maxiter=1000, dwell=dwell)
 	measure = anneal_measure(x, pdfs, p0, regulator)
 	
 	return x, success, guess, measure
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal', smooth=(1,1), regulator=10000.):
+def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000):
 	# Load pdfs
-	print 'Loading binned pdfs...'
+	sys.stderr.write('Loading binned pdfs...\n')
 	bounds, p = None, None
 	bounds, p = load_bins(bin_fname)
 	if converged:
@@ -162,20 +162,20 @@ def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal',
 	# Fit reddening profile
 	x, succes, guess, measure = None, None, None, None
 	if method == 'leastsq':
-		print 'Fitting reddening profile using the LM method (scipy.optimize.leastsq)...'
+		sys.stderr.write('Fitting reddening profile using the LM method (scipy.optimize.leastsq)...\n')
 		x, success, guess, measure = min_leastsq(p, N_regions=N_regions, chimax=5., regulator=regulator)
 	elif method == 'anneal':
-		print 'Fitting reddening profile using simulated annealing (scipy.optimize.anneal)...'
-		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-4, regulator=regulator)
+		sys.stderr.write('Fitting reddening profile using simulated annealing (scipy.optimize.anneal)...\n')
+		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-4, regulator=regulator, dwell=dwell)
 	
 	# Convert output into physical coordinates (rather than pixel coordinates)
 	Delta_Ar = np.exp(x) * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	guess = np.exp(guess) * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	
 	# Output basic information about fit
-	print 'Delta_Ar:', Delta_Ar
-	print 'success:', success
-	print 'measure:', measure
+	sys.stderr.write('Delta_Ar: %s\n' % np.array_str(Delta_Ar, max_line_width=N_regions*100, precision=8))
+	sys.stderr.write('success: %d\n' % success)
+	sys.stderr.write('measure: %f\n' % measure)
 	
 	return bounds, p, measure, success, Delta_Ar, guess
 
@@ -238,8 +238,8 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		fig.savefig(abspath(plot_fn), dpi=150)
 
 
-# Save the reddening profile to an ASCII file
-def save_profile(fname, bounds, Delta_Ar):
+# Save the reddening profile to an ASCII file, or print to stdout
+def output_profile(fname, bounds, Delta_Ar):
 	# Calculate reddening profile
 	N_regions = Delta_Ar.size
 	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
@@ -247,12 +247,14 @@ def save_profile(fname, bounds, Delta_Ar):
 	for i in xrange(N_regions+1):
 		Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[:i])
 	
-	output = np.empty((2, N_regions+1), dtype=np.float64)
-	output[0] = mu_anchors
-	output[1] = Ar_anchors
-	
-	# Write to file
-	np.savetxt(abspath(fname), output)
+	if fname == None:	# Print to stdout
+		print np.array_str(mu_anchors, max_line_width=N_regions*100, precision=8, suppress_small=True)[1:-1].lstrip().rstrip()
+		print np.array_str(Ar_anchors, max_line_width=N_regions*100, precision=8, suppress_small=True)[1:-1].lstrip().rstrip()
+	else:				# Write to file
+		output = np.empty((2, N_regions+1), dtype=np.float64)
+		output[0] = mu_anchors
+		output[1] = Ar_anchors
+		np.savetxt(abspath(fname), output)
 
 
 
@@ -274,6 +276,8 @@ def main():
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-ovp', '--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
+	parser.add_argument('-dw', '--dwell', type=int, default=1000, help='dwell parameter for annealing algorithm. The higher the value, the greater the chance of convergence (default: 1000).')
+	#parser.add_argument('-v', '--verbose', action='store_true', help='Print information on fit.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -285,13 +289,12 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator)
+	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell)
 	duration = time() - tstart
-	print 'Time elapsed: %.1f s' % duration
+	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	
-	# Save the reddening profile to an ASCII file
-	if values.outfn != None:
-		save_profile(values.outfn, bounds, Delta_Ar)
+	# Save the reddening profile to an ASCII file, or print to stdout
+	output_profile(values.outfn, bounds, Delta_Ar)
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
 	if (values.plotfn != None) or (values.show != None):

@@ -1,19 +1,25 @@
 #!/bin/bash
+#
+# Runs galstar on all input files in the working directory,
+# archiving the results in a tarball.
+#
+# Requires the following environmental variables to be set:
+#    TMPDIR     = temporary directory
+#    GALSTARDIR = directory containing galstar executable
+#    TAROUT     = filename for tarball output
+#
 
 # Create an empty tar archive to store the output
 tarfn=`readlink -m ${TAROUT%/}`
 tar --create --file=$tarfn --files-from=/dev/null
 echo "Writing binned pdfs and statistics to $tarfn."
 
-# Determine output file for std. output/error
-outerrfn=`readlink -m $OUTERR`
-outerrdir=`readlink -m ${outerrfn%/*}`
-outerrfnshort="${OUTERR##*/}"
-echo "Writing std. out/err to $outerrfn."
-
 # Determine working directory
 workingdir=`pwd`
 tmpdir=`readlink -m ${TMPDIR%/}`
+
+# Determine filename for std. output/error
+outerrfn="$tmpdir/out-err.txt"
 
 # Give each input file to galstar
 nfiles=`ls -l *.in | wc -l`
@@ -38,10 +44,10 @@ for f in *.in; do
 done
 
 # Add ASCII file containing std. out/err to tar archive
-cd $outerrdir
+cd $tmpdir
 gzip -9 $outerrfn
-tar -rf $tarfn $outerrfnshort.gz
-rm $outerrfnshort.gz
+tar -rf $tarfn $outerrfn.gz
+rm $outerrfn.gz
 cd $workingdir
 
 echo "Done."

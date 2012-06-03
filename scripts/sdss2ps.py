@@ -30,7 +30,7 @@ import sys, argparse
 from os.path import abspath
 
 import numpy as np
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, interp1d
 
 import ps
 
@@ -71,18 +71,19 @@ def save_PS_templates(fname, PSgrizy, MrFeH):
 		colors[:,i] = PSgrizy[:,i] - PSgrizy[:,i+1]	# gr ri iz zy
 	
 	# Clip interpolation grid to maximum PS r-band magnitude (since less than maximum SDSS r)
+	#PS_rmin = np.min(PSgrizy[:,1])
 	PS_rmax = np.max(PSgrizy[:,1])
+	#print PS_rmin, PS_rmax
 	mask = (MrFeH[:,0] < PS_rmax)
 	
 	# Interpolate back to the original grid in (Mr, FeH), albeit clipped as described above
 	PS_grid = np.array([PSgrizy[:,1], MrFeH[:,1]]).T
 	colors = interp_to_grid(colors, PS_grid, MrFeH[mask])
 	
-	
-	# Organize new template output
+	# Organize new template output into one array
 	N = np.sum(mask)
 	output = np.empty((N,6), dtype=np.float32)
-	output[:,0] = MrFeH[mask,0]#PSgrizy[:,1]
+	output[:,0] = MrFeH[mask,0]
 	output[:,1] = MrFeH[mask,1]
 	for i in range(4):
 		output[:,i+2] = colors[:,i]
@@ -107,19 +108,67 @@ def save_PS_templates(fname, PSgrizy, MrFeH):
 	f.close()
 
 
+def save_PS_lf(fname, SDSSlf, SDSSMrFeH, PSr):
+	'''Transform SDSS luminosity function to a PanSTARRS luminosity function and save result.'''
+	
+	# Choose row from MrFeH where FeH is closest to solar
+	FeH_closest = np.min(np.abs(SDSSMrFeH[:,1]))
+	FeH_mask = (SDSSMrFeH[:,1] == FeH_closest)
+	SDSSr = SDSSMrFeH[FeH_mask][:,0]
+	
+	# Transform SDSS r magnitudes in luminosity function to PS r magnitudes
+	PSr_from_SDSSr = interp1d(SDSSr, PSr[FeH_mask])
+	PSr_lf = PSr_from_SDSSr(SDSSlf[:,0])
+	PSlf_interp = interp1d(PSr_lf, SDSSlf[:,1])
+	
+	# Clip interpolation grid to maximum PS r-band magnitude (since less than maximum SDSS r)
+	PSr_max = np.max(PSr_lf)
+	mask = (SDSSlf[:,0] <= PSr_max)
+	N = np.sum(mask)
+	
+	# Interpolate back to original set of r magnitudes in luminosity function, albeit clipped to max. PS r
+	output = np.empty((N,2), dtype=np.float32)
+	output[:,0] = SDSSr[mask]
+	output[:,1] = PSlf_interp(SDSSr[mask])
+	
+	# Write to an ASCII file
+	header = """# Transformed to the PS r-band from Zeljko and Juric's SDSS luminosity
+# function (MrLF.MSandRGB_v1.0.dat), using Eddie Schlafly's
+# pssdsstransformall routine in ps.py. For details, see Greg Green's
+# sdss2ps.py. For more information on the original SDSS template
+# library, see the header in MrLF.MSandRGB_v1.0.dat.
+# 
+#  Mr        LF
+# (AB) (stars/pc^3/mag)
+"""
+	np.savetxt(fname, output, fmt='%.2f %.3g')
+	f = open(fname, 'r')
+	tmp = f.read()
+	f.close()
+	f = open(fname, 'w')
+	f.write(header)
+	f.write(tmp)
+	f.close()
+
+
 def main():
 	parser = argparse.ArgumentParser(prog='sdss2ps.py', description='Transform template library from SDSS colors to PanSTARRS colors.', add_help=True)
-	parser.add_argument('SDSSlib', type=str, help="Mario's SDSS template library.")
-	parser.add_argument('PSout', type=str, help='Output filename for PanSTARRS template library')
+	parser.add_argument('SDSStemp', type=str, help="Mario's SDSS template library.")
+	parser.add_argument('PStemp', type=str, help='Output filename for PanSTARRS template library.')
+	parser.add_argument('SDSSlf', type=str, help="Mario's SDSS luminosity function.")
+	parser.add_argument('PSlf', type=str, help='Output filename for PanSTARRS luminosity function.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
 	
-	SDSSugriz, MrFeH = load_SDSS_templates(values.SDSSlib)
+	SDSSugriz, MrFeH = load_SDSS_templates(values.SDSStemp)
 	PSgrizy = ps.pssdsstransformall(SDSSugriz)
-	save_PS_templates(values.PSout, PSgrizy, MrFeH)
+	save_PS_templates(values.PStemp, PSgrizy, MrFeH)
+	
+	SDSSlf = np.loadtxt(abspath(values.SDSSlf), usecols=(0,1), dtype=np.float32)
+	save_PS_lf(values.PSlf, SDSSlf, MrFeH, PSgrizy[:,1])
 	
 	return 0
 

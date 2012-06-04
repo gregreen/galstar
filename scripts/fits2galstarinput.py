@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 #
 #       fits2galstarinput.py
@@ -53,7 +53,7 @@ def main():
 	parser.add_argument('FITS', type=str, help='FITS output from LSD.')
 	parser.add_argument('tarout', type=str, help='Tarball output filename.')
 	parser.add_argument('-pf', '--prefix', type=str, default='pix', help='Prefix for pixel names (default: pix).')
-	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 32).')
+	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 128).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max')
 	if 'python' in sys.argv[0]:
@@ -87,6 +87,8 @@ def main():
 		mask = np.logical_and(l_mask, b_mask)
 		N_unique = N_unique[mask]
 		print '%d unique healpix pixel(s) in bounds' % N_unique.size
+		if N_unique.size == 0:
+			return 0
 	
 	# Open the tarball which will gather all the output files
 	tar = tarfile.open(values.tarout, 'w')
@@ -151,6 +153,7 @@ def main():
 			N_stars_max = outarr.shape[0]
 	
 	tar.close()
+	
 	print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f)' % (N_saved, N_unique.size, N_stars_min, N_stars_max, float(N_saved)/float(N_unique.size))
 	
 	return 0

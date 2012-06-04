@@ -26,6 +26,8 @@
 import os, sys, argparse
 from os.path import abspath
 
+from random import randint
+
 import healpy as hp
 import numpy as np
 import pyfits
@@ -56,6 +58,7 @@ def main():
 	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 128).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max')
+	parser.add_argument('-sp', '--split', type=int, default=1, help='Split into an arbitrary number of tarballs.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -90,8 +93,16 @@ def main():
 		if N_unique.size == 0:
 			return 0
 	
-	# Open the tarball which will gather all the output files
-	tar = tarfile.open(values.tarout, 'w')
+	# Open the tarball(s) which will gather all the output files
+	tar = None
+	if values.split < 1:
+		print '--split must be positive.'
+		return 1
+	if values.split > 1:
+		base = abspath(values.tarout).rstrip('.tar')
+		tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
+	else:
+		tar = [tarfile.open(values.tarout, 'w')]
 	
 	# Generate .in file for each unique pixel number
 	N_saved = 0
@@ -123,26 +134,9 @@ def main():
 		f.write(outarr.tostring())
 		f.close()
 		
-		'''
-		# Output mags and errs to a .in file
-		fname = abspath('%s_%d.in' % (values.prefix, N))
-		np.savetxt(fname, outarr, fmt='%.5f')
-		
-		# Prepend the average l, b to the file
-		l_avg = np.mean(d['l'][mask]).astype(np.float64)
-		b_avg = np.mean(d['b'][mask]).astype(np.float64)
-		f = open(fname, 'r')
-		ftxt = f.read()
-		f.close()
-		f = open(fname, 'w')
-		ftxt = '%.3f %.3f\n%s' % (l_avg, b_avg, ftxt)
-		f.write(ftxt)
-		f.close()
-		'''
-		
-		# Add the .in file to the tarball
+		# Add the .in file to one of the tarballs
 		dir_tmp, fname_short = os.path.split(fname)
-		tar.add(fname, arcname=fname_short)
+		tar[randint(0,values.split-1)].add(fname, arcname=fname_short)
 		os.remove(fname)
 		
 		# Record number of stars saved to pixel
@@ -152,7 +146,8 @@ def main():
 		if outarr.shape[0] > N_stars_max:
 			N_stars_max = outarr.shape[0]
 	
-	tar.close()
+	for t in tar:
+		t.close()
 	
 	print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f).' % (N_saved, N_unique.size, N_stars_min, N_stars_max, float(N_saved)/float(N_unique.size))
 	

@@ -55,6 +55,7 @@ def main():
 	parser.add_argument('-pf', '--prefix', type=str, default='pix', help='Prefix for pixel names (default: pix).')
 	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 32).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
+	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -66,21 +67,32 @@ def main():
 	print 'Loaded %d stars.' % d.shape[0]
 	
 	# Convert (l, b) to spherical coordinates (physics convention)
-	#theta, phi = lb2thetaphi(d['l'], d['b'])
 	theta = np.pi/180. * (90. - d['b'])
 	phi = np.pi/180. * d['l']
 	
 	# Convert spherical coordinates to healpix
 	N_arr = hp.ang2pix(values.nside, theta, phi, nest=(not values.ring))
-	print N_arr.shape
+	
+	# Get unique pixel numbers
+	N_unique = np.unique(N_arr)
+	print '%d unique healpix pixel(s) present.' % N_unique.size
+	
+	# Filter pixels by bounds
+	if values.bounds != None:
+		theta_0, phi_0 = hp.pix2ang(values.nside, N_unique, nest=(not values.ring))
+		l_0 = theta_0
+		b_0 = 90. - phi_0
+		l_mask = np.logical_and((l_0 >= values.bounds[0]), (l_0 <= values.bounds[1]))
+		b_mask = np.logical_and((b_0 >= values.bounds[2]), (b_0 <= values.bounds[3]))
+		mask = np.logical_and(l_mask, b_mask)
+		N_unique = N_unique[mask]
+		print '%d unique healpix pixel(s) in bounds' % N_unique.size
 	
 	# Open the tarball which will gather all the output files
 	tar = tarfile.open(values.tarout, 'w')
 	
 	# Generate .in file for each unique pixel number
 	N_saved = 0
-	N_unique = np.unique(N_arr)
-	print '%d unique healpix pixel(s) present.' % N_unique.size
 	N_stars_min = 1.e100
 	N_stars_max = -1.
 	for N in N_unique:

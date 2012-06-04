@@ -99,7 +99,9 @@ def main():
 		print '--split must be positive.'
 		return 1
 	if values.split > 1:
-		base = abspath(values.tarout).rstrip('.tar')
+		base = abspath(values.tarout)
+		if base[-4:] == '.tar':
+			base = base[:-4]
 		tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
 	else:
 		tar = [tarfile.open(values.tarout, 'w')]
@@ -110,9 +112,11 @@ def main():
 	N_stars_max = -1.
 	for N in N_unique:
 		# Get stars in this pixel
+		print 'masking...'
 		mask = (N_arr == N)
 		grizy = d['mean'][mask]
 		err = d['err'][mask]
+		print 'masked.'
 		outarr = np.hstack((grizy, err)).astype(np.float64)
 		
 		# Mask stars with nondetection or infinite variance in any bandpass

@@ -153,14 +153,16 @@ def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal',
 	sys.stderr.write('Loading binned pdfs...\n')
 	bounds, p = None, None
 	bounds, p = load_bins(bin_fname)
-	if converged:
+	mask = np.logical_not(np.sum(np.sum(np.logical_not(np.isfinite(p)), axis=1), axis=1).astype(np.bool))	# Filter out images with NaN bins
+	if converged:	# Filter out nonconverged images
 		converged, means, cov = load_stats(stats_fname)
-		p = smooth_bins(p[converged], smooth)
+		mask = np.logical_and(mask, converged)
+		p = smooth_bins(p[mask], smooth)
 	else:
-		p = smooth_bins(p, smooth)
+		p = smooth_bins(p[mask], smooth)
 	
 	# Fit reddening profile
-	x, succes, guess, measure = None, None, None, None
+	x, success, guess, measure = None, None, None, None
 	if method == 'leastsq':
 		sys.stderr.write('Fitting reddening profile using the LM method (scipy.optimize.leastsq)...\n')
 		x, success, guess, measure = min_leastsq(p, N_regions=N_regions, chimax=5., regulator=regulator)

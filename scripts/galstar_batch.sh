@@ -48,22 +48,17 @@ for infile in $infilelist; do
 	
 	# Run galstar with the current l.o.s input file
 	echo "$counter of $npix: Running galstar with $infile ..."
-	$galstardir/galstar $tmpdir/$binfn:DM[5,20,120],Ar[0,10,400] --statsfile $tmpdir/$statsfn --datafile $tmpdir/$infile &>> $outerrfn
-	
-	# Remove the used input file
-	rm $infile
+	$galstardir/galstar $tmpdir/$binfn:DM[5,20,120],Ar[0,10,400] --statsfile $tmpdir/$statsfn --datafile $tmpdir/$infile &>> $tmpdir/$outerrfn
 	
 	# Compress and archive output, removing temporary files
-	#cd $tmpdir	# Move to temporary directory, so that the tarball has a flat directory structure
 	gzip -9 $binfn
 	tar -rf $tarfn $binfn.gz $statsfn
-	rm $binfn.gz $statsfn
-	#cd $workingdir	# Return to the working directory
+	rm $binfn.gz $statsfn $infile
+	
 	counter=`expr $counter + 1`
 done
 
 # Add ASCII file containing std. out/err to tar archive
-#cd $tmpdir
 gzip -9 $outerrfn
 tar -rf $tarfn $outerrfn.gz
 rm $outerrfn.gz

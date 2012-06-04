@@ -43,8 +43,6 @@ for binfile in $binfilelist; do
 	# Extract current pixel
 	tar -xf $tarfn_abs $statsfn $binfn
 	echo "$counter of $npix: Fitting l.o.s. reddening law for $pixname ..."
-	echo $statsfn
-	echo $binfn
 	
 	# Run fit_pdfs.py on this pixel
 	echo $pixname >> $outfn

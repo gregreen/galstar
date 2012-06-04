@@ -80,13 +80,13 @@ def main():
 	# Filter pixels by bounds
 	if values.bounds != None:
 		theta_0, phi_0 = hp.pix2ang(values.nside, N_unique, nest=(not values.ring))
-		l_0 = theta_0
-		b_0 = 90. - phi_0
+		l_0 = 180./np.pi * phi_0
+		b_0 = 90. - 180./np.pi * theta_0
 		l_mask = np.logical_and((l_0 >= values.bounds[0]), (l_0 <= values.bounds[1]))
 		b_mask = np.logical_and((b_0 >= values.bounds[2]), (b_0 <= values.bounds[3]))
 		mask = np.logical_and(l_mask, b_mask)
 		N_unique = N_unique[mask]
-		print '%d unique healpix pixel(s) in bounds' % N_unique.size
+		print '%d unique healpix pixel(s) in bounds.' % N_unique.size
 		if N_unique.size == 0:
 			return 0
 	
@@ -154,7 +154,7 @@ def main():
 	
 	tar.close()
 	
-	print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f)' % (N_saved, N_unique.size, N_stars_min, N_stars_max, float(N_saved)/float(N_unique.size))
+	print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f).' % (N_saved, N_unique.size, N_stars_min, N_stars_max, float(N_saved)/float(N_unique.size))
 	
 	return 0
 

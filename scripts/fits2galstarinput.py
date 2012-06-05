@@ -104,7 +104,7 @@ def main():
 	N_arr = N_arr[indices]
 	
 	# Break data into healpix pixels
-	newblock = np.where(np.diff(pix))[0] + 1
+	newblock = np.where(np.diff(N_arr))[0] + 1
 	start = 0
 	for i,end in enumerate(np.concatenate((newblock,[-1]))):
 		# Filter pixels by bounds
@@ -128,7 +128,7 @@ def main():
 		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
 		# Create binary .in file
-		fname = abspath('%s_%d.in' % (values.prefix, N))
+		fname = abspath('%s_%d.in' % (values.prefix, N_arr[i]))
 		f = open(fname, 'wb')
 		
 		# Write Header

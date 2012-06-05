@@ -107,9 +107,11 @@ def main():
 	newblock = np.where(np.diff(N_arr))[0] + 1
 	start = 0
 	for i,end in enumerate(np.concatenate((newblock,[-1]))):
+		N = N_arr[start]
+		
 		# Filter pixels by bounds
 		if values.bounds != None:
-			theta_0, phi_0 = hp.pix2ang(values.nside, N_arr[i], nest=(not values.ring))
+			theta_0, phi_0 = hp.pix2ang(values.nside, N, nest=(not values.ring))
 			l_0 = 180./np.pi * phi_0
 			b_0 = 90. - 180./np.pi * theta_0
 			if (l_0 < values.bounds[0]) or (l_0 > values.bounds[1]) or (b_0 < values.bounds[2]) or (b_0 > values.bounds[3]):
@@ -128,7 +130,7 @@ def main():
 		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
 		# Create binary .in file
-		fname = abspath('%s_%d.in' % (values.prefix, N_arr[i]))
+		fname = abspath('%s_%d.in' % (values.prefix, N))
 		f = open(fname, 'wb')
 		
 		# Write Header

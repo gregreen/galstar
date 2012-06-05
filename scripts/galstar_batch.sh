@@ -33,6 +33,7 @@ for infile in $infilelist; do
         npix=`expr $npix + 1`
 done
 
+echo "Moving to temporary folder $tmpdir"
 cd $tmpdir
 
 # Give each input file to galstar
@@ -48,7 +49,7 @@ for infile in $infilelist; do
 	
 	# Run galstar with the current l.o.s input file
 	echo "$counter of $npix: Running galstar with $infile ..."
-	$galstardir/galstar $tmpdir/$binfn:DM[5,20,120],Ar[0,10,400] --statsfile $tmpdir/$statsfn --datafile $tmpdir/$infile &> $tmpdir/$outerrfn
+	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile &> $outerrfn
 	
 	# Compress and archive output, removing temporary files
 	gzip -9 $binfn

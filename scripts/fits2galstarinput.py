@@ -132,7 +132,7 @@ def main():
 		f = open(fname, 'wb')
 		
 		# Write Header
-		header_begin = np.array([np.mean(d['l'][mask]), np.mean(d['b'][mask])], dtype=np.float64)
+		header_begin = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
 		N_stars = np.array([outarr.shape[0]], np.uint32)
 		f.write(header_begin.tostring())
 		f.write(N_stars.tostring())

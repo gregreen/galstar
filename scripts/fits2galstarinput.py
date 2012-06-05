@@ -89,9 +89,9 @@ def main():
 		base = abspath(values.tarout)
 		if base[-4:] == '.tar':
 			base = base[:-4]
-		tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
+		#tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
 	else:
-		tar = [tarfile.open(values.tarout, 'w')]
+		#tar = [tarfile.open(values.tarout, 'w')]
 	
 	# Keep track of number of stars saved
 	N_pix_used = 0
@@ -130,8 +130,8 @@ def main():
 		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
 		# Create binary .in file
-		fname = abspath('%s_%d.in' % (values.prefix, N))
-		f = open(fname, 'wb')
+		#fname = abspath('%s_%d.in' % (values.prefix, N))
+		#f = open(fname, 'wb')
 		
 		# Write Header
 		header_begin = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
@@ -140,13 +140,13 @@ def main():
 		f.write(N_stars.tostring())
 		
 		# Write magnitudes and errors
-		f.write(outarr.tostring())
-		f.close()
+		#f.write(outarr.tostring())
+		#f.close()
 		
 		# Add the .in file to one of the tarballs
-		dir_tmp, fname_short = os.path.split(fname)
-		tar[randint(0,values.split-1)].add(fname, arcname=fname_short)
-		os.remove(fname)
+		#dir_tmp, fname_short = os.path.split(fname)
+		#tar[randint(0,values.split-1)].add(fname, arcname=fname_short)
+		#os.remove(fname)
 		
 		# Record number of stars saved to pixel
 		N_pix_used += 1
@@ -158,8 +158,8 @@ def main():
 		
 		start = end
 	
-	for t in tar:
-		t.close()
+	#for t in tar:
+	#	t.close()
 	
 	if N_pix_used != 0:
 		print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f).' % (N_saved, N_pix_used, N_stars_min, N_stars_max, float(N_saved)/float(N_pix_used))

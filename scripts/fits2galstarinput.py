@@ -81,14 +81,15 @@ def main():
 	print '%d unique healpix pixel(s) present.' % N_unique.size
 	
 	# Open the tarball(s) which will gather all the output files
-	tar = None
+	fout = None
 	if values.split < 1:
 		print '--split must be positive.'
 		return 1
 	if values.split > 1:
 		base = abspath(values.tarout)
-		if base[-4:] == '.tar':
-			base = base[:-4]
+		if base[-3:] == '.in':
+			base = base[:-3]
+		fout = [open('%s_%d.in' % (base, i), 'wb') for i in range(values.split)]
 		#tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
 	else:
 		pass
@@ -130,24 +131,17 @@ def main():
 		mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
 		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
-		# Create binary .in file
-		#fname = abspath('%s_%d.in' % (values.prefix, N))
-		#f = open(fname, 'wb')
-		
 		# Write Header
-		header_begin = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
 		N_stars = np.array([outarr.shape[0]], np.uint32)
-		#f.write(header_begin.tostring())
-		#f.write(N_stars.tostring())
+		if N_stars == 0:
+			continue
+		findex = randint(0,values.split-1)
+		header_begin = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
+		fout[findex].write(header_begin.tostring())
+		fout[findex].write(N_stars.tostring())
 		
 		# Write magnitudes and errors
-		#f.write(outarr.tostring())
-		#f.close()
-		
-		# Add the .in file to one of the tarballs
-		#dir_tmp, fname_short = os.path.split(fname)
-		#tar[randint(0,values.split-1)].add(fname, arcname=fname_short)
-		#os.remove(fname)
+		fout[findex].write(outarr.tostring())
 		
 		# Record number of stars saved to pixel
 		N_pix_used += 1
@@ -159,11 +153,11 @@ def main():
 		
 		start = end
 	
-	#for t in tar:
-	#	t.close()
+	for f in fout:
+		f.close()
 	
 	if N_pix_used != 0:
-		print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f).' % (N_saved, N_pix_used, N_stars_min, N_stars_max, float(N_saved)/float(N_pix_used))
+		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (N_saved, N_pix_used, values.split, N_stars_min, N_stars_max, float(N_saved)/float(N_pix_used))
 	else:
 		print 'No pixels in specified bounds.'
 	

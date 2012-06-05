@@ -91,6 +91,7 @@ def main():
 			base = base[:-4]
 		#tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
 	else:
+		pass
 		#tar = [tarfile.open(values.tarout, 'w')]
 	
 	# Keep track of number of stars saved

@@ -49,7 +49,7 @@ for infile in $infilelist; do
 	
 	# Run galstar with the current l.o.s input file
 	echo "$counter of $npix: Running galstar with $infile ..."
-	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile &> $outerrfn
+	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile &> $outfn
 	
 	# Compress and archive output, removing temporary files
 	gzip -9 $binfn

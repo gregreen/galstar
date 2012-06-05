@@ -137,8 +137,8 @@ def main():
 		# Write Header
 		header_begin = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
 		N_stars = np.array([outarr.shape[0]], np.uint32)
-		f.write(header_begin.tostring())
-		f.write(N_stars.tostring())
+		#f.write(header_begin.tostring())
+		#f.write(N_stars.tostring())
 		
 		# Write magnitudes and errors
 		#f.write(outarr.tostring())

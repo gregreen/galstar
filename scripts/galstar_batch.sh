@@ -21,7 +21,7 @@ tmpdir=`readlink -m ${TMPDIR%/}`
 galstardir=`readlink -m ${GALSTARDIR%/}`
 
 # Determine filename for std. output/error
-outerrfn="$tmpdir/out-err.txt"
+outfn="out-err.txt"
 
 # Get list of .in files in the input tarball
 tarin=`readlink -m $TARIN`
@@ -48,7 +48,7 @@ for infile in $infilelist; do
 	
 	# Run galstar with the current l.o.s input file
 	echo "$counter of $npix: Running galstar with $infile ..."
-	$galstardir/galstar $tmpdir/$binfn:DM[5,20,120],Ar[0,10,400] --statsfile $tmpdir/$statsfn --datafile $tmpdir/$infile &>> $tmpdir/$outerrfn
+	$galstardir/galstar $tmpdir/$binfn:DM[5,20,120],Ar[0,10,400] --statsfile $tmpdir/$statsfn --datafile $tmpdir/$infile &> $tmpdir/$outerrfn
 	
 	# Compress and archive output, removing temporary files
 	gzip -9 $binfn

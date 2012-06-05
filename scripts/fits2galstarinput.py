@@ -80,19 +80,6 @@ def main():
 	N_unique = np.unique(N_arr)
 	print '%d unique healpix pixel(s) present.' % N_unique.size
 	
-	# Filter pixels by bounds
-	if values.bounds != None:
-		theta_0, phi_0 = hp.pix2ang(values.nside, N_unique, nest=(not values.ring))
-		l_0 = 180./np.pi * phi_0
-		b_0 = 90. - 180./np.pi * theta_0
-		l_mask = np.logical_and((l_0 >= values.bounds[0]), (l_0 <= values.bounds[1]))
-		b_mask = np.logical_and((b_0 >= values.bounds[2]), (b_0 <= values.bounds[3]))
-		mask = np.logical_and(l_mask, b_mask)
-		N_unique = N_unique[mask]
-		print '%d unique healpix pixel(s) in bounds.' % N_unique.size
-		if N_unique.size == 0:
-			return 0
-	
 	# Open the tarball(s) which will gather all the output files
 	tar = None
 	if values.split < 1:
@@ -106,17 +93,33 @@ def main():
 	else:
 		tar = [tarfile.open(values.tarout, 'w')]
 	
-	# Generate .in file for each unique pixel number
+	# Keep track of number of stars saved
+	N_pix_used = 0
 	N_saved = 0
 	N_stars_min = 1.e100
 	N_stars_max = -1.
-	for N in N_unique:
+	
+	# Sort the stars by pixel
+	indices = N_arr.argsort()
+	N_arr = N_arr[indices]
+	
+	# Break data into healpix pixels
+	newblock = np.where(np.diff(pix))[0] + 1
+	start = 0
+	for i,end in enumerate(np.concatenate((newblock,[-1]))):
+		# Filter pixels by bounds
+		if values.bounds != None:
+			theta_0, phi_0 = hp.pix2ang(values.nside, N_arr[i], nest=(not values.ring))
+			l_0 = 180./np.pi * phi_0
+			b_0 = 90. - 180./np.pi * theta_0
+			if (l_0 < values.bounds[0]) or (l_0 > values.bounds[1]) or (b_0 < values.bounds[2]) or (b_0 > values.bounds[3]):
+				continue
+		
+		sel = indices[start:end]
+		
 		# Get stars in this pixel
-		print 'masking...'
-		mask = (N_arr == N)
-		grizy = d['mean'][mask]
-		err = d['err'][mask]
-		print 'masked.'
+		grizy = d['mean'][sel]
+		err = d['err'][sel]
 		outarr = np.hstack((grizy, err)).astype(np.float64)
 		
 		# Mask stars with nondetection or infinite variance in any bandpass
@@ -144,16 +147,22 @@ def main():
 		os.remove(fname)
 		
 		# Record number of stars saved to pixel
+		N_pix_used += 1
 		N_saved += outarr.shape[0]
 		if outarr.shape[0] < N_stars_min:
 			N_stars_min = outarr.shape[0]
 		if outarr.shape[0] > N_stars_max:
 			N_stars_max = outarr.shape[0]
+		
+		start = end
 	
 	for t in tar:
 		t.close()
 	
-	print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f).' % (N_saved, N_unique.size, N_stars_min, N_stars_max, float(N_saved)/float(N_unique.size))
+	if N_pix_used != 0:
+		print 'Saved %d stars to %d galstar input file(s) (min: %d, max: %d, mean: %.1f).' % (N_saved, N_pix_used, N_stars_min, N_stars_max, float(N_saved)/float(N_pix_used))
+	else:
+		print 'No pixels in specified bounds.'
 	
 	return 0
 

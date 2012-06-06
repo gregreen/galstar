@@ -80,7 +80,7 @@ struct TBinner2D {
 	void operator ()(const double *const pos, double weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
-	bool write_binary(std::string fname, bool append_to_file=false);					// Write binned data to file, possibly appending to existing file
+	bool write_binary(std::string fname, bool append_to_file=false, bool sparse=false);			// Write binned data to file, possibly appending to existing file
 	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10., std::ios::openmode writemode = std::ios::out);	// Write binned data to file
 	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Load binned data from file
 	void write_npz(std::string fname);									// Write numpy .npz file
@@ -243,43 +243,39 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, do
 // 	min[2]		(double)
 // 	max[2]		(double)
 // 	dx[2]		(double)
-// Data (8*N_files*width[0]*width[1] Bytes):
+// 
+// Data (if sparse): 
+// 	N_nonzero	(uint32)
+// 	N_nonzero x
+// 		i		(uint16)
+// 		j		(uint16)
+// 		value		(double)
+// 
+// Data (if full array) (8*N_files*width[0]*width[1] Bytes):
 // 	bin[N_files][width[0]][width[1]]	(double)
 template<unsigned int N>
-bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file) {
-	// If appending to existing file, increment the number of objects in file
-	unsigned int tmp_N_files;
-	if(append_to_file) {
-		std::fstream peekfile(fname.c_str(), std::ios::binary | std::ios::in | std::ios::out);
-		if(peekfile.fail()) {
-			std::cout << "Failed to open " << fname << "." << std::endl;
-			return false;
-		}
-		peekfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
-		tmp_N_files++;
-		peekfile.seekp(std::ios_base::beg);
-		peekfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
-		peekfile.close();
-	} else {
-		// If writing to new file, delete file, if it already exists
-		std::remove(fname.c_str());
-	}
+bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file, bool sparse) {
+	// If writing to new file, delete file, if it already exists
+	if(!append_to_file) { std::remove(fname.c_str()); }
 	
-	// Determine write mode and open file
-	std::ios::openmode writemode;
-	if(append_to_file) {
-		writemode = std::ios::out | std::ios::app;
-	} else {
-		writemode = std::ios::out;
-	}
-	std::fstream outfile(fname.c_str(), std::ios::binary | writemode);
+	std::ios_base::openmode mode = std::ios::binary | std::ios::out;
+	if(append_to_file) { mode |= std::ios::in; }
+	std::fstream outfile(fname.c_str(), mode);
 	if(outfile.fail()) {
-		std::cout << "Failed to open " << fname << "." << std::endl;
+		std::cerr << "Failed to open " << fname << "." << std::endl;
 		return false;
 	}
 	
-	// Write header if not appending to existing file
-	if(!append_to_file) {
+	unsigned int tmp_N_files;
+	if(append_to_file) {
+		// If appending to existing file, increment the number of objects in file
+		outfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		tmp_N_files++;
+		outfile.seekp(std::ios_base::beg);
+		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		outfile.seekp(0, std::ios::end);
+	} else {
+		// Write header if not appending to existing file
 		tmp_N_files = 1;
 		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
 		outfile.write(reinterpret_cast<char *>(&(width[0])), 2*sizeof(unsigned int));
@@ -289,13 +285,41 @@ bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file) {
 	}
 	
 	// Write the binned data
-	for(unsigned int i=0; i<width[0]; i++) {
-		outfile.write(reinterpret_cast<char *>(bin[i]), width[1]*sizeof(double));
+	if(sparse) {
+		// Leave room for number of points included
+		std::streampos start = outfile.tellp();
+		uint32_t N_nonzero = 0;
+		outfile.write(reinterpret_cast<char*>(&N_nonzero), sizeof(N_nonzero));
+		
+		// Write nonzero points
+		for(uint16_t i=0; i<(uint16_t)(width[0]); i++) {
+			for(uint16_t j=0; j<(uint16_t)(width[1]); j++) {
+				if(bin[i][j] != 0) {
+					outfile.write(reinterpret_cast<char*>(&i), sizeof(i));
+					outfile.write(reinterpret_cast<char*>(&j), sizeof(j));
+					outfile.write(reinterpret_cast<char*>(&bin[i][j]), sizeof(double));
+					N_nonzero++;
+				}
+			}
+		}
+		
+		std::cout << "nonzero: " << N_nonzero << std::endl;
+		
+		// Update number of nonzero points
+		//outfile.seekp(-(std::streamoff)(N_nonzero * (2*sizeof(uint16_t) + sizeof(double))), std::ios::cur);
+		outfile.seekp(start, std::ios::beg);
+		outfile.write(reinterpret_cast<char*>(&N_nonzero), sizeof(N_nonzero));
+		
+	} else {
+		// Write out flat array
+		for(unsigned int i=0; i<width[0]; i++) {
+			outfile.write(reinterpret_cast<char *>(bin[i]), width[1]*sizeof(double));
+		}
 	}
 	
 	// Return false if something has gone wrong in the writing
 	if(outfile.bad()) {
-		std::cout << "Something has gone wrong in writing to " << fname << "." << std::endl;
+		std::cerr << "Something has gone wrong in writing to " << fname << "." << std::endl;
 		outfile.close();
 		return false;
 	}

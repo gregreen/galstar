@@ -23,7 +23,7 @@
 #       
 
 import sys, argparse
-from os.path import abspath
+from os.path import abspath, exists
 from time import time
 
 import numpy as np
@@ -148,11 +148,11 @@ def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000., dwell=1000):
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000):
+def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000):
 	# Load pdfs
 	sys.stderr.write('Loading binned pdfs...\n')
 	bounds, p = None, None
-	bounds, p = load_bins(bin_fname)
+	bounds, p = load_bins(bin_fname, sparse)
 	mask = np.logical_not(np.sum(np.sum(np.logical_not(np.isfinite(p)), axis=1), axis=1).astype(np.bool))	# Filter out images with NaN bins
 	if converged:	# Filter out nonconverged images
 		converged, means, cov = load_stats(stats_fname)
@@ -241,7 +241,7 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 
 
 # Save the reddening profile to an ASCII file, or print to stdout
-def output_profile(fname, bounds, Delta_Ar):
+'''def output_profile(fname, bounds, Delta_Ar):
 	# Calculate reddening profile
 	N_regions = Delta_Ar.size
 	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
@@ -256,7 +256,33 @@ def output_profile(fname, bounds, Delta_Ar):
 		output = np.empty((2, N_regions+1), dtype=np.float64)
 		output[0] = mu_anchors
 		output[1] = Ar_anchors
-		np.savetxt(abspath(fname), output)
+		np.savetxt(abspath(fname), output)'''
+
+
+def output_profile(fname, pixnum, bounds, Delta_Ar):
+	'''
+	Append the reddening profile to the end of the binary file given by <fname>.
+	
+	Format - for each pixel:
+		pixnum		(uint64)
+		N_regions	(uint16)
+		mu_anchors	(float64)
+		Ar_anchors	(float64)
+	'''
+	# Calculate reddening profile
+	N_regions = Delta_Ar.size
+	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
+	Ar_anchors = np.empty(N_regions+1, dtype=Delta_Ar.dtype)
+	for i in xrange(N_regions+1):
+		Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[:i])
+	
+	f = open(fname, 'wb')
+	f.seek(0, 2)	# Seek to end of file
+	f.write(np.array([pixnum], dtype=np.uint64).tostring())
+	f.write(np.array([N_regions], dtype=np.uint16).tostring())
+	f.write(mu_anchors.tostring())
+	f.write(Ar_anchors.tostring())
+	f.close()
 
 
 
@@ -274,11 +300,12 @@ def main():
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out unconverged stars.')
 	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(1,1), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1 1).')
 	parser.add_argument('-reg', '--regulator', type=float, default=10000., help='Width of support of prior on ln(Delta_Ar) (default: 10000).')
-	parser.add_argument('-o', '--outfn', type=str, default=None, help='Output filename for reddening profile.')
+	parser.add_argument('-o', '--outfn', type=str, nargs=2, default=None, help='Output filename for reddening profile and healpix pixel number.')
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-ovp', '--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
 	parser.add_argument('-dw', '--dwell', type=int, default=1000, help='dwell parameter for annealing algorithm. The higher the value, the greater the chance of convergence (default: 1000).')
+	parser.add_argument('-nsp', '--nonsparse', action='store_true', help='Binned pdfs are not stored in sparse format.')
 	#parser.add_argument('-v', '--verbose', action='store_true', help='Print information on fit.')
 	if 'python' in sys.argv[0]:
 		offset = 2
@@ -291,12 +318,12 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell)
+	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell)
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	
 	# Save the reddening profile to an ASCII file, or print to stdout
-	output_profile(values.outfn, bounds, Delta_Ar)
+	output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar)
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
 	if (values.plotfn != None) or (values.show != None):

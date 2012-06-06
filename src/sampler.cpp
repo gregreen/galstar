@@ -493,7 +493,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 			count++;
 		}
 		
-		sampler.print_stats();
+		//sampler.print_stats();
 		
 		TChain tmp_chain = sampler.get_chain();
 		if(giant_flag == 1) {

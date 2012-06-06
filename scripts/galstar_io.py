@@ -27,6 +27,7 @@ import gzip
 
 import numpy as np
 import scipy.ndimage.filters as filters
+import scipy.weave as weave
 
 
 def load_stats(fname, selection=None):
@@ -86,12 +87,13 @@ def load_stats(fname, selection=None):
 	return converged, mean, cov
 
 
-def load_bins(fname, selection=None):
+def load_bins(fname, sparse=True, selection=None):
 	'''
 	Load binned probability density functions (pdfs) from a galstar bin output file (gzipped or uncompressed).
 	
 	Input:
 		fname - filename of binned data
+		sparse - True if pdfs are stored in sparse format (i.e. not as flat arrays)
 		selection - indices of stars to load. If None, all stars are loaded.
 	
 	Output:
@@ -100,9 +102,14 @@ def load_bins(fname, selection=None):
 	'''
 	
 	if fname.endswith('.gz') or fname.endswith('.gzip'):
+		if sparse:
+			raise Exception('Cannot load sparsely stored files in gzip format.')
 		return load_bins_gzip(fname, selection)
 	else:
-		return load_bins_uncompressed(fname, selection)
+		if sparse:
+			return load_bins_sparse(fname, selection)
+		else:
+			return load_bins_uncompressed(fname, selection)
 
 
 def load_bins_uncompressed(fname, selection=None):
@@ -201,6 +208,97 @@ def load_bins_gzip(fname, selection=None):
 	# Reshape bin data
 	N_files_empirical = bin_data.size / bin_width[0] / bin_width[1]
 	bin_data.shape = (N_files_empirical, bin_width[0], bin_width[1])
+	
+	# Create list containing bounds
+	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]
+	
+	return bounds, bin_data
+
+
+def load_bins_sparse(fname, selection=None):
+	'''
+	Load binned probability density functions (pdfs) from a sparse, uncompressed galstar bin output file.
+	
+	Input:
+		fname - filename of binned data
+		selection - indices of stars to load. If None, all stars are loaded.
+	
+	Output:
+		bounds[4] = [x_min, x_max, y_min, y_max]
+		bin_data (numpy float64 array) = p(n, x, y), where n is the index of the star, and x and y are the axes (DM and Ar, for example)
+	'''
+	
+	# Read in header
+	f = open(abspath(fname), 'rb')
+	N_files = np.fromfile(f, dtype=np.uint32, count=1)[0]
+	bin_width = np.fromfile(f, dtype=np.uint32, count=2)
+	bin_min = np.fromfile(f, dtype=np.float64, count=2)
+	bin_max = np.fromfile(f, dtype=np.float64, count=2)
+	bin_dx = np.fromfile(f, dtype=np.float64, count=2)
+	f.close()
+	
+	sel_sorted = None
+	if selection == None:
+		sel_sorted = np.arange(N_files, dtype=np.uint32)
+	else:
+		sel_sorted = np.sort(selection)
+		if np.max(sel_sorted) > N_files:
+			raise Exception('selection contains indices greater than # of stars in bin file.')
+	
+	# Create an empty array to populate
+	N_files_sel = sel_sorted.size;
+	bin_data = np.zeros((N_files_sel, bin_width[0], bin_width[1]), dtype=np.float64)
+	
+	# Load in all the stars
+	code = """
+		std::fstream infile(fname.c_str(), std::ios::binary | std::ios::in);
+		
+		unsigned int N_files;
+		unsigned int width[2];
+		double min[2];
+		double max[2];
+		double dx[2];
+		infile.read(reinterpret_cast<char *>(&N_files), sizeof(unsigned int));
+		infile.read(reinterpret_cast<char *>(&(width[0])), 2*sizeof(unsigned int));
+		infile.read(reinterpret_cast<char *>(&(min[0])), 2*sizeof(double));
+		infile.read(reinterpret_cast<char *>(&(max[0])), 2*sizeof(double));
+		infile.read(reinterpret_cast<char *>(&(dx[0])), 2*sizeof(double));
+		
+		uint16_t i, j;
+		double value;
+		int m = 0;
+		for(int n=0; n<(int)N_files; n++) {
+			uint32_t N_nonzero;
+			infile.read(reinterpret_cast<char*>(&N_nonzero), sizeof(uint32_t));
+			//std::cout << "nonzero: " << N_nonzero << std::endl;
+			
+			if((int)sel_sorted(m) == n) {
+				for(int k=0; k<(int)N_nonzero; k++) {
+					infile.read(reinterpret_cast<char*>(&i), sizeof(i));
+					infile.read(reinterpret_cast<char*>(&j), sizeof(j));
+					infile.read(reinterpret_cast<char*>(&value), sizeof(value));
+					
+					if(((int)i < 0) || ((int)i > width[0]) || ((int)j < 0) || ((int)j > width[1])) {
+						return_val = false;
+						break;
+					}
+					bin_data((int)m, (int)i, (int)j) = value;
+				}
+				m++;
+			} else {
+				infile.seekg(12 * N_nonzero, std::ios::cur);
+			}
+			
+			if(m >= N_files_sel) { break; }
+		}
+		
+		infile.close();
+		return_val = true;
+	"""
+	read_success = weave.inline(code, ['fname', 'bin_data', 'sel_sorted', 'N_files_sel'], headers=['<iostream>', '<fstream>', '<stdint.h>'], type_converters=weave.converters.blitz, compiler='gcc')
+	
+	if not read_success:
+		raise Exception('Input file %s is corrupt.' % fname)
 	
 	# Create list containing bounds
 	bounds = [bin_min[0], bin_max[0], bin_min[1], bin_max[1]]

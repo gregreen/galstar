@@ -208,10 +208,10 @@ struct TStellarData {
 	bool load_data(std::string infile, double err_floor=0.001) {
 		std::ifstream fin(infile.c_str());
 		if(!fin.is_open()) {
-			std::cout << "# Cannot open file " << infile << std::endl;
+			std::cerr << "# Cannot open file " << infile << std::endl;
 			return false;
 		}
-		std::cout << "# Loading stellar magnitudes from " << infile << " ..." << std::endl;
+		std::cerr << "# Loading stellar magnitudes from " << infile << " ..." << std::endl;
 		fin >> l >> b;
 		while(!fin.eof()) {
 			TMagnitudes tmp;
@@ -219,7 +219,6 @@ struct TStellarData {
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> tmp.m[i]; }
 			for(unsigned int i=0; i<NBANDS; i++) { fin >> err_tmp; tmp.err[i] = sqrt(err_tmp*err_tmp + err_floor*err_floor); }
 			star.push_back(tmp);
-			std::cout << std::endl;
 		}
 		star.pop_back();
 		fin.close();
@@ -250,7 +249,7 @@ struct TStellarData {
 		uint32_t N_pix;
 		f.read(reinterpret_cast<char*>(&N_pix), sizeof(N_pix));
 		if(pix_index > N_pix) {
-			std::cout << "Pixel requested (" << pix_index << ") greater than number of pixels in file (" << N_pix << ")." << std::endl;
+			std::cerr << "Pixel requested (" << pix_index << ") greater than number of pixels in file (" << N_pix << ")." << std::endl;
 			f.close();
 			return false;
 		}
@@ -261,18 +260,18 @@ struct TStellarData {
 			f.read(reinterpret_cast<char*>(&l), sizeof(l));
 			f.read(reinterpret_cast<char*>(&b), sizeof(b));
 			f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));
-			if(i < pix_index) { f.seekg(N_stars * 2*NBANDS*sizeof(double)); }
+			if(i < pix_index) { f.seekg(N_stars * 2*NBANDS*sizeof(double), std::ios::cur); }
 		}
 		
 		if(f.eof()) {
-			std::cout << "End of file reached before requested pixel (" << pix_index << ") reached. File corrupted." << std::endl;
+			std::cerr << "End of file reached before requested pixel (" << pix_index << ") reached. File corrupted." << std::endl;
 			f.close();
 			return false;
 		}
 		
 		// Exit if N_stars is unrealistically large
 		if(N_stars > 1e7) {
-			std::cout << "Error reading " << infile << ". Header indicates " << N_stars << " stars. Aborting attempt to read file." << std::endl;
+			std::cerr << "Error reading " << infile << ". Header indicates " << N_stars << " stars. Aborting attempt to read file." << std::endl;
 			f.close();
 			return false;
 		}
@@ -293,7 +292,7 @@ struct TStellarData {
 		
 		if(f.fail()) { f.close(); return false; }
 		
-		std::cerr << "# Loaded " << N_stars << " stars from " << infile << "." << std::endl;
+		std::cerr << "# Loaded " << N_stars << " stars from pixel " << pix_index << " of " << infile << "." << std::endl;
 		
 		f.close();
 		return true;

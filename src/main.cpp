@@ -92,6 +92,9 @@ int main(int argc, char **argv) {
 	string infile("NONE");
 	string statsfn("NONE");
 	string photometry = "PS";
+	double errfloor = 1.;
+	bool sparse = true;
+	bool append = false;
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 25;
@@ -110,6 +113,7 @@ int main(int argc, char **argv) {
 		("lf", po::value<string>(&lf_fn), "luminosity function file")
 		("seds", po::value<string>(&seds_fn), "SEDs file")
 		("photometry", po::value<string>(&photometry), "Photometric system ('PS' or 'SDSS', default 'PS')")
+		("errfloor", po::value<double>(&errfloor), "Error to add in quadrature (in millimags)")
 		("thindisk", po::value<string>(&par_thin), "Thin disk model parameters (l1 h1)")
 		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
 		("halo", po::value<string>(&par_halo), "Halo model parameters, (f_halo q n_inner R_br n_outer)")
@@ -119,6 +123,8 @@ int main(int argc, char **argv) {
 		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
+		("nonsparse", "Write binned PDFs as full arrays (produces significantly larger output).")
+		("append", "Append output to existing files.")
 		("dwarf", "Assume star is a dwarf (Mr > 4)")
 		("giant", "Assume star is a giant (Mr < 4)")
 	;
@@ -139,9 +145,12 @@ int main(int argc, char **argv) {
 		infile = infile_str[0];
 		pix_index = (uint32_t)atoi(infile_str[1].c_str());
 	} else {
-		cout << "'infile' is a required argument. E.g. '--infile pix.in 10' selects the 10th set of stars from pix.in." << endl;
+		cerr << "'infile' is a required argument. E.g. '--infile pix.in 10' selects the 10th set of stars from pix.in." << endl;
 		return -1;
 	}
+	if(vm.count("nonsparse")) { sparse = false; }
+	if(vm.count("append")) { append = true; }
+	errfloor /= 1000.;
 	
 	vector<string> output_fns;
 	TMultiBinner<4> multibinner;
@@ -171,7 +180,11 @@ int main(int argc, char **argv) {
 	
 	
 	// Construct data set /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	TStellarData data(infile, pix_index);
+	TStellarData data;
+	if(!data.load_data_binary(infile, pix_index, errfloor)) {
+		cerr << "Failed to load data from " << infile << "." << endl;
+		return -1;
+	}
 	double m[NBANDS], err[NBANDS];
 	double l, b;
 	l = data.l;
@@ -200,10 +213,10 @@ int main(int argc, char **argv) {
 		if(!converged) { N_nonconverged++; }
 		
 		// Output binned pdfs and statistics for current star
-		bool append_to_file = (count != 0);
+		bool append_to_file = (append || (count != 0));
 		// Write out the marginalized posteriors
 		for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
-			bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file);
+			bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file, sparse);
 		}
 		// Write out summary of statistics
 		if(statsfn != "NONE") {

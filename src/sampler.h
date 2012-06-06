@@ -199,7 +199,7 @@ struct TStellarData {
 	double l, b;
 	std::vector<TMagnitudes> star;
 	
-	TStellarData(std::string infile) { load_data_binary(infile); }
+	TStellarData(std::string infile, uint32_t pix_index) { load_data_binary(infile, pix_index); }
 	TStellarData() {}
 	
 	TMagnitudes& operator[](const unsigned int &index) { return star.at(index); }
@@ -227,7 +227,13 @@ struct TStellarData {
 	}
 	
 	// Load magnitudes and errors of stars along one line of sight, along with (l,b) for the given l.o.s. Same as load_data, but for binary files.
-	// Expected format:
+	// Each binary file contains magnitudes and errors for stars along multiple lines of sight. The stars are grouped into lines of sight, called
+	// pixels. The file begins with the number of pixels:
+	//
+	// 	N_pixels (uint32)
+	// 
+	// Each pixel has the form
+	// 
 	// 	Header:
 	// 		l		(double)
 	// 		b		(double)
@@ -235,18 +241,37 @@ struct TStellarData {
 	// 	Data - For each star:
 	// 		mag[NBANDS]	(double)
 	// 		err[NBANDS]	(double)
-	bool load_data_binary(std::string infile, double err_floor=0.001) {
+	// 
+	bool load_data_binary(std::string infile, uint32_t pix_index, double err_floor=0.001) {
 		std::fstream f(infile.c_str(), std::ios::in | std::ios::binary);
 		if(!f) { f.close(); return false; }
 		
-		// Read in header
+		// Read in number of pixels (sets of stars) in file
+		uint32_t N_pix;
+		f.read(reinterpret_cast<char*>(&N_pix), sizeof(N_pix));
+		if(pix_index > N_pix) {
+			std::cout << "Pixel requested (" << pix_index << ") greater than number of pixels in file (" << N_pix << ")." << std::endl;
+			f.close();
+			return false;
+		}
+		
+		// Seek to beginning of requested pixel
 		uint32_t N_stars;
-		f.read(reinterpret_cast<char*>(&l), sizeof(l));
-		f.read(reinterpret_cast<char*>(&b), sizeof(b));
-		f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));
+		for(uint32_t i=0; i<=pix_index; i++) {
+			f.read(reinterpret_cast<char*>(&l), sizeof(l));
+			f.read(reinterpret_cast<char*>(&b), sizeof(b));
+			f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));
+			if(i < pix_index) { f.seekg(N_stars * 2*NBANDS*sizeof(double)); }
+		}
+		
+		if(f.eof()) {
+			std::cout << "End of file reached before requested pixel (" << pix_index << ") reached. File corrupted." << std::endl;
+			f.close();
+			return false;
+		}
 		
 		// Exit if N_stars is unrealistically large
-		if(N_stars > 1e6) {
+		if(N_stars > 1e7) {
 			std::cout << "Error reading " << infile << ". Header indicates " << N_stars << " stars. Aborting attempt to read file." << std::endl;
 			f.close();
 			return false;

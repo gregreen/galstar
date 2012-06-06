@@ -87,7 +87,9 @@ int main(int argc, char **argv) {
 	string par_thick = "0.13 3261 743";
 	string par_halo = "0.0051 0.70 -2.62 27.8 -3.8";
 	// TODO: Add in option to set metallicity parameters
-	string datafn("NONE");
+	vector<string> infile_str;
+	uint32_t pix_index;
+	string infile("NONE");
 	string statsfn("NONE");
 	string photometry = "PS";
 	unsigned int giant_flag = 0;
@@ -111,7 +113,7 @@ int main(int argc, char **argv) {
 		("thindisk", po::value<string>(&par_thin), "Thin disk model parameters (l1 h1)")
 		("thickdisk", po::value<string>(&par_thick), "Thick disk model parameters, (f_thin l2 h2)")
 		("halo", po::value<string>(&par_halo), "Halo model parameters, (f_halo q n_inner R_br n_outer)")
-		("datafile", po::value<string>(&datafn), "Stellar magnitudes and errors file")
+		("infile", po::value<vector<string> >(&infile_str)->multitoken(), "Stellar magnitudes and errors file, and index of pixel in file.")
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
@@ -128,11 +130,17 @@ int main(int argc, char **argv) {
 	po::notify(vm);
 	
 	if(vm.count("help") || !output_pdfs.size()) { cout << desc << endl; return -1; }
-	if(!(vm.count("datafile"))) { cout << "'datafile' is a required argument." << endl; return -1; }
 	if(vm.count("dwarf")) { giant_flag = 1; }
 	if(vm.count("giant")) {
 		if(giant_flag == 1) { cout << "--dwarf and --giant are incompatible options." << endl; return -1; }
 		giant_flag = 2;
+	}
+	if(infile_str.size() == 2) {
+		infile = infile_str[0];
+		pix_index = (uint32_t)atoi(infile_str[1].c_str());
+	} else {
+		cout << "'infile' is a required argument. E.g. '--infile pix.in 10' selects the 10th set of stars from pix.in." << endl;
+		return -1;
 	}
 	
 	vector<string> output_fns;
@@ -147,7 +155,7 @@ int main(int argc, char **argv) {
 		for(unsigned int i=0; i<NBANDS; i++){ Acoef_tmp[i] = AcoefSDSS[i]; }
 	} else {
 		cerr << "Invalid photometry: '" << photometry << "'. Valid options are 'PS' and 'SDSS'." << endl;
-		return EXIT_FAILURE;
+		return -1;
 	}
 	TModel model(lf_fn, seds_fn, Acoef_tmp);
 	#define PARSE(from, to) if(!(  istringstream(from) >> to  )) { std::cerr << "Error parsing " #from " (" << from << ")\n"; return -1; }
@@ -163,7 +171,7 @@ int main(int argc, char **argv) {
 	
 	
 	// Construct data set /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	TStellarData data(datafn);
+	TStellarData data(infile, pix_index);
 	double m[NBANDS], err[NBANDS];
 	double l, b;
 	l = data.l;

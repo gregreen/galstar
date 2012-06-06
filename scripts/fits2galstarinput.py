@@ -31,29 +31,12 @@ from random import randint
 import healpy as hp
 import numpy as np
 import pyfits
-import tarfile
-
-
-def lb2thetaphi(l, b):
-	l_rad, b_rad = l * np.pi/180., b * np.pi/180.
-	
-	# Convert from Galactic to Cartesian coordinates
-	sinb = np.sin(b_rad)
-	x = np.cos(l_rad) * sinb
-	y = np.sin(l_rad) * sinb
-	z = np.cos(b_rad)
-	
-	# Convert from Cartesian to Spherical coordinates
-	theta = np.arctan(np.divide(np.sqrt(x*x + y*y), z))
-	phi = np.arctan2(y, x)
-	
-	return theta, phi
 
 
 def main():
 	parser = argparse.ArgumentParser(prog='fits2galstarinput.py', description='Generate galstar input files from LSD fits output.', add_help=True)
 	parser.add_argument('FITS', type=str, help='FITS output from LSD.')
-	parser.add_argument('tarout', type=str, help='Tarball output filename.')
+	parser.add_argument('out', type=str, help='Output filename.')
 	parser.add_argument('-pf', '--prefix', type=str, default='pix', help='Prefix for pixel names (default: pix).')
 	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 128).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
@@ -86,17 +69,15 @@ def main():
 		print '--split must be positive.'
 		return 1
 	if values.split > 1:
-		base = abspath(values.tarout)
+		base = abspath(values.out)
 		if base[-3:] == '.in':
 			base = base[:-3]
 		fout = [open('%s_%d.in' % (base, i), 'wb') for i in range(values.split)]
-		#tar = [tarfile.open('%s_%d.tar' % (base, i), 'w') for i in range(values.split)]
 	else:
-		pass
-		#tar = [tarfile.open(values.tarout, 'w')]
+		fout = [open(values.out, 'w')]
 	
 	# Keep track of number of stars saved
-	N_pix_used = 0
+	N_pix_used = np.zeros(values.split, dtype=np.uint32)
 	N_saved = 0
 	N_stars_min = 1.e100
 	N_stars_max = -1.
@@ -105,10 +86,15 @@ def main():
 	indices = N_arr.argsort()
 	N_arr = N_arr[indices]
 	
+	# Leave space in each file to record the number of files
+	N_pix_used_str = N_pix_used.tostring()
+	for i,f in enumerate(fout):
+		f.write(N_pix_used_str[4*i:4*i+4])
+	
 	# Break data into healpix pixels
 	newblock = np.where(np.diff(N_arr))[0] + 1
 	start = 0
-	for i,end in enumerate(np.concatenate((newblock,[-1]))):
+	for end in np.concatenate((newblock,[-1])):
 		N = N_arr[start]
 		
 		# Filter pixels by bounds
@@ -144,7 +130,7 @@ def main():
 		fout[findex].write(outarr.tostring())
 		
 		# Record number of stars saved to pixel
-		N_pix_used += 1
+		N_pix_used[findex] += 1
 		N_saved += outarr.shape[0]
 		if outarr.shape[0] < N_stars_min:
 			N_stars_min = outarr.shape[0]
@@ -153,7 +139,11 @@ def main():
 		
 		start = end
 	
-	for f in fout:
+	# Return to beginning of each file and write number of pixels in file
+	N_pix_used_str = N_pix_used.tostring()
+	for i,f in enumerate(fout):
+		f.seek(0)
+		f.write(N_pix_used_str[4*i:4*i+4])
 		f.close()
 	
 	if N_pix_used != 0:

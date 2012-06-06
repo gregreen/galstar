@@ -146,8 +146,8 @@ def main():
 		f.write(N_pix_used_str[4*i:4*i+4])
 		f.close()
 	
-	if N_pix_used != 0:
-		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (N_saved, N_pix_used, values.split, N_stars_min, N_stars_max, float(N_saved)/float(N_pix_used))
+	if np.sum(N_pix_used) != 0:
+		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (N_saved, np.sum(N_pix_used), values.split, N_stars_min, N_stars_max, float(N_saved)/float(np.sum(N_pix_used)))
 	else:
 		print 'No pixels in specified bounds.'
 	

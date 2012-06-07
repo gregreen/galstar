@@ -121,7 +121,8 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 		measure = line_integral(Delta_y, pdfs).astype(np.float128)	# Begin with line integral through each stellar pdf
 		print measure
 	
-	measure = p0 * np.log(2. * np.cosh(measure / p0))			# Soften around zero (measure -> positive const. below scale p0)
+	measure *= np.log(1 + np.exp(-2. * measure / p0))
+	#measure = p0 * np.log(2. * np.cosh(measure / p0))			# Soften around zero (measure -> positive const. below scale p0)
 	measure = -np.sum(np.log(measure))							# Sum logarithms of line integrals
 	
 	# Disfavor larger values of Delta_y slightly

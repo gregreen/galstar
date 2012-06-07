@@ -159,7 +159,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	bounds, p = load_bins(bin_fname, sparse)
 	print np.any(np.isnan(p))
 	mask = np.logical_not(np.sum(np.sum(np.logical_not(np.isfinite(p)), axis=1), axis=1).astype(np.bool))	# Filter out images with NaN bins
-	print np.any(np.isnan(p)
+	print np.any(np.isnan(p))
 	if converged:	# Filter out nonconverged images
 		converged, means, cov = load_stats(stats_fname)
 		mask = np.logical_and(mask, converged)

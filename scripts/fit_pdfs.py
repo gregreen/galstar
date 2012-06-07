@@ -119,8 +119,6 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 	measure = 0.
 	if not np.any(np.isnan(Delta_y)):
 		measure = line_integral(Delta_y, pdfs).astype(np.float128)	# Begin with line integral through each stellar pdf
-	
-	if measure != 0.:
 		print measure
 	
 	measure = p0 * np.log(2. * np.cosh(measure / p0))			# Soften around zero (measure -> positive const. below scale p0)

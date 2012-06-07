@@ -303,8 +303,6 @@ bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file, bool spa
 			}
 		}
 		
-		std::cout << "nonzero: " << N_nonzero << std::endl;
-		
 		// Update number of nonzero points
 		//outfile.seekp(-(std::streamoff)(N_nonzero * (2*sizeof(uint16_t) + sizeof(double))), std::ios::cur);
 		outfile.seekp(start, std::ios::beg);

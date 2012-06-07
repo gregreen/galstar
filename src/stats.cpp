@@ -228,45 +228,36 @@ bool TStats::write_binary_old(std::string fname, std::ios::openmode writemode) c
 	return true;
 }
 
-// Write statistics to binary file. Pass std::ios::app as writemode to append to end of existing file.
+// Write statistics to binary file, possibly appending to existing file.
 bool TStats::write_binary(std::string fname, bool converged, bool append_to_file) const {
-	// If appending to existing file, increment the number of objects in file
-	unsigned int tmp_N_files;
-	if(append_to_file) {
-		std::fstream peekfile(fname.c_str(), std::ios::binary | std::ios::in | std::ios::out);
-		if(peekfile.fail()) {
-			std::cout << "Failed to open " << fname << " for peek." << std::endl;
-			return false;
-		}
-		peekfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
-		tmp_N_files++;
-		peekfile.seekp(std::ios_base::beg);
-		peekfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
-		peekfile.close();
-	} else {
-		// If writing to new file, delete file, if it already exists
-		std::remove(fname.c_str());
-	}
+	// If writing to new file, delete file, if it already exists
+	if(!append_to_file) { std::remove(fname.c_str()); }
 	
-	// Determine write mode and open file
-	std::ios::openmode writemode;
-	if(append_to_file) {
-		writemode = std::ios::out | std::ios::app;
-	} else {
-		writemode = std::ios::out;
-	}
-	std::fstream outfile(fname.c_str(), std::ios::binary | writemode);
+	std::ios_base::openmode mode = std::ios::binary | std::ios::out;
+	if(append_to_file) { mode |= std::ios::in; }
+	std::fstream outfile(fname.c_str(), mode);
 	if(outfile.fail()) {
-		std::cout << "Failed to open " << fname << "." << std::endl;
+		std::cerr << "Failed to open " << fname << "." << std::endl;
 		return false;
 	}
 	
-	// Write header if not appending to existing file
-	if(!append_to_file) {
+	// Header:
+	unsigned int tmp_N_files;
+	if(append_to_file) {
+		// If appending to existing file, increment the number of objects in file
+		outfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		tmp_N_files++;
+		outfile.seekp(std::ios_base::beg);
+		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
+		outfile.seekp(0, std::ios::end);
+	} else {
+		// Write header if not appending to existing file
 		tmp_N_files = 1;
 		outfile.write(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));
 		outfile.write(reinterpret_cast<const char *>(&N), sizeof(unsigned int));
 	}
+	
+	// Data:
 	
 	// Write whether converged
 	outfile.write(reinterpret_cast<char *>(&converged), sizeof(bool));

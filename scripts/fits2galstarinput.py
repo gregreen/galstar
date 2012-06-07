@@ -122,12 +122,14 @@ def main():
 		if N_stars == 0:
 			continue
 		findex = randint(0,values.split-1)
-		header_begin = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
-		fout[findex].write(header_begin.tostring())
-		fout[findex].write(N_stars.tostring())
+		pix_index = np.array([N], dtype=np.uint32)
+		gal_lb = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
+		fout[findex].write(pix_index.tostring())	# Pixel index	(uint32)
+		fout[findex].write(gal_lb.tostring())		# (l, b)		(2 x float64)
+		fout[findex].write(N_stars.tostring())		# N_stars		(uint32)
 		
 		# Write magnitudes and errors
-		fout[findex].write(outarr.tostring())
+		fout[findex].write(outarr.tostring())		# 5xmag, 5xerr	(10 x float64)
 		
 		# Record number of stars saved to pixel
 		N_pix_used[findex] += 1

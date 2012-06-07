@@ -4,9 +4,10 @@
 # archiving the results in a tarball.
 #
 # Requires the following environmental variables to be set:
-#    TARIN      = tarball containing inputs
+#    INFILE     = binary file containing input lines of sight
 #    TMPDIR     = temporary directory
 #    GALSTARDIR = directory containing galstar executable
+#    SCRIPTSDIR = directory containing galstar scripts
 #    TAROUT     = filename for tarball output
 #
 
@@ -19,49 +20,40 @@ echo "Writing binned pdfs and statistics to $tarfn."
 workingdir=`pwd`
 tmpdir=`readlink -m ${TMPDIR%/}`
 galstardir=`readlink -m ${GALSTARDIR%/}`
+scriptsdir=`readlink -m ${SCRIPTSDIR%/}`
 
 # Determine filename for std. output/error
 outfn="out-err.txt"
 
-# Get list of .in files in the input tarball
-tarin=`readlink -m $TARIN`
-infilelist=`tar -tf $TARIN | grep .in`
+# Get the absolute path of the input file
+infile=`readlink -m $INFILE`
 
-# Determine number of pixels in tarball
-npix=0
-for infile in $infilelist; do
-        npix=`expr $npix + 1`
-done
+# Determine number of pixels in the input
+npix=`$scriptsdir/npix_in_input.py $infile`
+maxpix=`expr $npix - 1`
 
 echo "Moving to temporary folder $tmpdir"
 cd $tmpdir
 
-# Give each input file to galstar
-counter=1
-for infile in $infilelist; do
+# Give each pixel in input file to galstar
+for n in {0..maxpix}; do
 	# Determine filenames for galstar output
 	pixname=${infile%.in}
-	statsfn="$pixname.stats"
-	binfn="${pixname}_DM_Ar.dat"
+	statsfn="$pixname_$n.stats"
+	binfn="${pixname}_$n_DM_Ar.dat"
 	
-	# Extract the current input file from the tarball
-	tar -xf $tarin $infile
+	# Run galstar with the current pixel
+	echo "$n of $maxpix: Running galstar ..."
+	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile $n &> $outfn
 	
-	# Run galstar with the current l.o.s input file
-	echo "$counter of $npix: Running galstar with $infile ..."
-	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile &> $outfn
-	
-	# Compress and archive output, removing temporary files
-	gzip -9 $binfn
-	tar -rf $tarfn $binfn.gz $statsfn
-	rm $binfn.gz $statsfn $infile
-	
-	counter=`expr $counter + 1`
+	# Archive output, removing temporary files
+	tar -rf $tarfn $binfn $statsfn
+	rm $binfn $statsfn
 done
 
-# Add ASCII file containing std. out/err to tar archive
-gzip -9 $outerrfn
+# Add ASCII file containing std. out/err to tar archive and compress archive
 tar -rf $tarfn $outerrfn.gz
+gzip -9 $tarfn
 rm $outerrfn.gz
 
 cd $workingdir

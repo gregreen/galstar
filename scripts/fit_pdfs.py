@@ -240,25 +240,6 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		fig.savefig(abspath(plot_fn), dpi=150)
 
 
-# Save the reddening profile to an ASCII file, or print to stdout
-'''def output_profile(fname, bounds, Delta_Ar):
-	# Calculate reddening profile
-	N_regions = Delta_Ar.size
-	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
-	Ar_anchors = np.empty(N_regions+1, dtype=Delta_Ar.dtype)
-	for i in xrange(N_regions+1):
-		Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[:i])
-	
-	if fname == None:	# Print to stdout
-		print np.array_str(mu_anchors, max_line_width=N_regions*100, precision=8, suppress_small=True)[1:-1].lstrip().rstrip()
-		print np.array_str(Ar_anchors, max_line_width=N_regions*100, precision=8, suppress_small=True)[1:-1].lstrip().rstrip()
-	else:				# Write to file
-		output = np.empty((2, N_regions+1), dtype=np.float64)
-		output[0] = mu_anchors
-		output[1] = Ar_anchors
-		np.savetxt(abspath(fname), output)'''
-
-
 def output_profile(fname, pixnum, bounds, Delta_Ar):
 	'''
 	Append the reddening profile to the end of the binary file given by <fname>.

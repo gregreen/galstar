@@ -53,11 +53,11 @@ def seek_to_pixel(f, index):
 		raise Exception('Not enough pixels in input file.')
 	
 	pix_index, gal_lb, N_stars = None, None, None
-	for i in xrange(index):
+	for i in xrange(index+1):
 		pix_index = np.fromfile(f, dtype=np.uint32, count=1)[0]
 		gal_lb = np.fromfile(f, dtype=np.float64, count=2)
 		N_stars = np.fromfile(f, dtype=np.uint32, count=1)[0]
-		if i != index-1:
+		if i != index:
 			f.seek(N_stars * 10 * 8, 1)
 	
 	return pix_index, gal_lb, N_stars

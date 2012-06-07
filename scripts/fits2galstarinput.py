@@ -37,7 +37,6 @@ def main():
 	parser = argparse.ArgumentParser(prog='fits2galstarinput.py', description='Generate galstar input files from LSD fits output.', add_help=True)
 	parser.add_argument('FITS', type=str, help='FITS output from LSD.')
 	parser.add_argument('out', type=str, help='Output filename.')
-	parser.add_argument('-pf', '--prefix', type=str, default='pix', help='Prefix for pixel names (default: pix).')
 	parser.add_argument('-n', '--nside', type=int, default=128, help='healpix nside parameter (default: 128).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max')

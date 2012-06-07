@@ -53,8 +53,6 @@ def line_integral(Delta_y, img):
 	N_regions = Delta_y.shape[0]
 	N_samples = img.shape[1] / N_regions
 	
-	print Delta_y
-	
 	line_int_ret = np.zeros(N_images)
 	code = """
 		double y = 0.;
@@ -115,6 +113,9 @@ def min_leastsq(pdfs, N_regions=15, chimax=5., regulator=10000.):
 # Return a measure to minimize by simulated annealing
 def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 	Delta_y = np.exp(log_Delta_y)
+	
+	if np.any(np.isnan(Delta_y)):
+		return -np.inf
 	
 	measure = line_integral(Delta_y, pdfs).astype(np.float128)	# Begin with line integral through each stellar pdf
 	measure = p0 * np.log(2. * np.cosh(measure / p0))			# Soften around zero (measure -> positive const. below scale p0)

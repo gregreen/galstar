@@ -81,12 +81,14 @@ def main():
 		print npix
 	
 	if values.pix_index != None:
-		pix_index, gal_lb, N_stars = seek_to_pixel(values.pix_index)
+		pix_index, gal_lb, N_stars = seek_to_pixel(f, values.pix_index)
 		print pix_index
 	
 	if values.nstars != None:
-		pix_index, gal_lb, N_stars = seek_to_pixel(values.pix_index)
+		pix_index, gal_lb, N_stars = seek_to_pixel(f, values.pix_index)
 		print N_stars
+	
+	f.close()
 	
 	return 0
 

@@ -54,6 +54,13 @@ def main():
 	# Convert (l, b) to spherical coordinates (physics convention)
 	theta = np.pi/180. * (90. - d['b'])
 	phi = np.pi/180. * d['l']
+	l_min = np.min(d['l'])
+	l_max = np.max(d['l'])
+	b_min = np.min(d['b'])
+	b_max = np.max(d['b'])
+	print '(l_min, l_max) = (%.3f, %.3f)' % (l_min, l_max)
+	print '(b_min, b_max) = (%.3f, %.3f)' % (b_min, b_max)
+	print ''
 	
 	# Convert spherical coordinates to healpix
 	N_arr = hp.ang2pix(values.nside, theta, phi, nest=(not values.ring))
@@ -93,14 +100,24 @@ def main():
 	# Break data into healpix pixels
 	newblock = np.where(np.diff(N_arr))[0] + 1
 	start = 0
+	l_min, l_max, b_min, b_max = 1.e100, -1.e100, 1.e100, -1.e100
 	for end in np.concatenate((newblock,[-1])):
 		N = N_arr[start]
+		print N
 		
 		# Filter pixels by bounds
 		if values.bounds != None:
 			theta_0, phi_0 = hp.pix2ang(values.nside, N, nest=(not values.ring))
 			l_0 = 180./np.pi * phi_0
 			b_0 = 90. - 180./np.pi * theta_0
+			if l_0 < l_min:
+				l_min = l_0
+			if l_0 > l_max:
+				l_max = l_0
+			if b_0 < b_min:
+				b_min = b_0
+			if b_0 > b_max:
+				b_max = b_0
 			if (l_0 < values.bounds[0]) or (l_0 > values.bounds[1]) or (b_0 < values.bounds[2]) or (b_0 > values.bounds[3]):
 				continue
 		
@@ -151,6 +168,10 @@ def main():
 		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (N_saved, np.sum(N_pix_used), values.split, N_stars_min, N_stars_max, float(N_saved)/float(np.sum(N_pix_used)))
 	else:
 		print 'No pixels in specified bounds.'
+	
+	if values.bounds != None:
+		print '(l_min, l_max) = (%.3f, %.3f)' % (l_min, l_max)
+		print '(b_min, b_max) = (%.3f, %.3f)' % (b_min, b_max)
 	
 	return 0
 

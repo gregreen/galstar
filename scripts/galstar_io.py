@@ -270,7 +270,7 @@ def load_bins_sparse(fname, selection=None):
 		for(int n=0; n<(int)N_files; n++) {
 			uint32_t N_nonzero;
 			infile.read(reinterpret_cast<char*>(&N_nonzero), sizeof(uint32_t));
-			std::cout << "nonzero: " << N_nonzero << std::endl;
+			//std::cout << "nonzero: " << N_nonzero << std::endl;
 			
 			if((int)sel_sorted(m) == n) {
 				for(int k=0; k<(int)N_nonzero; k++) {

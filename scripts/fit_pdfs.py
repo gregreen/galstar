@@ -53,6 +53,8 @@ def line_integral(Delta_y, img):
 	N_regions = Delta_y.shape[0]
 	N_samples = img.shape[1] / N_regions
 	
+	print Delta_y
+	
 	line_int_ret = np.zeros(N_images)
 	code = """
 		double y = 0.;

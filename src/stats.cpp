@@ -235,7 +235,7 @@ bool TStats::write_binary(std::string fname, bool converged, bool append_to_file
 	if(append_to_file) {
 		std::fstream peekfile(fname.c_str(), std::ios::binary | std::ios::in | std::ios::out);
 		if(peekfile.fail()) {
-			std::cout << "Failed to open " << fname << "." << std::endl;
+			std::cout << "Failed to open " << fname << " for peek." << std::endl;
 			return false;
 		}
 		peekfile.read(reinterpret_cast<char *>(&tmp_N_files), sizeof(unsigned int));

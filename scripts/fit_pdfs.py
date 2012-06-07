@@ -114,6 +114,8 @@ def min_leastsq(pdfs, N_regions=15, chimax=5., regulator=10000.):
 def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 	Delta_y = np.exp(log_Delta_y)
 	
+	print Delta_y
+	
 	if np.any(np.isnan(Delta_y)):
 		return -np.inf
 	

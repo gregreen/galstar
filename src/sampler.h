@@ -255,8 +255,9 @@ struct TStellarData {
 		}
 		
 		// Seek to beginning of requested pixel
-		uint32_t N_stars;
+		uint32_t N_stars, healpixnum;
 		for(uint32_t i=0; i<=pix_index; i++) {
+			f.read(reinterpret_cast<char*>(&healpixnum), sizeof(healpixnum));
 			f.read(reinterpret_cast<char*>(&l), sizeof(l));
 			f.read(reinterpret_cast<char*>(&b), sizeof(b));
 			f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));

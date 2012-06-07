@@ -7,7 +7,7 @@
 # Requires the following environmental variables to be set:
 #    TMPDIR     = temporary directory
 #    SCRIPTSDIR = directory with scripts
-#    TARFN      = filename of tarball with galstar outputs
+#    TARIN      = filename of tarball with galstar outputs
 #    OUTFN      = file to output DM,Ar relation to for each pixel
 #    ARGS       = optional arguments to pass to fit_pdfs.py
 #
@@ -20,9 +20,12 @@ scriptsdir=`readlink -m ${SCRIPTSDIR%/}`
 # Determine absolute filename for output
 outfn=`readlink -m $OUTFN`
 
+# Remove output file if it already exists
+rm $outfn
+
 # Get list of bin files from tarball
-tarfn_abs=`readlink -m $TARFN`
-binfilelist=`tar -tf $TARFN | grep .dat.gz`
+tarin=`readlink -m $TARFN`
+binfilelist=`tar -tf $TARIN | grep .dat.gz`
 
 # Determine number of pixels in tarball
 npix=0
@@ -30,24 +33,23 @@ for binfile in $binfilelist; do
 	npix=`expr $npix + 1`
 done
 
+echo "Moving to $tmpdir"
 cd $tmpdir
 
 # Run fit_pdfs.py on each pixel
 counter=1
 for binfile in $binfilelist; do
 	# Determine filenames corresponding to current pixel
-	pixname=${binfile%_DM_Ar.dat.gz}
-	statsfn="$pixname.stats"
-        binfn="${pixname}_DM_Ar.dat.gz"
+	pixindex=${binfile%_DM_Ar.dat.gz}
+	statsfn="$pixindex.stats"
+	binfn="${pixindex}_DM_Ar.dat.gz"
 	
 	# Extract current pixel
-	tar -xf $tarfn_abs $statsfn $binfn
+	tar -xf $tarin $statsfn $binfn
 	echo "$counter of $npix: Fitting l.o.s. reddening law for $pixname ..."
 	
 	# Run fit_pdfs.py on this pixel
-	echo $pixname >> $outfn
-	$scriptsdir/fit_pdfs.py $binfn $statsfn $ARGS >> $outfn
-	echo "" >> $outfn
+	$scriptsdir/fit_pdfs.py $binfn $statsfn -o $outfn $pixindex $ARGS
 	
 	# Remove temporary files
 	rm $statsfn $binfn
@@ -56,6 +58,7 @@ for binfile in $binfilelist; do
 	echo ""
 done
 
-#gzip -9 $outfn
+gzip -9 $outfn
 
-#cd $workingdir
+cd $workingdir
+echo "Done."

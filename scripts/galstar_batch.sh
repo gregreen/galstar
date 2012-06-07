@@ -29,7 +29,7 @@ outfn="out-err.txt"
 infile=`readlink -m $INFILE`
 
 # Determine number of pixels in the input
-npix=`$scriptsdir/npix_in_input.py $infile`
+npix=`$scriptsdir/input_info.py $infile --npix`
 maxpix=`expr $npix - 1`
 
 echo "Moving to temporary folder $tmpdir"
@@ -37,13 +37,17 @@ cd $tmpdir
 
 # Give each pixel in input file to galstar
 for n in {0..maxpix}; do
-	# Determine filenames for galstar output
+	# Determine healpix number of this pixel
+	pixindex=`$scriptsdir/input_info.py $infile --pix_index $n`
+	
+	# Name galstar output files by healpix number
 	pixname=${infile%.in}
-	statsfn="$pixname_$n.stats"
-	binfn="${pixname}_$n_DM_Ar.dat"
+	statsfn="$pixindex.stats"
+	binfn="$pixindex_DM_Ar.dat"
 	
 	# Run galstar with the current pixel
-	echo "$n of $maxpix: Running galstar ..."
+	m=`expr $n + 1`
+	echo "$m of $npix: Running galstar ..."
 	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile $n &> $outfn
 	
 	# Archive output, removing temporary files
@@ -52,9 +56,9 @@ for n in {0..maxpix}; do
 done
 
 # Add ASCII file containing std. out/err to tar archive and compress archive
-tar -rf $tarfn $outerrfn.gz
+tar -rf $tarfn $outerrfn
+rm $outerrfn
 gzip -9 $tarfn
-rm $outerrfn.gz
 
 cd $workingdir
 echo "Done."

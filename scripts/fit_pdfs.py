@@ -145,8 +145,8 @@ def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000., dwell=1000):
 	# Set bounds on step size in Delta_Ar
 	lower = np.empty(N_regions, dtype=np.float64)
 	upper = np.empty(N_regions, dtype=np.float64)
-	lower.fill(-0.01)
-	upper.fill(0.01)
+	lower.fill(-0.1)
+	upper.fill(0.1)
 	
 	# Run simulated annealing
 	#feps=1.e-12

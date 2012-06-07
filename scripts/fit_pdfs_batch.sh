@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #
 # Runs fit_pdfs.py on each pixel in a tarball containing galstar outputs
 # for many lines of sight.
@@ -21,11 +20,11 @@ scriptsdir=`readlink -m ${SCRIPTSDIR%/}`
 outfn=`readlink -m $OUTFN`
 
 # Remove output file if it already exists
-rm $outfn
+#rm $outfn
 
 # Get list of bin files from tarball
-tarin=`readlink -m $TARFN`
-binfilelist=`tar -tf $TARIN | grep .dat.gz`
+tarin=`readlink -m $TARIN`
+binfilelist=`tar -tf $TARIN | grep .dat`
 
 # Determine number of pixels in tarball
 npix=0
@@ -40,13 +39,13 @@ cd $tmpdir
 counter=1
 for binfile in $binfilelist; do
 	# Determine filenames corresponding to current pixel
-	pixindex=${binfile%_DM_Ar.dat.gz}
+	pixindex=${binfile%_DM_Ar.dat}
 	statsfn="$pixindex.stats"
-	binfn="${pixindex}_DM_Ar.dat.gz"
+	binfn="${pixindex}_DM_Ar.dat"
 	
 	# Extract current pixel
 	tar -xf $tarin $statsfn $binfn
-	echo "$counter of $npix: Fitting l.o.s. reddening law for $pixname ..."
+	echo "$counter of $npix: Fitting l.o.s. reddening law for healpix pixel $pixindex ..."
 	
 	# Run fit_pdfs.py on this pixel
 	$scriptsdir/fit_pdfs.py $binfn $statsfn -o $outfn $pixindex $ARGS

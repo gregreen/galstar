@@ -113,17 +113,12 @@ def min_leastsq(pdfs, N_regions=15, chimax=5., regulator=10000.):
 # Return a measure to minimize by simulated annealing
 def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 	Delta_y = np.exp(log_Delta_y)
-	
-	#print Delta_y
-	
-	measure = 0.
-	if not np.any(np.isnan(Delta_y)):
-		measure = line_integral(Delta_y, pdfs).astype(np.float128)	# Begin with line integral through each stellar pdf
-		#print measure
-	else:
+	if np.any(np.isnan(Delta_y)):
 		raise ValueError('Delta_y contains NaN values.')
 	
-	measure += np.exp(-measure/p0)						# Soften around zero (measure -> positive const. below scale p0)
+	measure = line_integral(Delta_y, pdfs)	# Begin with line integral through each stellar pdf
+	
+	measure += p0 * np.exp(-measure/p0)						# Soften around zero (measure -> positive const. below scale p0)
 	#measure = p0 * np.log(2. * np.cosh(measure / p0))
 	measure = -np.sum(np.log(measure))					# Sum logarithms of line integrals
 	
@@ -138,15 +133,15 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 
 
 # Maximize the line integral by simulated annealing
-def min_anneal(pdfs, N_regions=15, p0=1.e-4, regulator=10000., dwell=1000):
+def min_anneal(pdfs, N_regions=15, p0=1.e-5, regulator=10000., dwell=1000):
 	# Start with random guess
-	guess = np.log(np.random.ranf(N_regions) * 2.* float(pdfs.shape[2])/float(N_regions))
+	guess = np.log(0.5 * np.random.ranf(N_regions) * 2.* float(pdfs.shape[2])/float(N_regions))
 	
 	# Set bounds on step size in Delta_Ar
 	lower = np.empty(N_regions, dtype=np.float64)
 	upper = np.empty(N_regions, dtype=np.float64)
-	lower.fill(-0.1)
-	upper.fill(0.1)
+	lower.fill(-0.02)
+	upper.fill(0.02)
 	
 	# Run simulated annealing
 	#feps=1.e-12
@@ -177,7 +172,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 		x, success, guess, measure = min_leastsq(p, N_regions=N_regions, chimax=5., regulator=regulator)
 	elif method == 'anneal':
 		sys.stderr.write('Fitting reddening profile using simulated annealing (scipy.optimize.anneal)...\n')
-		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-4, regulator=regulator, dwell=dwell)
+		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-5, regulator=regulator, dwell=dwell)
 	
 	# Convert output into physical coordinates (rather than pixel coordinates)
 	Delta_Ar = np.exp(x) * ((bounds[3] - bounds[2]) / float(p.shape[2]))

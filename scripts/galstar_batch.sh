@@ -36,19 +36,21 @@ echo "Moving to temporary folder $tmpdir"
 cd $tmpdir
 
 # Give each pixel in input file to galstar
-for n in {0..maxpix}; do
+for ((n=0; n<=$maxpix; n++)); do
 	# Determine healpix number of this pixel
 	pixindex=`$scriptsdir/input_info.py $infile --pix_index $n`
 	
 	# Name galstar output files by healpix number
 	pixname=${infile%.in}
 	statsfn="$pixindex.stats"
-	binfn="$pixindex_DM_Ar.dat"
+	binfn="${pixindex}_DM_Ar.dat"
+	
+	echo $binfn
 	
 	# Run galstar with the current pixel
 	m=`expr $n + 1`
-	echo "$m of $npix: Running galstar ..."
-	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --datafile $infile $n &> $outfn
+	echo "$m of $npix: Running galstar on healpix pixel $pixindex..."
+	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --infile $infile $n &> $outfn
 	
 	# Archive output, removing temporary files
 	tar -rf $tarfn $binfn $statsfn

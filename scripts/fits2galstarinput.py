@@ -103,7 +103,6 @@ def main():
 	l_min, l_max, b_min, b_max = 1.e100, -1.e100, 1.e100, -1.e100
 	for end in np.concatenate((newblock,[-1])):
 		N = N_arr[start]
-		print N
 		
 		# Filter pixels by bounds
 		if values.bounds != None:

@@ -118,6 +118,7 @@ def main():
 			if b_0 > b_max:
 				b_max = b_0
 			if (l_0 < values.bounds[0]) or (l_0 > values.bounds[1]) or (b_0 < values.bounds[2]) or (b_0 > values.bounds[3]):
+				start = end
 				continue
 		
 		sel = indices[start:end]
@@ -135,6 +136,7 @@ def main():
 		# Write Header
 		N_stars = np.array([outarr.shape[0]], np.uint32)
 		if N_stars == 0:
+			start = end
 			continue
 		findex = randint(0,values.split-1)
 		pix_index = np.array([N], dtype=np.uint32)

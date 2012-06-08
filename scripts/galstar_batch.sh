@@ -58,8 +58,8 @@ for ((n=0; n<=$maxpix; n++)); do
 done
 
 # Add ASCII file containing std. out/err to tar archive and compress archive
-tar -rf $tarfn $outerrfn
-rm $outerrfn
+tar -rf $tarfn $outfn
+rm $outfn
 gzip -9 $tarfn
 
 cd $workingdir

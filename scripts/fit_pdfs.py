@@ -311,7 +311,8 @@ def main():
 	output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar)
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
-	if (values.plotfn != None) or (values.show != None):
+	if (values.plotfn != None) or values.show:
+		sys.stderr.write('Plotting profile to %s ...' % values.plotfn)
 		plot_profile(bounds, p, Delta_Ar, values.plotfn, values.overplot)
 	
 	if values.show:

@@ -59,7 +59,7 @@ def load_reddening(fname):
 				Ar_anchors = np.fromfile(f, dtype=np.float64, count=N_regions+1)
 				print 'pixel index: %d' % pix_index
 				print '# of stars: %d' % N_stars
-				print 'chisq: %.2f (%.2f / d.o.f.)' % (measure, measure / float(N_stars))
+				print 'chisq: %.2f (%.2f / d.o.f.)' % (measure, measure / float(N_stars - N_regions - 1))
 				print 'success: %d' % success
 				print '# of regions: %d' % N_regions
 				print 'line integrals:'

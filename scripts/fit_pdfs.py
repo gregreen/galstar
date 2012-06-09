@@ -174,6 +174,8 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 		sys.stderr.write('Fitting reddening profile using simulated annealing (scipy.optimize.anneal)...\n')
 		x, success, guess, measure = min_anneal(p, N_regions=N_regions, p0=1.e-5, regulator=regulator, dwell=dwell)
 	
+	line_int = line_integral(np.exp(x), p)
+	
 	# Convert output into physical coordinates (rather than pixel coordinates)
 	Delta_Ar = np.exp(x) * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	guess = np.exp(guess) * ((bounds[3] - bounds[2]) / float(p.shape[2]))
@@ -183,7 +185,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	sys.stderr.write('success: %d\n' % success)
 	sys.stderr.write('measure: %f\n' % measure)
 	
-	return bounds, p, measure, success, Delta_Ar, guess
+	return bounds, p, line_int, measure, success, Delta_Ar, guess
 
 
 
@@ -244,16 +246,21 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		fig.savefig(abspath(plot_fn), dpi=150)
 
 
-def output_profile(fname, pixnum, bounds, Delta_Ar):
+def output_profile(fname, pixnum, bounds, Delta_Ar, N_stars, line_int, measure, success):
 	'''
 	Append the reddening profile to the end of the binary file given by <fname>.
 	
 	Format - for each pixel:
 		pixnum		(uint64)
+		N_stars		(uint32)
+		measure		(float64)
+		success		(uint16)
 		N_regions	(uint16)
-		mu_anchors	(float64)
-		Ar_anchors	(float64)
+		line_int	(float64) x N_stars
+		mu_anchors	(float64) x (N_regions + 1)
+		Ar_anchors	(float64) x (N_regions + 1)
 	'''
+	
 	# Calculate reddening profile
 	N_regions = Delta_Ar.size
 	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
@@ -261,10 +268,13 @@ def output_profile(fname, pixnum, bounds, Delta_Ar):
 	for i in xrange(N_regions+1):
 		Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[:i])
 	
-	f = open(fname, 'wb')
-	f.seek(0, 2)	# Seek to end of file
+	# Append to end of file <fname>
+	f = open(fname, 'ab')
 	f.write(np.array([pixnum], dtype=np.uint64).tostring())
-	f.write(np.array([N_regions], dtype=np.uint16).tostring())
+	f.write(np.array([N_stars], dtype=np.uint32).tostring())
+	f.write(np.array([measure], dtype=np.float64).tostring())
+	f.write(np.array([success, N_regions], dtype=np.uint16).tostring())
+	f.write(line_int.tostring())
 	f.write(mu_anchors.tostring())
 	f.write(Ar_anchors.tostring())
 	f.close()
@@ -303,12 +313,13 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell)
+	bounds, p, line_int, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell)
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	
 	# Save the reddening profile to an ASCII file, or print to stdout
-	output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar)
+	N_stars = p.shape[0]
+	output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar, N_stars, line_int, measure, success)
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
 	if (values.plotfn != None) or values.show:

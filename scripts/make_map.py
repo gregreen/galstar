@@ -50,11 +50,23 @@ def load_reddening(fname):
 		while True:
 			try:
 				pix_index = np.fromfile(f, dtype=np.uint64, count=1)[0]
+				N_stars = np.fromfile(f, dtype=np.uint32, count=1)[0]
+				measure = np.fromfile(f, dtype=np.float64, count=1)[0]
+				success = np.fromfile(f, dtype=np.uint16, count=1)[0]
 				N_regions = np.fromfile(f, dtype=np.uint16, count=1)[0]
+				line_int = np.fromfile(f, dtype=np.float64, count=N_stars)
 				mu_anchors = np.fromfile(f, dtype=np.float64, count=N_regions+1)
 				Ar_anchors = np.fromfile(f, dtype=np.float64, count=N_regions+1)
-				print pix_index, N_regions
+				print 'pixel index: %d' % pix_index
+				print '# of stars: %d' % N_stars
+				print 'chisq: %.2f (%.2f / d.o.f.)' % (measure, measure / float(N_stars))
+				print 'success: %d' % success
+				print '# of regions: %d' % N_regions
+				print 'line integrals:'
+				print line_int
+				print 'mu anchors:'
 				print mu_anchors
+				print 'A_r anchors:'
 				print Ar_anchors
 				print ''
 			except:

@@ -22,6 +22,8 @@
 #       
 #       
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 import healpy as hp
 
@@ -124,8 +126,11 @@ def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=256):
 		n = 0
 		for j in xrange(1, len(mu_arr)):
 			if mu_arr[j] >= mu[n]:
-				slope = (mu_arr[j] - mu_arr[j-1]) / (Ar_arr[j] - Ar_arr[j-1])
-				Ar_map[n, pix_index[i]] = Ar_arr[j-1] + slope * (mu[n] - mu_arr[j-1])
+				slope = (Ar_arr[j] - Ar_arr[j-1]) / (mu_arr[j] - mu_arr[j-1])
+				Ar_map[n, pix_index[i]] = 1.#Ar_arr[j-1] + slope * (mu[n] - mu_arr[j-1])
+				#print '(%d --> %.3f)' % (pix_index[i], Ar_map[n, pix_index[i]])
+				#print '\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f' % (mu[n], mu_arr[j-1], mu_arr[j], Ar_arr[j-1], Ar_arr[j])
+				
 				n += 1
 				if n >= len(mu):
 					break
@@ -145,12 +150,14 @@ def main():
 	
 	mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(values.input)
 	
-	mu_eval = np.array([8., 12., 16.], dtype=np.float64)
+	mu_eval = np.array([8., 10., 12., 14., 16.], dtype=np.float64)
 	Ar_map = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval)
 	
 	#print Ar_map[0].shape
+	np.seterr(all='ignore')
 	
-	hp.visufunc.mollview(map=None, nest=True)
+	for i in xrange(Ar_map.shape[0]):
+		hp.visufunc.mollview(map=np.log(Ar_map[i]), nest=True, flip='geo', min=0., max=4.)
 	plt.show()
 	
 	#m = np.arange(hp.nside2npix(256))

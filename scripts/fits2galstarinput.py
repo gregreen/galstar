@@ -73,14 +73,14 @@ def main():
 	N_unique = np.unique(N_arr)
 	print '%d unique healpix pixel(s) present.' % N_unique.size
 	
-	# Open the tarball(s) which will gather all the output files
+	# Open the output files (which will be galstar .in files)
 	fout = None
 	if values.split < 1:
 		print '--split must be positive.'
 		return 1
 	if values.split > 1:
 		base = abspath(values.out)
-		if base[-3:] == '.in':
+		if base.endswith('.in'):
 			base = base[:-3]
 		fout = [open('%s_%d.in' % (base, i), 'wb') for i in range(values.split)]
 	else:
@@ -151,7 +151,6 @@ def main():
 		if N_stars == 0:
 			start = end
 			continue
-		#findex = randint(0, values.split-1)
 		findex = np.argmin(N_saved)
 		pix_index = np.array([N], dtype=np.uint32)
 		gal_lb = np.array([np.mean(d['l'][sel]), np.mean(d['b'][sel])], dtype=np.float64)
@@ -190,6 +189,7 @@ def main():
 		print '\t(l_min, l_max) = (%.3f, %.3f)' % (l_min, l_max)
 		print '\t(b_min, b_max) = (%.3f, %.3f)' % (b_min, b_max)
 	
+	# Show footprint of stored pixels on sky
 	if values.visualize:
 		hp.visufunc.mollview(map=pix_map, nest=(not values.ring), title='Footprint')
 		plt.show()

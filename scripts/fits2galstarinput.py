@@ -137,9 +137,9 @@ def main():
 		outarr = np.hstack((grizy, err)).astype(np.float64)
 		
 		# Mask stars with nondetection or infinite variance in any bandpass
-		#mask_nan = np.isfinite(np.sum(err, axis=1))
-		#mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
-		#outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
+		mask_nan = np.isfinite(np.sum(err, axis=1))
+		mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
+		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
 		if values.visualize:
 			pix_map[N] = 2.

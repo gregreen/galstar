@@ -53,7 +53,7 @@ def line_integral(Delta_y, img):
 	N_regions = Delta_y.shape[0]
 	N_samples = img.shape[1] / N_regions
 	
-	line_int_ret = np.zeros(N_images)
+	line_int_ret = np.zeros(N_images, dtype=np.float64)
 	code = """
 		double y = 0.;
 		double y_ceil, y_floor;
@@ -135,7 +135,7 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-4, regulator=10000.):
 # Maximize the line integral by simulated annealing
 def min_anneal(pdfs, N_regions=15, p0=1.e-5, regulator=10000., dwell=1000):
 	# Start with random guess
-	guess = np.log(0.5 * np.random.ranf(N_regions) * 2.* float(pdfs.shape[2])/float(N_regions))
+	guess = np.log(0.5 * np.random.ranf(N_regions) * 2.* float(pdfs.shape[2])/float(N_regions)).astype(np.float64)
 	
 	# Set bounds on step size in Delta_Ar
 	lower = np.empty(N_regions, dtype=np.float64)
@@ -263,8 +263,8 @@ def output_profile(fname, pixnum, bounds, Delta_Ar, N_stars, line_int, measure, 
 	
 	# Calculate reddening profile
 	N_regions = Delta_Ar.size
-	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
-	Ar_anchors = np.empty(N_regions+1, dtype=Delta_Ar.dtype)
+	mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1, dtype=np.float64)
+	Ar_anchors = np.empty(N_regions+1, dtype=np.float64)
 	for i in xrange(N_regions+1):
 		Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[:i])
 	

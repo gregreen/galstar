@@ -75,8 +75,8 @@ def load_reddening(fname):
 				Ar_anchors = np.fromfile(f, dtype=np.float64, count=N_regions+1)
 				
 				
-				print 'pixel index: %d' % pix_index
-				print '# of stars: %d' % N_stars
+				#print 'pixel index: %d' % pix_index
+				#print '# of stars: %d' % N_stars
 				'''
 				print 'chisq: %.2f (%.2f / d.o.f.)' % (measure, measure / float(N_stars - int(N_regions) - 1))
 				print 'success: %d' % success
@@ -130,19 +130,17 @@ def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=512):
 	
 	# Evaluate each pixel in the maps
 	for i, (mu_arr, Ar_arr) in enumerate(zip(mu_anchors, Ar_anchors)):
-		for n in xrange(len(mu)):
-			Ar_map[n, pix_index[i]-n] = 1.
-		#n = 0
-		#for j in xrange(1, len(mu_arr)):
-			#if mu_arr[j] >= mu[n]:
-				#slope = (Ar_arr[j] - Ar_arr[j-1]) / (mu_arr[j] - mu_arr[j-1])
-				#Ar_map[n, pix_index[i]] = Ar_arr[j-1] + slope * (mu[n] - mu_arr[j-1])
+		n = 0
+		for j in xrange(1, len(mu_arr)):
+			if mu_arr[j] >= mu[n]:
+				slope = (Ar_arr[j] - Ar_arr[j-1]) / (mu_arr[j] - mu_arr[j-1])
+				Ar_map[n, pix_index[i]] = Ar_arr[j-1] + slope * (mu[n] - mu_arr[j-1])
 				#print '(%d --> %.3f)' % (pix_index[i], Ar_map[n, pix_index[i]])
 				#print '\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f' % (mu[n], mu_arr[j-1], mu_arr[j], Ar_arr[j-1], Ar_arr[j])
 				
-				#n += 1
-				#if n >= len(mu):
-				#	break
+				n += 1
+				if n >= len(mu):
+					break
 	
 	return Ar_map
 

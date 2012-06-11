@@ -38,10 +38,11 @@ def main():
 	parser = argparse.ArgumentParser(prog='fits2galstarinput.py', description='Generate galstar input files from LSD fits output.', add_help=True)
 	parser.add_argument('FITS', type=str, help='FITS output from LSD.')
 	parser.add_argument('out', type=str, help='Output filename.')
-	parser.add_argument('-n', '--nside', type=int, default=256, help='healpix nside parameter (default: 128).')
+	parser.add_argument('-n', '--nside', type=int, default=512, help='healpix nside parameter (default: 512).')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering. If not specified, nested ordering is used.')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max')
 	parser.add_argument('-sp', '--split', type=int, default=1, help='Split into an arbitrary number of tarballs.')
+	parser.add_argument('-min', '--min_stars', type=int, default=15, help='Minimum # of stars in pixel.')
 	parser.add_argument('-vis', '--visualize', action='store_true', help='Show plot of footprint')
 	if 'python' in sys.argv[0]:
 		offset = 2
@@ -131,24 +132,45 @@ def main():
 		
 		sel = indices[start:end]
 		
+		#diff_tmp = N_arr[start+1:end] - N_arr[start:end-1]
+		#if np.sum(diff_tmp) != 0:
+		#	print diff_tmp
+		
 		# Get stars in this pixel
 		grizy = d['mean'][sel]
 		err = d['err'][sel]
-		outarr = np.hstack((grizy, err)).astype(np.float64)
+		
+		# Fix errors for stars with NaN or zero magnitude or error in any band
+		mask_zero_mag = (grizy == 0.)
+		mask_zero_err = (err == 0.)
+		mask_nan_mag = np.isnan(grizy)
+		mask_nan_err = np.isnan(err)
+		
+		grizy[mask_nan_mag] = 0.
+		err[mask_zero_err] = 1.e10
+		err[mask_nan_err] = 1.e10
+		err[mask_zero_mag] = 1.e10
+		
+		mask_detect = np.sum(grizy, axis=1).astype(np.bool)
+		mask_informative = (np.sum(err > 1.e10, axis=1) < 3).astype(np.bool)
+		mask_keep = np.logical_and(mask_detect, mask_informative)
+		
+		# Create the output matrix
+		outarr = np.hstack((grizy[mask_keep], err[mask_keep])).astype(np.float64)
+		
+		#if np.random.random() < 0.0002:
+		#	print mask_detect
+		#	print mask_informative
+		#	print ''
 		
 		# Mask stars with nondetection or infinite variance in any bandpass
-		mask_nan = np.isfinite(np.sum(err, axis=1))
-		mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
-		outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
-		
-		if values.visualize:
-			pix_map[N] = 2.
-			if outarr.shape[0] == 0:
-				pix_map[N] -= 1.
+		#mask_nan = np.isfinite(np.sum(err, axis=1))
+		#mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
+		#outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
 		
 		# Write Header
 		N_stars = np.array([outarr.shape[0]], np.uint32)
-		if N_stars == 0:
+		if N_stars < values.min_stars:
 			start = end
 			continue
 		findex = np.argmin(N_saved)
@@ -168,6 +190,10 @@ def main():
 			N_stars_min = outarr.shape[0]
 		if outarr.shape[0] > N_stars_max:
 			N_stars_max = outarr.shape[0]
+		if values.visualize:
+			pix_map[N] = outarr.shape[0]
+			#if outarr.shape[0] == 0:
+			#	pix_map[N] -= 1.
 		
 		start = end
 	
@@ -191,7 +217,7 @@ def main():
 	
 	# Show footprint of stored pixels on sky
 	if values.visualize:
-		hp.visufunc.mollview(map=pix_map, nest=(not values.ring), title='Footprint')
+		hp.visufunc.mollview(map=np.log(pix_map), nest=(not values.ring), title='Footprint', coord='G', xsize=5000)
 		plt.show()
 	
 	return 0

@@ -158,16 +158,6 @@ def main():
 		# Create the output matrix
 		outarr = np.hstack((grizy[mask_keep], err[mask_keep])).astype(np.float64)
 		
-		#if np.random.random() < 0.0002:
-		#	print mask_detect
-		#	print mask_informative
-		#	print ''
-		
-		# Mask stars with nondetection or infinite variance in any bandpass
-		#mask_nan = np.isfinite(np.sum(err, axis=1))
-		#mask_nondetect = np.logical_not(np.sum((grizy == 0), axis=1).astype(np.bool))
-		#outarr = outarr[np.logical_and(mask_nan, mask_nondetect)]
-		
 		# Write Header
 		N_stars = np.array([outarr.shape[0]], np.uint32)
 		if N_stars < values.min_stars:
@@ -192,8 +182,6 @@ def main():
 			N_stars_max = outarr.shape[0]
 		if values.visualize:
 			pix_map[N] = outarr.shape[0]
-			#if outarr.shape[0] == 0:
-			#	pix_map[N] -= 1.
 		
 		start = end
 	

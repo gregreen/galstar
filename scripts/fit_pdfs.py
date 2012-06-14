@@ -75,8 +75,15 @@ def line_integral(Delta_y, img):
 			if((int)y_ceil >= y_max) { break; }
 			if((int)y_floor < 0) { break; }
 		}
+		return_val = x;
 	"""
-	weave.inline(code, ['img', 'Delta_y', 'N_images', 'N_regions', 'N_samples', 'y_max', 'line_int_ret'], type_converters=weave.converters.blitz, compiler='gcc')
+	x = weave.inline(code, ['img', 'Delta_y', 'N_images', 'N_regions', 'N_samples', 'y_max', 'line_int_ret'], type_converters=weave.converters.blitz, compiler='gcc')
+	
+	#if np.random.random() < 0.001:
+	#	print x
+	
+	#if x > 120:
+	#	print x
 	
 	return line_int_ret
 
@@ -180,7 +187,7 @@ def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=15., algorithm='CR
 	lower = np.empty(N_regions+1, dtype=np.float64)
 	upper = np.empty(N_regions+1, dtype=np.float64)
 	lower.fill(0.)
-	upper.fill(min(float(pdfs.shape[2]), 1.2*np.max(guess)))
+	upper.fill(max(float(pdfs.shape[2]), 1.2*np.max(guess)))
 	opt.set_lower_bounds(lower)
 	opt.set_upper_bounds(upper)
 	
@@ -217,14 +224,14 @@ def min_brute(pdfs, guess, p0=1.e-5, regulator=10000.):
 	return np.exp(x), 0, measure
 
 
-def guess_measure(Delta_y, y_mean, y_err):
+def guess_measure(Delta_y, y_mean, y_err, weight):
 	y_profile = np.empty(Delta_y.size, np.float64)
 	y_profile[0] = Delta_y[0]
 	for i in xrange(1, Delta_y.size):
 		y_profile[i] = y_profile[i-1] + Delta_y[i]
 	y_profile -= y_mean
 	y_profile = np.divide(y_profile, y_err)
-	return np.sum(y_profile * y_profile)
+	return np.sum(weight * y_profile * y_profile)
 
 
 def gen_guess(pdfs, N_regions=15):
@@ -232,6 +239,7 @@ def gen_guess(pdfs, N_regions=15):
 	
 	y_mean = np.empty(N_regions+1, dtype=np.float64)
 	y_err = np.empty(N_regions+1, dtype=np.float64)
+	weight = np.empty(N_regions+1, dtype=np.float64)
 	
 	y_diag = np.diag(np.arange(pdfs_flat.shape[1]))
 	for i in xrange(N_regions):
@@ -243,15 +251,15 @@ def gen_guess(pdfs, N_regions=15):
 			x_1 = pdfs.shape[1]
 		
 		pdfs_slice = pdfs_flat[x_0:x_1,:]
-		norm = np.sum(pdfs_slice)
+		weight[i] = np.sum(pdfs_slice)
 		
 		pdfs_slice = np.dot(pdfs_slice, y_diag)
-		y_mean[i] = np.sum(pdfs_slice) / norm
+		y_mean[i] = np.sum(pdfs_slice) / weight[i]
 		
 		pdfs_slice = np.dot(pdfs_slice, y_diag)
-		y2_mean = np.sum(pdfs_slice) / norm
+		y2_mean = np.sum(pdfs_slice) / weight[i]
 		
-		if norm < 1.e-5:
+		if weight[i] < 1.e-5:
 			y_err[i] = np.inf
 		else:
 			y_err[i] = np.sqrt(y2_mean - y_mean[i]*y_mean[i])
@@ -278,7 +286,7 @@ def gen_guess(pdfs, N_regions=15):
 	opt.set_maxtime(5.)
 	
 	# Set the objective function
-	opt.set_min_objective(lambda x, grad: guess_measure(x, y_mean, y_err))
+	opt.set_min_objective(lambda x, grad: guess_measure(x, y_mean, y_err, weight))
 	
 	# Start with random guess
 	guess = 3.0 * (np.random.ranf(N_regions+1) * np.max(y_mean)/float(N_regions+1)).astype(np.float64)
@@ -314,6 +322,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	guess_fitness = nlopt_measure(guess, np.array([]), p, p0, regulator)
 	sys.stderr.write('Guess: %s\n' % np.array_str(guess, max_line_width=N_regions*100, precision=8))
 	sys.stderr.write('Guess measure: %.3f\n\n' % guess_fitness)
+	guess_line_int = line_integral(guess, p)
 	
 	# Fit reddening profile
 	x, success, measure = None, None, None
@@ -338,6 +347,8 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	N_outliers = np.sum(line_int == 0.)
 	N_softened = np.sum(line_int < p0)
 	
+	#print line_int - guess_line_int
+	
 	# Convert output into physical coordinates (rather than pixel coordinates)
 	Delta_Ar = x * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	guess *= ((bounds[3] - bounds[2]) / float(p.shape[2]))
@@ -360,20 +371,6 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 
 # Overplot reddening profile on stacked pdfs
 def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
-	# Calculate reddening profile
-	if type(Delta_Ar) is not list:
-		Delta_Ar = [Delta_Ar]
-	
-	mu_anchors = []
-	Ar_anchors = []
-	for n in xrange(len(Delta_Ar)):
-		N_regions = Delta_Ar[n].size - 1
-		mu_anchors.append(np.linspace(bounds[0], bounds[1], N_regions+1))
-		Ar_anchors.append(np.empty(N_regions+1, dtype=np.float64))
-		Ar_anchors[n][0] = bounds[2] + Delta_Ar[n][0]
-		for i in xrange(1, N_regions+1):
-			Ar_anchors[n][i] = bounds[2] + np.sum(Delta_Ar[n][:i])
-	
 	# Set matplotlib style attributes
 	mplib.rc('text',usetex=True)
 	mplib.rc('xtick.major', size=6)
@@ -388,8 +385,15 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	fig = plt.figure(figsize=(7,5), dpi=100)
 	ax = fig.add_subplot(1,1,1)
 	
-	# Plot the stacked pdfs
-	img = np.average(p, axis=0).T
+	# Stack pdfs
+	img = np.average(p, axis=0)
+	
+	# Determine maximum reddening present in pdfs
+	y_index_max = np.max(np.where(img > 0)[1])
+	max_Ar = y_index_max.astype(np.float64) / float(p.shape[2]) * (bounds[3] - bounds[2]) + bounds[2]
+	
+	# Plot stacked pdfs
+	img = img.T
 	img /= np.max(img, axis=0)
 	p0 = np.mean(img[img > 0])
 	img += p0 * np.exp(-img / p0)
@@ -407,16 +411,19 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		ax.plot(x, y, 'g.', linestyle='None', markersize=2, alpha=0.3)
 	
 	# Plot the line-of-sight reddening profile
-	max_Ar = -1.
-	for i in xrange(len(Delta_Ar)):
-		tmp_max = np.max(Ar_anchors[i])
-		if tmp_max > max_Ar:
-			max_Ar = tmp_max
-		
-		ax.plot(mu_anchors[i], Ar_anchors[i])
+	if type(Delta_Ar) is not list:
+		Delta_Ar = [Delta_Ar]
+	for n in xrange(len(Delta_Ar)):
+		N_regions = Delta_Ar[n].size - 1
+		mu_anchors = np.linspace(bounds[0], bounds[1], N_regions+1)
+		Ar_anchors = np.empty(N_regions+1, dtype=np.float64)
+		Ar_anchors[0] = bounds[2] + Delta_Ar[n][0]
+		for i in xrange(1, N_regions+1):
+			Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[n][:i])
+		ax.plot(mu_anchors, Ar_anchors)
 	
 	# Set axis limits and labels
-	y_max = min([bounds[3], 2.*max_Ar])
+	y_max = min([bounds[3], max_Ar])
 	ax.set_xlim(bounds[0], bounds[1])
 	ax.set_ylim(bounds[2], y_max)
 	ax.set_xlabel(r'$\mu$', fontsize=18)

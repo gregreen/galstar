@@ -277,7 +277,8 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 			filt_length++;
 		}
 	}
-	std::sort(sorted_indices.begin(), sorted_indices.end());
+	unsigned int npoints = (unsigned int)(chain_frac * (double)filt_length);
+	std::partial_sort(sorted_indices.begin(), sorted_indices.begin() + npoints, sorted_indices.end());
 	/*for(unsigned int i=0; i<20; i++) {
 		std::cout << sorted_indices[i].index << "\t" << sorted_indices[i].dist2 << std::endl;
 	}*/
@@ -286,7 +287,6 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 	// Determine <1/L> inside the prior volume
 	double sum_invL = 0.;
 	double tmp_invL;
-	unsigned int npoints = (unsigned int)(chain_frac * (double)filt_length);
 	double nsigma = sqrt(sorted_indices[npoints].dist2);
 	unsigned int tmp_index = sorted_indices[0].index;;
 	double L_0 = L[tmp_index];
@@ -427,7 +427,7 @@ bool TChain::save(std::string filename) const {
 	
 	out.close();
 	
-	bool stats_success = stats.write_binary(filename.c_str(), std::ios::app);
+	bool stats_success = stats.write_binary_old(filename.c_str(), std::ios::app);
 	
 	return stats_success;
 }

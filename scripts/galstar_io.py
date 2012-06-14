@@ -40,6 +40,7 @@ def load_stats(fname, selection=None):
 	
 	Output:
 		converged (numpy bool array) - whether or not each star converged
+		ln_evidence (numpy float64 array) - ln(Z) for each star, up to a constant
 		mean (numpy float64 array) - mean model parameters for each star
 		cov (numpy float64 array) - model-parameter covariance matrix for each star
 	'''
@@ -60,6 +61,7 @@ def load_stats(fname, selection=None):
 	
 	# Set up arrays to hold statistics
 	converged = np.empty(N, dtype=np.bool)
+	ln_evidence = np.empty(N, dtype=np.float64)
 	mean = np.empty((N, N_dim), dtype=np.float64)
 	cov = np.empty((N, N_dim*N_dim), dtype=np.float64)
 	
@@ -72,6 +74,7 @@ def load_stats(fname, selection=None):
 		
 		# Read in this star
 		converged[i] = np.fromfile(f, dtype=np.bool, count=1)[0]
+		ln_evidence[i] = np.fromfile(f, dtype=np.bool, count=1)[0]
 		mean[i] = np.fromfile(f, dtype=np.float64, count=N_dim)
 		cov[i] = np.fromfile(f, dtype=np.float64, count=N_dim*N_dim)
 		
@@ -84,7 +87,7 @@ def load_stats(fname, selection=None):
 	# Reshape the covariance array
 	cov.shape = (N, N_dim, N_dim)
 	
-	return converged, mean, cov
+	return converged, ln_evidence, mean, cov
 
 
 def load_bins(fname, sparse=True, selection=None):

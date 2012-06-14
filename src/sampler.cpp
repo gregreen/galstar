@@ -372,7 +372,7 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 }
 
 // N_threads	 # of parallel affine samplers to run
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
 	unsigned int max_rounds = 3;		// After <max_rounds> rounds, the Markov chains are terminated
@@ -420,10 +420,19 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		
 		sampler.print_stats();
 		
-		if(convergence) { stats = sampler.get_stats(); break; } else { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
+		if(!convergence) { std::cout << "Attempt " << n+1 << " failed." << std::endl << std::endl; }
 		
-		if(n+1 == max_attempts) {
+		if((n+1 == max_attempts) || convergence) {
 			stats = sampler.get_stats();
+			
+			evidence = sampler.get_chain().get_ln_Z_harmonic(true, 1e6, 0.1, 0.1);
+			for(unsigned int i=0; i<NBANDS; i++) {
+				evidence -= 0.918938533 + log(mag.err[i]);
+			}
+			evidence /= 10.;
+			std::cout << "ln(Z) = " << evidence << std::endl;
+			
+			break;
 		}
 	}
 	
@@ -446,7 +455,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 
 // Sample both dwarfs and giants
 // N_threads	 # of parallel affine samplers to run
-bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
 	unsigned int max_rounds = 5;		// After <max_rounds> rounds, the Markov chains are terminated
@@ -499,12 +508,19 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		if(giant_flag == 1) {
 			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			chain.append(tmp_chain, true, true, 1e6, 0.1, 0.01);	// Attach giant solution to dwarf solution, weighting each according to evidence
+			chain.append(tmp_chain, true, true, 1e6, 0.1, 0.001);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }
 		std::cout << std::endl;
 	}
+	
+	evidence = chain.get_ln_Z_harmonic(true, 1e6, 0.1, 0.1);
+	for(unsigned int i=0; i<NBANDS; i++) {
+		evidence -= 0.918938533 + log(mag.err[i]);
+	}
+	evidence /= 10.;
+	std::cout << "ln(Z) = " << evidence << std::endl;
 	
 	// Log the results
 	stats = chain.stats;

@@ -181,7 +181,6 @@ int main(int argc, char **argv) {
 	
 	// Construct data set /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	TStellarData data;
-	unsigned int N_stars = data.star.size();
 	if(!data.load_data_binary(infile, pix_index, errfloor)) {
 		cerr << "Failed to load data from " << infile << "." << endl;
 		return -1;
@@ -200,16 +199,18 @@ int main(int argc, char **argv) {
 	// Pass each star in turn to the sampling function
 	unsigned int count = 0;
 	unsigned int N_nonconverged = 0;
+	unsigned int N_stars = data.star.size();
 	for(vector<TStellarData::TMagnitudes>::iterator it = data.star.begin(); it != data.star.end(); ++it, ++count) {
 		// Calculate posterior for current star
 		cout << "=========================================" << endl;
 		cout << "Calculating posterior for star #" << count+1 << " of " << N_stars << endl << endl;
 		TStats stats(4);
 		bool converged;
+		double evidence;
 		if(giant_flag != 0) {
-			converged = sample_affine(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+			converged = sample_affine(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, N_threads);
 		} else {
-			converged = sample_affine_both(model, p, *it, multibinner, stats, N_samplers, N_steps, N_threads);
+			converged = sample_affine_both(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, N_threads);
 		}
 		if(!converged) { N_nonconverged++; }
 		
@@ -221,7 +222,7 @@ int main(int argc, char **argv) {
 		}
 		// Write out summary of statistics
 		if(statsfn != "NONE") {
-			bool write_success = stats.write_binary(statsfn, converged, append_to_file);
+			bool write_success = stats.write_binary(statsfn, converged, evidence, append_to_file);
 		}
 		multibinner.clear();
 	}

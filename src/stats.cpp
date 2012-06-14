@@ -229,7 +229,7 @@ bool TStats::write_binary_old(std::string fname, std::ios::openmode writemode) c
 }
 
 // Write statistics to binary file, possibly appending to existing file.
-bool TStats::write_binary(std::string fname, bool converged, bool append_to_file) const {
+bool TStats::write_binary(std::string fname, bool converged, double evidence, bool append_to_file) const {
 	// If writing to new file, delete file, if it already exists
 	if(!append_to_file) { std::remove(fname.c_str()); }
 	
@@ -261,6 +261,7 @@ bool TStats::write_binary(std::string fname, bool converged, bool append_to_file
 	
 	// Write whether converged
 	outfile.write(reinterpret_cast<char *>(&converged), sizeof(bool));
+	outfile.write(reinterpret_cast<char *>(&evidence), sizeof(double));
 	
 	// Write mean values
 	double tmp;

@@ -305,6 +305,7 @@ struct MCMCParams {
 	TStellarData &data;			// Contains stellar magnitudes
 	TModel &model;				// Contains galactic model information
 	double DM_min, DM_max;			// Minimum and maximum distance moduli for which to precompute various priors
+	double log_dn_norm;			// Normalization constant for P(DM) along this l.o.s.
 	#define DM_SAMPLES 10000
 	
 	// These two parameters are only used when fitting one star at a time
@@ -333,13 +334,20 @@ struct MCMCParams {
 		log_dn_arr = new TLinearInterp(DM_min, DM_max, DM_SAMPLES);
 		f_halo_arr = new TLinearInterp(DM_min, DM_max, DM_SAMPLES);
 		mu_disk_arr = new TLinearInterp(DM_min, DM_max, DM_SAMPLES);
-		double DM_i;
+		double DM_i, log_dn_tmp;
+		double log_dn_0 = model.log_dn(cos_l, sin_l, cos_b, sin_b, 13.);
+		log_dn_norm = 0.;
 		for(unsigned int i=0; i<DM_SAMPLES; i++) {
 			DM_i = log_dn_arr->get_x(i);
-			(*log_dn_arr)[i] = model.log_dn(cos_l, sin_l, cos_b, sin_b, DM_i);
+			log_dn_tmp = model.log_dn(cos_l, sin_l, cos_b, sin_b, DM_i);
+			(*log_dn_arr)[i] = log_dn_tmp;
 			(*f_halo_arr)[i] = model.f_halo(cos_l, sin_l, cos_b, sin_b, DM_i);
 			(*mu_disk_arr)[i] = model.mu_disk(cos_l, sin_l, cos_b, sin_b, DM_i);
+			log_dn_norm += exp(log_dn_tmp - log_dn_0);
 		}
+		log_dn_norm = log_dn_0 + log(log_dn_norm);
+		log_dn_norm += log((log_dn_arr->get_x(DM_SAMPLES-1) - log_dn_arr->get_x(0)) / DM_SAMPLES);
+		std::cout << "log_dn_norm = " << log_dn_norm << std::endl;
 		
 		// Set the giant flag to include both giants and dwarfs
 		giant_flag = 0;
@@ -359,8 +367,8 @@ struct MCMCParams {
 	}
 	
 	inline double log_dn_interp(const double DM) {
-		if((DM < DM_min) || (DM > DM_max)) { return model.log_dn(cos_l, sin_l, cos_b, sin_b, DM); std::cout << "DM = " << DM << " !!!!" << std::endl; }
-		return (*log_dn_arr)(DM);
+		if((DM < DM_min) || (DM > DM_max)) { return model.log_dn(cos_l, sin_l, cos_b, sin_b, DM) - log_dn_norm; std::cout << "DM = " << DM << " !!!!" << std::endl; }
+		return (*log_dn_arr)(DM) - log_dn_norm;
 	}
 	
 	inline double f_halo_interp(const double DM) {
@@ -381,8 +389,8 @@ struct MCMCParams {
 // Functions for individual star
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
-bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
 
 // Debugging functions
 void print_logpdf(TModel &model, double l, double b, TStellarData::TMagnitudes &mag, TStellarData &data, double (&m)[5], double (&err)[5], double DM, double Ar, double Mr, double FeH);

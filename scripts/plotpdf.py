@@ -35,7 +35,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 
 
 # Plot the given probability surfaces (p) to a single figure, saving if given a filename
-def plot_surfs(p, bounds, clip=None, shape=(3,2), fname=None, labels=None, converged=None):
+def plot_surfs(p, bounds, clip=None, shape=(3,2), fname=None, labels=None, converged=None, ln_evidence=None):
 	# Set up the figure
 	fig = plt.figure(figsize=(8.5,11.), dpi=100)
 	grid = ImageGrid(fig, 111, nrows_ncols=shape, axes_pad=0.2, share_all=True, aspect=False)
@@ -65,6 +65,13 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), fname=None, labels=None, conve
 				x, y = 0.95*xmax, 0.95*ymax
 				grid[i].text(x, y, '!', color='white', fontsize=24, horizontalalignment='right', verticalalignment='top')
 				#grid[i].scatter(x, y, color='r', s=10)
+	
+	# Write evidence for each star
+	if ln_evidence != None:
+		for i in xrange(N_plots):
+			xmax, ymax = grid[i].get_xlim()[1], grid[i].get_ylim()[1]
+			x, y = 0.95*xmax, 0.95*ymax
+			grid[i].text(x, y, '%.2g' % ln_evidence[i], color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
 	
 	if fname != None:
 		print 'Saving figure to %s ...' % fname
@@ -137,11 +144,11 @@ def main():
 			clip = list(bounds)
 			clip[3] = values.ymax
 		p = smooth_bins(p, values.smooth)
-		converged, mean, cov = load_stats(values.statsfn, selection)
+		converged, ln_evidence, mean, cov = load_stats(values.statsfn, selection)
 		#p[p == 0] = np.min(p[p != 0])
 		#p = np.log(p)
 		#p[np.logical_not(np.isfinite(p))] = np.min(p[np.isfinite(p)])
-		fig = plot_surfs(p, bounds, clip, values.rowcol, plotfn, labels, converged)
+		fig = plot_surfs(p, bounds, clip, values.rowcol, plotfn, labels, converged, ln_evidence)
 		if not values.show:
 			plt.close(fig)
 	

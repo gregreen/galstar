@@ -29,6 +29,7 @@ void TLF::load(const std::string &fn)
 	if(!in) { std::cerr << "Could not read LF from '" << fn << "'\n"; abort(); }
 
 	dMr = -1;
+	log_lf_norm = 0.;
 	lf.clear();
 
 	std::string line;
@@ -37,7 +38,7 @@ void TLF::load(const std::string &fn)
 	{
 		if(!line.size()) { continue; }		// empty line
 		if(line[0] == '#') { continue; }	// comment
-
+		
 		std::istringstream ss(line);
 		ss >> Mr >> Phi;
 		
@@ -48,10 +49,16 @@ void TLF::load(const std::string &fn)
 		}
 		
 		lf.push_back(log(Phi));
+		log_lf_norm += Phi;
 	}
 	
-	lf_interp = new TLinearInterp(Mr0, Mr0 + dMr*(lf.size()-1), lf.size());
+	double Mr1 = Mr0 + dMr*(lf.size()-1);
+	lf_interp = new TLinearInterp(Mr0, Mr1, lf.size());
 	for(unsigned int i=0; i<lf.size(); i++) { (*lf_interp)[i] = lf[i]; }
+	
+	log_lf_norm *= Mr1 / (double)(lf.size());
+	log_lf_norm = log(log_lf_norm
+);
 	
 	std::cerr << "# Loaded Phi(" << Mr0 << " <= Mr <= " <<  Mr0 + dMr*(lf.size()-1) << ") LF from " << fn << "\n";
 }
@@ -429,8 +436,8 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 			for(unsigned int i=0; i<NBANDS; i++) {
 				evidence -= 0.918938533 + log(mag.err[i]);
 			}
-			evidence /= 10.;
-			std::cout << "ln(Z) = " << evidence << std::endl;
+			evidence -= 2.3;	// Estimating effect of Ar prior
+			std::cout << "ln(Z) = " << evidence << std::endl << std::endl;
 			
 			break;
 		}
@@ -508,7 +515,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		if(giant_flag == 1) {
 			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			chain.append(tmp_chain, true, true, 1e6, 0.1, 0.001);	// Attach giant solution to dwarf solution, weighting each according to evidence
+			chain.append(tmp_chain, true, false, 1e6, 0.1, 0.2);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }
@@ -519,8 +526,8 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 	for(unsigned int i=0; i<NBANDS; i++) {
 		evidence -= 0.918938533 + log(mag.err[i]);
 	}
-	evidence /= 10.;
-	std::cout << "ln(Z) = " << evidence << std::endl;
+	evidence -= 2.3;	// Estimating effect of Ar prior
+	std::cout << "ln(Z) = " << evidence << std::endl << std::endl;
 	
 	// Log the results
 	stats = chain.stats;

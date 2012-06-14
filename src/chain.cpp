@@ -287,7 +287,7 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 	// Determine <1/L> inside the prior volume
 	double sum_invL = 0.;
 	double tmp_invL;
-	double nsigma = sqrt(sorted_indices[npoints].dist2);
+	double nsigma = sqrt(sorted_indices[npoints-1].dist2);
 	unsigned int tmp_index = sorted_indices[0].index;;
 	double L_0 = L[tmp_index];
 	//std::cout << "index_0 = " << sorted_indices[0].index << std::endl;

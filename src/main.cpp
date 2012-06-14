@@ -204,6 +204,9 @@ int main(int argc, char **argv) {
 		// Calculate posterior for current star
 		cout << "=========================================" << endl;
 		cout << "Calculating posterior for star #" << count+1 << " of " << N_stars << endl << endl;
+		for(unsigned int i=0; i<NBANDS; i++) {
+			cout << "m[" << i << "] = " << it->m[i] << " +- " << it->err[i] << endl;
+		}
 		TStats stats(4);
 		bool converged;
 		double evidence;

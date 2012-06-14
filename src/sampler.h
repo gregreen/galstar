@@ -91,15 +91,16 @@ struct TLF	// the luminosity function
 	double Mr0, dMr;
 	std::vector<double> lf;
 	TLinearInterp *lf_interp;
+	double log_lf_norm;
 
 	TLF(const std::string &fn) : lf_interp(NULL) { load(fn); }
 	~TLF() { delete lf_interp; }
 	
 	double operator()(double Mr) const	// return the LF at position Mr (linear interpolation)
 	{
-		return (*lf_interp)(Mr);
+		return (*lf_interp)(Mr) - log_lf_norm;
 	}
-
+	
 	void load(const std::string &fn);
 };
 
@@ -347,7 +348,6 @@ struct MCMCParams {
 		}
 		log_dn_norm = log_dn_0 + log(log_dn_norm);
 		log_dn_norm += log((log_dn_arr->get_x(DM_SAMPLES-1) - log_dn_arr->get_x(0)) / DM_SAMPLES);
-		std::cout << "log_dn_norm = " << log_dn_norm << std::endl;
 		
 		// Set the giant flag to include both giants and dwarfs
 		giant_flag = 0;

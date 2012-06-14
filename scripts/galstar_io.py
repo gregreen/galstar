@@ -66,7 +66,7 @@ def load_stats(fname, selection=None):
 	cov = np.empty((N, N_dim*N_dim), dtype=np.float64)
 	
 	# Read in statistics one at a time
-	block_size = 8 * (1 + 2 * N_dim * (N_dim + 1)) + 1
+	block_size = 8 * (2 + 2 * N_dim * (N_dim + 1)) + 1
 	offset = lambda index: 8 + block_size*index
 	for i,k in enumerate(indices):
 		# Seek to the position of the next selected star
@@ -74,7 +74,7 @@ def load_stats(fname, selection=None):
 		
 		# Read in this star
 		converged[i] = np.fromfile(f, dtype=np.bool, count=1)[0]
-		ln_evidence[i] = np.fromfile(f, dtype=np.bool, count=1)[0]
+		ln_evidence[i] = np.fromfile(f, dtype=np.float64, count=1)[0]
 		mean[i] = np.fromfile(f, dtype=np.float64, count=N_dim)
 		cov[i] = np.fromfile(f, dtype=np.float64, count=N_dim*N_dim)
 		

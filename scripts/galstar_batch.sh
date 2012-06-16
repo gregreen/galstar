@@ -50,7 +50,7 @@ for ((n=0; n<=$maxpix; n++)); do
 	# Run galstar with the current pixel
 	m=`expr $n + 1`
 	echo "$m of $npix: Running galstar on healpix pixel $pixindex..."
-	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,10,400] --statsfile $statsfn --infile $infile $n &> $outfn
+	$galstardir/galstar $binfn:DM[5,20,120],Ar[0,25,1000] --statsfile $statsfn --infile $infile $n --errfloor 20 &> $outfn
 	
 	# Archive output, removing temporary files
 	tar -rf $tarfn $binfn $statsfn

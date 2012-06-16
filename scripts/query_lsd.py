@@ -82,6 +82,11 @@ def reducer(keyvalue):
 	yield (pix_index, obj[mask_keep])
 
 
+def start_file(base_fname, index):
+	fout = open('%s_%d.in' % (base_fname, index), 'wb')
+	f.write(np.array([0], dtype=np.uint32).tostring())
+	return f
+
 
 def main():
 	parser = argparse.ArgumentParser(prog='query_lsd.py', description='Generate galstar input files from PanSTARRS data.', add_help=True)
@@ -89,7 +94,7 @@ def main():
 	parser.add_argument('out', type=str, help='Output filename.')
 	parser.add_argument('-n', '--nside', type=int, default=512, help='healpix nside parameter (default: 512).')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max.')
-	parser.add_argument('-sp', '--split', type=int, default=1, help='Split into an arbitrary number of tarballs.')
+	parser.add_argument('-fs', '--filesize', type=int, default=85000, help='Number of stars per input file (default: 85000).')
 	parser.add_argument('-min', '--min_stars', type=int, default=15, help='Minimum # of stars in pixel.')
 	parser.add_argument('-vis', '--visualize', action='store_true', help='Show plot of footprint.')
 	if 'python' in sys.argv[0]:
@@ -117,22 +122,14 @@ def main():
 	query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)"
 	query = db.query(query)
 	
-	# Open the output files (which will be galstar .in files)
-	fout = None
-	if values.split < 1:
-		print '--split must be positive.'
-		return 1
-	if values.split > 1:
-		base = abspath(values.out)
-		if base.endswith('.in'):
-			base = base[:-3]
-		fout = [open('%s_%d.in' % (base, i), 'wb') for i in range(values.split)]
-	else:
-		fout = [open(values.out, 'w')]
+	# Determine the base output filename (without the '.in' extension)
+	base_fname = abspath(values.out)
+	if base_fname.endswith('.in'):
+		base_fname = base_fname[:-3]
 	
 	# Keep track of number of stars saved to each file
-	N_pix_used = np.zeros(values.split, dtype=np.uint32)
-	N_saved = np.zeros(values.split, dtype=np.uint64)
+	N_pix_used = []
+	N_saved = []
 	N_stars_min = 1.e100
 	N_stars_max = -1.
 	
@@ -141,55 +138,72 @@ def main():
 	if values.visualize:
 		pix_map = np.zeros(12 * values.nside**2, dtype=np.uint64)
 	
-	# Leave space in each file to record the number of pixels
-	N_pix_used_str = N_pix_used.tostring()
-	for i,f in enumerate(fout):
-		f.write(N_pix_used_str[4*i:4*i+4])
+	f = None
+	findex = 0
+	N_stars_in_file = None
+	N_pix_in_file = None
 	
 	# Save each pixel to the file with the least number of stars
 	for (pix_index, obj) in query.execute([(mapper, values.nside, values.bounds), reducer], group_by_static_cell=True, bounds=query_bounds):
 		if len(obj) < values.min_stars:
 			continue
 		
+		# Open new file, if necessary
+		if f is None:
+			f = open('%s_%d.in' % (base_fname, findex), 'wb')
+			f.write(np.array([0], dtype=np.uint32).tostring())
+			findex += 1
+			N_stars_in_file = 0
+			N_pix_in_file = 0
+		
 		# Create the output matrix
 		outarr = np.hstack((obj['mean'], obj['err'])).astype(np.float64)
 		
-		# Write Header
-		N_stars = np.array([outarr.shape[0]], np.uint32)
-		findex = np.argmin(N_saved)
+		# Write pixel header
+		N_stars = np.array([outarr.shape[0]], dtype=np.uint32)
 		gal_lb = np.array([np.mean(obj['l']), np.mean(obj['l'])], dtype=np.float64)
-		fout[findex].write(np.array([pix_index], dtype=np.uint32).tostring())	# Pixel index	(uint32)
-		fout[findex].write(gal_lb.tostring())									# (l, b)		(2 x float64)
-		fout[findex].write(N_stars.tostring())									# N_stars		(uint32)
+		f.write(np.array([pix_index], dtype=np.uint32).tostring())	# Pixel index	(uint32)
+		f.write(gal_lb.tostring())									# (l, b)		(2 x float64)
+		f.write(N_stars.tostring())									# N_stars		(uint32)
 		
 		# Write magnitudes and errors
-		fout[findex].write(outarr.tostring())									# 5xmag, 5xerr	(10 x float64)
+		f.write(outarr.tostring())									# 5xmag, 5xerr	(10 x float64)
 		
 		# Record number of stars saved to pixel
-		N_pix_used[findex] += 1
-		N_saved[findex] += outarr.shape[0]
+		N_pix_in_file += 1
+		N_stars_in_file += outarr.shape
 		if outarr.shape[0] < N_stars_min:
 			N_stars_min = outarr.shape[0]
 		if outarr.shape[0] > N_stars_max:
 			N_stars_max = outarr.shape[0]
 		if values.visualize:
 			pix_map[N] = outarr.shape[0]
+		
+		# Close file, if number of stars saved to file exceeds specified number
+		if N_stars_in_file >= values.nstars:
+			f.seek(0)
+			f.write(np.array([N_pix_in_file], dtype=np.uint32).tostring())
+			f.close()
+			f = None
+			N_pix_used.append(N_pix_in_file)
+			N_saved.append(N_stars_in_file)
 	
-	# Return to beginning of each file and write number of pixels in file
-	N_pix_used_str = N_pix_used.tostring()
-	for i,f in enumerate(fout):
+	# Close file, if necessary
+	if f != None:
 		f.seek(0)
-		f.write(N_pix_used_str[4*i:4*i+4])
+		f.write(np.array([N_pix_in_file], dtype=np.uint32).tostring())
 		f.close()
+		N_pix_used.append(N_pix_in_file)
+		N_saved.append(N_stars_in_file)
 	
-	if np.sum(N_pix_used) != 0:
-		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (np.sum(N_saved), np.sum(N_pix_used), values.split, N_stars_min, N_stars_max, float(np.sum(N_saved))/float(np.sum(N_pix_used)))
+	if sum(N_pix_used) != 0:
+		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (sum(N_saved), sum(N_pix_used), findex, N_stars_min, N_stars_max, float(sum(N_saved))/float(sum(N_pix_used)))
 	else:
 		print 'No pixels in specified bounds.'
 	
 	# Show footprint of stored pixels on sky
 	if values.visualize:
-		hp.visufunc.mollview(map=np.log(pix_map), nest=(not values.ring), title='Footprint', coord='G', xsize=5000)
+		hp.visufunc.mollview(map=np.log(pix_map), nest=True, title='Footprint', coord='G', xsize=5000)
 		plt.show()
 	
 	return 0

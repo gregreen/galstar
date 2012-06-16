@@ -147,7 +147,7 @@ def main():
 		f.write(N_pix_used_str[4*i:4*i+4])
 	
 	# Save each pixel to the file with the least number of stars
-	for (pix_index, obj) in query.execute([(mapper, nside, bounds), reducer], group_by_static_cell=True, bounds=query_bounds):
+	for (pix_index, obj) in query.execute([(mapper, values.nside, values.bounds), reducer], group_by_static_cell=True, bounds=query_bounds):
 		if len(obj) < values.min_stars:
 			continue
 		

@@ -90,8 +90,7 @@ def start_file(base_fname, index):
 
 def main():
 	parser = argparse.ArgumentParser(prog='query_lsd.py', description='Generate galstar input files from PanSTARRS data.', add_help=True)
-	parser.add_argument('FITS', type=str, help='FITS output from LSD.')
-	parser.add_argument('out', type=str, help='Output filename.')
+	parser.add_argument('out', type=str, help='Base filename for output.')
 	parser.add_argument('-n', '--nside', type=int, default=512, help='healpix nside parameter (default: 512).')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max.')
 	parser.add_argument('-fs', '--filesize', type=int, default=85000, help='Number of stars per input file (default: 85000).')

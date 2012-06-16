@@ -46,13 +46,13 @@ def mapper(qresult, nside, bounds):
 		pix_indices = hp.ang2pix(nside, theta, phi, nest=False)
 		
 		# Group together stars having same index
-		for pix_index, block_indices in index_by_key(pix_indices):
+		for pix_index, block_indices in iterators.index_by_key(pix_indices):
 			# Filter out pixels by bounds
 			if bounds != None:
 				theta_0, phi_0 = hp.pix2ang(nside, pix_index, nest=False)
 				l_0 = 180./np.pi * phi_0
 				b_0 = 90. - 180./np.pi * theta_0
-				if (l_0 < values.bounds[0]) or (l_0 > values.bounds[1]) or (b_0 < values.bounds[2]) or (b_0 > values.bounds[3]):
+				if (l_0 < bounds[0]) or (l_0 > bounds[1]) or (b_0 < bounds[2]) or (b_0 > bounds[3]):
 					continue
 			
 			yield (pix_index, obj[block_indices])
@@ -108,9 +108,9 @@ def main():
 		query_bounds = []
 		query_bounds.append(0.)
 		query_bounds.append(360.)
-		pix_height = 90. / 2**np.sqrt(nside / 12)
-		query_bounds.append(max(-90., bounds[3] - 5.*pix_height))
-		query_bounds.append(min(90., bounds[3] + 5.*pix_height))
+		pix_height = 90. / 2**np.sqrt(values.nside / 12)
+		query_bounds.append(max(-90., values.bounds[3] - 5.*pix_height))
+		query_bounds.append(min(90., values.bounds[3] + 5.*pix_height))
 	else:
 		query_bounds = [0., 360., -90., 90.]
 	query_bounds = lsd.bounds.rectangle(query_bounds[0], query_bounds[2], query_bounds[1], query_bounds[3], coordsys='gal')
@@ -170,7 +170,7 @@ def main():
 		
 		# Record number of stars saved to pixel
 		N_pix_in_file += 1
-		N_stars_in_file += outarr.shape
+		N_stars_in_file += outarr.shape[0]
 		if outarr.shape[0] < N_stars_min:
 			N_stars_min = outarr.shape[0]
 		if outarr.shape[0] > N_stars_max:
@@ -179,7 +179,7 @@ def main():
 			pix_map[N] = outarr.shape[0]
 		
 		# Close file, if number of stars saved to file exceeds specified number
-		if N_stars_in_file >= values.nstars:
+		if N_stars_in_file >= values.filesize:
 			f.seek(0)
 			f.write(np.array([N_pix_in_file], dtype=np.uint32).tostring())
 			f.close()

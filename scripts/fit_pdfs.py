@@ -511,7 +511,8 @@ def main():
 	
 	# Save the reddening profile to an ASCII file, or print to stdout
 	N_stars = p.shape[0]
-	output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar, N_stars, line_int, measure, success)
+	if values.output != None:
+		output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar, N_stars, line_int, measure, success)
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
 	if values.plotfn != None:

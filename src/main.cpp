@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
 	string infile("NONE");
 	string statsfn("NONE");
 	string photometry = "PS";
-	double errfloor = 1.;
+	double errfloor = 20.;
 	bool sparse = true;
 	bool append = false;
 	unsigned int giant_flag = 0;

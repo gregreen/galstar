@@ -433,10 +433,13 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 			stats = sampler.get_stats();
 			
 			evidence = sampler.get_chain().get_ln_Z_harmonic(true, 1e6, 0.1, 0.1);
+			double L_norm = 0.;
 			for(unsigned int i=0; i<NBANDS; i++) {
-				evidence -= 0.918938533 + log(mag.err[i]);
+				if(mag.err[i] < 1.e9) {
+					L_norm += 0.918938533 + log(mag.err[i]);
+				}
 			}
-			evidence -= 2.3;	// Estimating effect of Ar prior
+			evidence -= 2.3 + L_norm;	// Estimating effect of Ar prior
 			std::cout << "ln(Z) = " << evidence << std::endl << std::endl;
 			
 			break;
@@ -515,19 +518,32 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		if(giant_flag == 1) {
 			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			chain.append(tmp_chain, true, false, 1e6, 0.1, 0.2);	// Attach giant solution to dwarf solution, weighting each according to evidence
+			evidence = chain.append(tmp_chain, true, false, 10., 0.1, 0.1);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }
 		std::cout << std::endl;
 	}
 	
-	evidence = chain.get_ln_Z_harmonic(true, 1e6, 0.1, 0.1);
+	// Calculate evidence
+	double L_norm = 0.;
 	for(unsigned int i=0; i<NBANDS; i++) {
-		evidence -= 0.918938533 + log(mag.err[i]);
+		if(mag.err[i] < 1.e9) {
+			L_norm += 0.918938533 + log(mag.err[i]);
+		}
 	}
-	evidence -= 2.3;	// Estimating effect of Ar prior
+	//evidence = chain.get_ln_Z_harmonic(true, 1e6, 0.1, 0.1);
+	evidence -= 2.3 + L_norm;	// Estimating effect of Ar prior
 	std::cout << "ln(Z) = " << evidence << std::endl << std::endl;
+	
+	// Calculate likelihood of max. likelihood point
+	/*double peak[4];
+	chain.density_peak(&(peak[0]) , 0.05);
+	double M[NBANDS];
+	FOR(0, NBANDS) { M[i] = p.m[i] - peak[_DM] - peak[_Ar]*p.model.Acoef[i]; }
+	TSED sed_bilin_interp = (*p.model.sed_interp)(peak[_Mr], peak[_FeH]);
+	double logL_peak = logL_SED(M, p.err, sed_bilin_interp) - L_norm;
+	std::cout << "ln(L_peak) = " << logL_peak << std::endl << std::endl;*/
 	
 	// Log the results
 	stats = chain.stats;

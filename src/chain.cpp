@@ -110,19 +110,20 @@ double TChain::get_w(unsigned int i) const {
 	return w[i];
 }
 
-void TChain::append(const TChain& chain, bool reweight, bool use_peak, double nsigma_max, double nsigma_peak, double chain_frac, double threshold) {
+double TChain::append(const TChain& chain, bool reweight, bool use_peak, double nsigma_max, double nsigma_peak, double chain_frac, double threshold) {
 	assert(chain.N == N);	// Make sure the two chains have the same dimensionality
 	
 	// Weight each chain according to Bayesian evidence, if requested
 	double a1 = 1.;
 	double a2 = 1.;
+	double lnZ = 0.;
 	if(reweight) {
 		double lnZ1 = chain.get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac);
 		double lnZ2 = get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac);
 		
 		if(lnZ2 > lnZ1) {
 			a2 = exp(lnZ1 - lnZ2) * total_weight / chain.total_weight;
-			if(isnan(a2)) {
+			/*if(isnan(a2)) {
 				std::cout << std::endl;
 				std::cout << "NaN Error: a2 = " << a2 << std::endl;
 				std::cout << "ln(Z1) = " << lnZ1 << std::endl;
@@ -130,10 +131,10 @@ void TChain::append(const TChain& chain, bool reweight, bool use_peak, double ns
 				std::cout << "total_weight = " << total_weight << std::endl;
 				std::cout << "chain.total_weight = " << chain.total_weight << std::endl;
 				std::cout << std::endl;
-			}
+			}*/
 		} else {
 			a1 = exp(lnZ2 - lnZ1) * chain.total_weight / total_weight;
-			if(isnan(a1)) {
+			/*if(isnan(a1)) {
 				std::cout << std::endl;
 				std::cout << "NaN Error: a1 = " << a1 << std::endl;
 				std::cout << "ln(Z1) = " << lnZ1 << std::endl;
@@ -141,8 +142,10 @@ void TChain::append(const TChain& chain, bool reweight, bool use_peak, double ns
 				std::cout << "total_weight = " << total_weight << std::endl;
 				std::cout << "chain.total_weight = " << chain.total_weight << std::endl;
 				std::cout << std::endl;
-			}
+			}*/
 		}
+		
+		lnZ = log(a1/(a1+a2) * exp(lnZ2) + a2/(a1+a2) * exp(lnZ1));
 	}
 	
 	if(reweight) { std::cout << "(a1, a2) = " << a1 << ", " << a2 << std::endl; }
@@ -189,11 +192,12 @@ void TChain::append(const TChain& chain, bool reweight, bool use_peak, double ns
 			if(chain.x_min[i] < x_min[i]) { x_min[i] = chain.x_min[i]; }
 		}
 	}
-	
 	//stats.clear();
 	//for(unsigned int i=0; i<length; i++) {
 	//	stats(get_element(i), 1.e10*w[i]);
 	//}
+	
+	return lnZ;
 }
 
 double* TChain::operator [](unsigned int i) {

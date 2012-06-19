@@ -109,7 +109,7 @@ def main():
 		query_bounds.append(0.)
 		query_bounds.append(360.)
 		pix_height = 90. / 2**np.sqrt(values.nside / 12)
-		query_bounds.append(max(-90., values.bounds[3] - 5.*pix_height))
+		query_bounds.append(max(-90., values.bounds[2] - 5.*pix_height))
 		query_bounds.append(min(90., values.bounds[3] + 5.*pix_height))
 	else:
 		query_bounds = [0., 360., -90., 90.]
@@ -142,8 +142,18 @@ def main():
 	N_stars_in_file = None
 	N_pix_in_file = None
 	
+	N_pix_total = 0
+	N_stars_total = 0
+	l_min = 1.e100
+	l_max = -1.e100
+	b_min = 1.e100
+	b_max = -1.e100
+	
 	# Save each pixel to the file with the least number of stars
 	for (pix_index, obj) in query.execute([(mapper, values.nside, values.bounds), reducer], group_by_static_cell=True, bounds=query_bounds):
+		N_pix_total += 1
+		N_stars_total += len(obj)
+		
 		if len(obj) < values.min_stars:
 			continue
 		
@@ -160,7 +170,15 @@ def main():
 		
 		# Write pixel header
 		N_stars = np.array([outarr.shape[0]], dtype=np.uint32)
-		gal_lb = np.array([np.mean(obj['l']), np.mean(obj['l'])], dtype=np.float64)
+		gal_lb = np.array([np.mean(obj['l']), np.mean(obj['b'])], dtype=np.float64)
+		if gal_lb[0] < l_min:
+			l_min = gal_lb[0]
+		if gal_lb[0] > l_max:
+			l_max = gal_lb[0]
+		if gal_lb[1] < b_min:
+			b_min = gal_lb[1]
+		if gal_lb[1] > b_max:
+			b_max = gal_lb[1]
 		f.write(np.array([pix_index], dtype=np.uint32).tostring())	# Pixel index	(uint32)
 		f.write(gal_lb.tostring())									# (l, b)		(2 x float64)
 		f.write(N_stars.tostring())									# N_stars		(uint32)
@@ -197,8 +215,16 @@ def main():
 	
 	if sum(N_pix_used) != 0:
 		print 'Saved %d stars from %d healpix pixels to %d galstar input file(s) (per pixel min: %d, max: %d, mean: %.1f).' % (sum(N_saved), sum(N_pix_used), findex, N_stars_min, N_stars_max, float(sum(N_saved))/float(sum(N_pix_used)))
+		print '# of stars in footprint: %d.' % N_stars_total
+		print '# of pixels in footprint: %d.' % N_pix_total
 	else:
 		print 'No pixels in specified bounds.'
+	
+	if (values.bounds != None) and (np.sum(N_pix_used) != 0):
+		print ''
+		print 'Bounds of included pixel centers:'
+		print '\t(l_min, l_max) = (%.3f, %.3f)' % (l_min, l_max)
+		print '\t(b_min, b_max) = (%.3f, %.3f)' % (b_min, b_max)
 	
 	# Show footprint of stored pixels on sky
 	if values.visualize:

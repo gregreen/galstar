@@ -44,6 +44,7 @@ partindex=1
 partsize=`expr $npix / $DIV`
 remainder=`expr $npix % $DIV`
 remainderused=0
+
 for binfile in $binfilelist; do
 	# Determine whether to process this pixel
 	if [ "$thispart" -gt "$partsize" ]; then
@@ -58,6 +59,7 @@ for binfile in $binfilelist; do
 			fi
 		else
 			partindex=`expr $partindex + 1`
+			thispart=1
 		fi
 	else
 		thispart=`expr $thispart + 1`

@@ -48,36 +48,56 @@ from galstarutils import get_objects
 # Compute the line integral through multiple images, stacked in <img>
 def line_integral(Delta_y, img):
 	# Determine the number of bins per piecewise linear region
-	if img.shape[1] % (Delta_y.shape[0] - 1) != 0:
+	N_regions = Delta_y.shape[0] - 1
+	if img.shape[1] % N_regions != 0:
 		raise Exception('Number of samples in mu (%d) not integer multiple of number of piecewise linear regions (%d).' % (img.shape[1], (Delta_y.shape[0] - 1)))
 	N_images = img.shape[0]
 	y_max = img.shape[2]
-	N_regions = Delta_y.shape[0] - 1
 	N_samples = img.shape[1] / N_regions
 	
 	line_int_ret = np.zeros(N_images, dtype=np.float64)
 	code = """
+		//double tmp = Delta_y(0);
 		double y = Delta_y(0);
-		double y_ceil, y_floor;
+		double y_ceil, y_floor, dy;
 		int x = 0;
+		
+		//if((int)verbose != -1) {
+		//	std::cout << "Delta_y = (";
+		//	for(int i=0; i<N_regions+1; i++) {
+		//		std::cout << 20./1000.*Delta_y(i) << (i < N_regions ? ", " : "");
+		//	}
+		//	std::cout << std::endl;
+		//}
+		
 		for(int i=0; i<N_regions; i++) {
-			double dy = (double)(Delta_y(i+1)) / (double)N_samples;
-			for(int j=0; j<N_samples; j++, x++) {
-				y += dy;
+			dy = (double)(Delta_y(i+1)) / (double)(N_samples);
+			//std::cout << "(" << x << ", " << y << ", " << tmp << ") ";
+			for(int j=0; j<N_samples; j++, x++, y+=dy) {
 				y_ceil = ceil(y);
 				y_floor = floor(y);
 				if((int)y_ceil >= y_max) { break; }
 				if((int)y_floor < 0) { break; }
 				for(int k=0; k<N_images; k++) {
 					line_int_ret(k) += (y_ceil - y) * img(k, x, (int)y_floor) + (y - y_floor) * img(k, x, (int)y_ceil);
+					//if((int)verbose == k) {
+					//	std::cout << "p(" << 5. + 15./120.*x << ", " << 20./1000.*y << ") = " << (y_ceil - y) * img(k, x, (int)y_floor) + (y - y_floor) * img(k, x, (int)y_ceil) << std::endl;
+					//}
 				}
 			}
+			//tmp += (double)(Delta_y(i+1));
 			if((int)y_ceil >= y_max) { break; }
 			if((int)y_floor < 0) { break; }
 		}
+		//std::cout << "(" << x << ", " << y << ", " << tmp << ") ";
+		//std::cout << std::endl;
 		return_val = x;
 	"""
 	x = weave.inline(code, ['img', 'Delta_y', 'N_images', 'N_regions', 'N_samples', 'y_max', 'line_int_ret'], type_converters=weave.converters.blitz, compiler='gcc')
+	
+	#print np.sum(Delta_y)
+	#if verbose != -1:
+	#	print ''
 	
 	#if np.random.random() < 0.001:
 	#	print x
@@ -97,8 +117,9 @@ def chi_leastsq(log_Delta_y, pdfs=None, p0=1.e-5, regulator=10000.):
 	measure = -2. * np.log(measure)
 	
 	# Disfavor larger values of ln(Delta_y) slightly
-	bias = 0.
-	measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	#bias = 0.
+	#measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
 	
 	return np.sqrt(measure)
 
@@ -125,13 +146,13 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-5, regulator=1000.):
 		raise ValueError('Delta_y contains NaN values.')
 	
 	measure = line_integral(Delta_y, pdfs)	# Begin with line integral through each stellar pdf
-	
 	measure += p0 * np.exp(-measure/p0)		# Soften around zero (measure -> positive const. below scale p0)
 	measure = -np.sum(np.log(measure))		# Sum logarithms of line integrals
 	
 	# Disfavor larger values of ln(Delta_y) slightly
-	bias = 0.
-	measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	#bias = 0.
+	#measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
 	
 	return measure
 
@@ -160,15 +181,19 @@ def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000.):
 		raise Exception('Gradient-free methods only, please!')
 	
 	#Delta_y = np.exp(log_Delta_y)
-	log_Delta_y = np.log(Delta_y)
 	
 	measure = line_integral(Delta_y, pdfs)	# Begin with line integral through each stellar pdf
 	measure += p0 * np.exp(-measure/p0)		# Soften around zero (measure -> positive const. below scale p0)
 	measure = -np.sum(np.log(measure))		# Sum logarithms of line integrals
 	
 	# Disfavor larger values of ln(Delta_y) slightly
-	bias = 0.
-	measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	#bias = 0.
+	#log_Delta_y = np.log(Delta_y)
+	#measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	#print np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
+	#print log_Delta_y[1:]
+	#print ''
+	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
 	
 	return measure
 
@@ -186,7 +211,7 @@ def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=15., algorithm='CR
 	# Set lower and upper bounds on Delta_Ar
 	lower = np.empty(N_regions+1, dtype=np.float64)
 	upper = np.empty(N_regions+1, dtype=np.float64)
-	lower.fill(0.)
+	lower.fill(1.e-10)
 	upper.fill(max(float(pdfs.shape[2]), 1.2*np.max(guess)))
 	opt.set_lower_bounds(lower)
 	opt.set_upper_bounds(upper)
@@ -196,8 +221,10 @@ def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=15., algorithm='CR
 		local_opt = nlopt.opt(nlopt.LN_COBYLA, N_regions+1)
 		local_opt.set_lower_bounds(lower)
 		local_opt.set_upper_bounds(upper)
+		local_opt.set_initial_step(15.)
 		opt.set_local_optimizer(local_opt)
 	
+	opt.set_initial_step(15.)
 	
 	# Set stopping conditions
 	opt.set_maxtime(maxtime)
@@ -237,32 +264,32 @@ def guess_measure(Delta_y, y_mean, y_err, weight):
 def gen_guess(pdfs, N_regions=15):
 	pdfs_flat = np.sum(pdfs, axis=0)
 	
+	y_weight = np.empty(pdfs_flat.shape, dtype=np.float64)
+	y2_weight = np.empty(pdfs_flat.shape, dtype=np.float64)
+	for i in xrange(pdfs_flat.shape[1]):
+		y_weight[:,i] = i * pdfs_flat[:,i]
+		y2_weight[:,i] = i*i * pdfs_flat[:,i]
+	mu_y = np.divide(np.sum(y_weight, axis=1), np.sum(pdfs_flat, axis=1))
+	mu_y2 = np.divide(np.sum(y2_weight, axis=1), np.sum(pdfs_flat, axis=1))
+	mu_y[np.isnan(mu_y)] = 0.
+	mu_y2[np.isnan(mu_y2)] = 0.
+	
 	y_mean = np.empty(N_regions+1, dtype=np.float64)
 	y_err = np.empty(N_regions+1, dtype=np.float64)
 	weight = np.empty(N_regions+1, dtype=np.float64)
 	
-	y_diag = np.diag(np.arange(pdfs_flat.shape[1]))
-	for i in xrange(N_regions):
+	for i in xrange(N_regions+1):
 		x_0 = int((float(i) - 0.5) * float(pdfs.shape[1]) / float(N_regions))
-		x_1 = int((float(i) + 1.5) * float(pdfs.shape[1]) / float(N_regions))
+		x_1 = int((float(i) + 0.5) * float(pdfs.shape[1]) / float(N_regions))
 		if x_0 < 0:
 			x_0 = 0
 		if x_1 >= pdfs.shape[1]:
 			x_1 = pdfs.shape[1]
 		
-		pdfs_slice = pdfs_flat[x_0:x_1,:]
-		weight[i] = np.sum(pdfs_slice)
-		
-		pdfs_slice = np.dot(pdfs_slice, y_diag)
-		y_mean[i] = np.sum(pdfs_slice) / weight[i]
-		
-		pdfs_slice = np.dot(pdfs_slice, y_diag)
-		y2_mean = np.sum(pdfs_slice) / weight[i]
-		
-		if weight[i] < 1.e-5:
-			y_err[i] = np.inf
-		else:
-			y_err[i] = np.sqrt(y2_mean - y_mean[i]*y_mean[i])
+		weight[i] = np.sum(pdfs_flat[x_0:x_1,:])
+		y_mean[i] = np.mean(mu_y[x_0:x_1])
+		y2_mean = np.mean(mu_y2[x_0:x_1])
+		y_err[i] = np.sqrt(y2_mean - y_mean[i]*y_mean[i])
 	
 	y_mean[~np.isfinite(y_mean)] = 0.
 	y_err[y_mean < 1.e-5] = np.inf
@@ -297,7 +324,12 @@ def gen_guess(pdfs, N_regions=15):
 	measure = opt.last_optimum_value()
 	success = opt.last_optimize_result()
 	
-	return x
+	x[(x < 1.e-5)] = 1.e-5
+	Delta_y_mean = np.empty(N_regions+1, dtype=np.float64)
+	Delta_y_mean[0] = y_mean[0]
+	Delta_y_mean[1:] = y_mean[1:] - y_mean[:-1]
+	
+	return x, Delta_y_mean
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
@@ -318,11 +350,15 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	
 	# Generate a guess based on the stacked pdfs
 	sys.stderr.write('Generating guess...\n')
-	guess = gen_guess(p, N_regions=N_regions)
+	guess, y_mean = gen_guess(p, N_regions=N_regions)
+	guess_Delta_Ar = guess * ((bounds[3] - bounds[2]) / float(p.shape[2]))
+	Delta_Ar_mean = y_mean * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	guess_fitness = nlopt_measure(guess, np.array([]), p, p0, regulator)
-	sys.stderr.write('Guess: %s\n' % np.array_str(guess, max_line_width=N_regions*100, precision=8))
+	sys.stderr.write('Guess: %s\n' % np.array_str(guess_Delta_Ar, max_line_width=N_regions*100, precision=8))
 	sys.stderr.write('Guess measure: %.3f\n\n' % guess_fitness)
 	guess_line_int = line_integral(guess, p)
+	#print guess_line_int
+	#print ''
 	
 	# Fit reddening profile
 	x, success, measure = None, None, None
@@ -347,11 +383,8 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	N_outliers = np.sum(line_int == 0.)
 	N_softened = np.sum(line_int < p0)
 	
-	#print line_int - guess_line_int
-	
 	# Convert output into physical coordinates (rather than pixel coordinates)
 	Delta_Ar = x * ((bounds[3] - bounds[2]) / float(p.shape[2]))
-	guess *= ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	
 	# Output basic information about fit
 	sys.stderr.write('Delta_Ar: %s\n' % np.array_str(Delta_Ar, max_line_width=N_regions*100, precision=8))
@@ -360,7 +393,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	sys.stderr.write('Extreme outliers: %d of %d\n' % (N_outliers, line_int.size))
 	sys.stderr.write('Outliers (below softening limit): %d of %d\n\n' % (N_softened, line_int.size))
 	
-	return bounds, p, line_int, measure, success, Delta_Ar, guess
+	return bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess_Delta_Ar, Delta_Ar_mean
 
 
 
@@ -395,10 +428,10 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	# Plot stacked pdfs
 	img = img.T
 	img /= np.max(img, axis=0)
-	p0 = np.mean(img[img > 0])
-	img += p0 * np.exp(-img / p0)
-	img = np.log(img)
-	img -= np.max(img, axis=0)
+	#p0 = np.mean(img[img > 0])
+	#img += p0 * np.exp(-img / p0)
+	#img = np.log(img)
+	#img -= np.max(img, axis=0)
 	img.shape = (1, p.shape[2], p.shape[1])
 	ax.imshow(img[0], extent=bounds, origin='lower', aspect='auto', cmap='hot')
 	
@@ -419,7 +452,7 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		Ar_anchors = np.empty(N_regions+1, dtype=np.float64)
 		Ar_anchors[0] = bounds[2] + Delta_Ar[n][0]
 		for i in xrange(1, N_regions+1):
-			Ar_anchors[i] = bounds[2] + np.sum(Delta_Ar[n][:i])
+			Ar_anchors[i] = Ar_anchors[i-1] + Delta_Ar[n][i]
 		ax.plot(mu_anchors, Ar_anchors)
 	
 	# Set axis limits and labels
@@ -432,6 +465,71 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	
 	if plot_fn != None:
 		fig.savefig(abspath(plot_fn), dpi=150)
+
+
+# Overplot reddening profile on stacked pdfs
+def plot_indiv(bounds, p, Delta_Ar, line_int):
+	# Set matplotlib style attributes
+	mplib.rc('text',usetex=True)
+	mplib.rc('xtick.major', size=6)
+	mplib.rc('xtick.minor', size=4)
+	mplib.rc('ytick.major', size=6)
+	mplib.rc('ytick.minor', size=4)
+	mplib.rc('xtick', direction='out')
+	mplib.rc('ytick', direction='out')
+	mplib.rc('axes', grid=False)
+	
+	# Determine the line-of-sight reddening profile
+	if type(Delta_Ar) is not list:
+		Delta_Ar = [Delta_Ar]
+	if type(line_int) is not list:
+		line_int = [line_int]
+	
+	mu_anchors = []
+	Ar_anchors = []
+	
+	for n, DAr in enumerate(Delta_Ar):
+		N_regions = Delta_Ar[n].size - 1
+		mu_anchors.append(np.linspace(bounds[0], bounds[1], N_regions+1))
+		Ar_anchors.append(np.empty(N_regions+1, dtype=np.float64))
+		Ar_anchors[-1][0] = bounds[2] + DAr[0]
+		for i in xrange(1, N_regions+1):
+			Ar_anchors[-1][i] = Ar_anchors[-1][i-1] + DAr[i]
+	
+	# Determine maximum reddening present in pdfs
+	img = np.average(p, axis=0)
+	y_index_max = np.max(np.where(img > 0)[1])
+	max_Ar = y_index_max.astype(np.float64) / float(p.shape[2]) * (bounds[3] - bounds[2]) + bounds[2]
+	y_max = min([bounds[3], max_Ar])
+	
+	# Plot pdf and reddening profile for each star
+	fig = None
+	x_text_left = bounds[0] + 0.05 * (bounds[1] - bounds[0])
+	x_text_right = bounds[0] + 0.9 * (bounds[1] - bounds[0])
+	y_text = bounds[2] + 0.95 * (y_max - bounds[2])
+	palette = ['b', 'g', 'r', 'c', 'y']
+	for i in xrange(p.shape[0]):
+		ax_index = (i % 6) + 1
+		if ax_index == 1:
+			fig = plt.figure(figsize=(8.5,11), dpi=100)
+		ax = fig.add_subplot(3, 2, ax_index)
+		ax.imshow(p[i].T, extent=bounds, origin='lower', aspect='auto', cmap='hot')
+		
+		for k, (mu, Ar) in enumerate(zip(mu_anchors, Ar_anchors)):
+			ax.plot(mu, Ar, palette[k])
+		
+		ax.text(x_text_left, y_text, r'$%d$' % i, color='w', fontsize=14, horizontalalignment='left', verticalalignment='top')
+		
+		for k, l_int in enumerate(line_int):
+			ax.text(x_text_right, y_text - k * 0.1 * (y_max - bounds[2]), r'$%.2g$' % l_int[i], color=palette[k], fontsize=14, horizontalalignment='right', verticalalignment='top')
+		
+		# Set axis limits and labels
+		ax.set_xlim(bounds[0], bounds[1])
+		ax.set_ylim(bounds[2], y_max)
+		ax.set_xlabel(r'$\mu$', fontsize=18)
+		ax.set_ylabel(r'$A_r$', fontsize=18)
+	
+	fig.show()
 
 
 def output_profile(fname, pixnum, bounds, Delta_Ar, N_stars, line_int, measure, success):
@@ -479,20 +577,21 @@ def main():
 	parser = argparse.ArgumentParser(prog='fit_pdfs.py', description='Fit line-of-sight reddening law from probability density functions of individual stars.', add_help=True)
 	parser.add_argument('binfn', type=str, help='File containing binned probability density functions for each star along l.o.s. (also accepts gzipped files)')
 	parser.add_argument('statsfn', type=str, help='File containing summary statistics for each star.')
-	parser.add_argument('-N', '--N', type=int, default=15, help='# of piecewise-linear regions in DM-Ar relation')
+	parser.add_argument('-N', '--N', type=int, default=20, help='# of piecewise-linear regions in DM-Ar relation (default: 20)')
 	parser.add_argument('-mtd', '--method', type=str, choices=('anneal', 'leastsq', 'brute', 'nlopt CRS', 'nlopt MLSL'), default='nlopt CRS', help='Optimization method (default: nlopt CRS)')
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out unconverged stars.')
-	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(1,1), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1 1).')
-	parser.add_argument('-reg', '--regulator', type=float, default=10000., help='Width of support of prior on ln(Delta_Ar) (default: 10000).')
+	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(2,2), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 2 2).')
+	parser.add_argument('-reg', '--regulator', type=float, default=1000., help='Width of support of prior on Delta_Ar (default: 1000).')
 	parser.add_argument('-o', '--outfn', type=str, nargs=2, default=None, help='Output filename for reddening profile and healpix pixel number.')
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-ovp', '--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
 	parser.add_argument('-dw', '--dwell', type=int, default=1000, help='dwell parameter for annealing algorithm. The higher the value, the greater the chance of convergence (default: 1000).')
-	parser.add_argument('-W', '--maxtime', type=float, default=15., help='Maximum walltime (in seconds) for NLopt routines (default: 15).')
+	parser.add_argument('-W', '--maxtime', type=float, default=25., help='Maximum walltime (in seconds) for NLopt routines (default: 25).')
 	parser.add_argument('-p0', '--floor', type=float, default=1.e-5, help='Floor on stellar line integrals (default: 1.e-5).')
-	parser.add_argument('-ev', '--evidence_range', type=float, default=15., help='Maximum difference in ln(evidence) from max. value before star is considered outlier (default: 15).')
+	parser.add_argument('-ev', '--evidence_range', type=float, default=25., help='Maximum difference in ln(evidence) from max. value before star is considered outlier (default: 25).')
 	parser.add_argument('-nsp', '--nonsparse', action='store_true', help='Binned pdfs are not stored in sparse format.')
+	parser.add_argument('-pltind', '--plot_individual', type=int, nargs=2, default=None, help='Plot individual pdfs with reddening profile.')
 	#parser.add_argument('-v', '--verbose', action='store_true', help='Print information on fit.')
 	if 'python' in sys.argv[0]:
 		offset = 2
@@ -505,20 +604,27 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, line_int, measure, success, Delta_Ar, guess = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, p0=values.floor, ev_range=values.evidence_range)
+	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, p0=values.floor, ev_range=values.evidence_range)
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	
 	# Save the reddening profile to an ASCII file, or print to stdout
 	N_stars = p.shape[0]
-	if values.output != None:
+	if values.outfn != None:
 		output_profile(values.outfn[0], int(values.outfn[1]), bounds, Delta_Ar, N_stars, line_int, measure, success)
+	
+	# Plot individual reddening profile
+	if values.plot_individual != None:
+		i1, i2 = values.plot_individual
+		if i2 < i1:
+			print 'Second index must be greater than first in option --plot-individual.'
+		plot_indiv(bounds, p[i1:i2], [guess, Delta_Ar], [guess_line_int[i1:i2], line_int[i1:i2]])
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
 	if values.plotfn != None:
 			sys.stderr.write('Plotting profile to %s ...\n' % values.plotfn)
 	if (values.plotfn != None) or values.show:
-		plot_profile(bounds, p, [guess, Delta_Ar], values.plotfn, values.overplot)
+		plot_profile(bounds, p, [guess, Delta_Ar, Delta_Ar_mean], values.plotfn, values.overplot)
 	if values.show:
 		plt.show()
 	

@@ -162,7 +162,7 @@ def main():
 	mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(values.input)
 	print '%d pixel(s) loaded.' % len(pix_index)
 	
-	mu_eval = np.array([5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.], dtype=np.float64)
+	mu_eval = np.array([6., 7., 8., 9., 10., 11., 12., 13., 14.], dtype=np.float64)
 	Ar_map = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=values.nside)
 	Ar_max = np.max(Ar_map)
 	Ar_map[(Ar_map == 0)] = np.inf
@@ -173,12 +173,13 @@ def main():
 	mplib.rc('text',usetex=True)
 	mplib.rc('axes', grid=False)
 	
-	fig = plt.figure(1, figsize=(7,5), dpi=150)
+	fig = plt.figure(1, figsize=(9,5), dpi=150)
 	center_gal = (values.lb_bounds == (0., 360., -90., 90.))
+	lb_bounds = list(values.lb_bounds)
 	for i in xrange(Ar_map.shape[0]):
 		print 'Plotting map at mu = %.1f ...' % mu_eval[i]
-		ax = fig.add_subplot(3, 4, i+1)
-		hputils.healmap_to_axes(ax, Ar_map[i], values.nside, size=values.size, center_gal=center_gal, lb_bounds=values.lb_bounds, vmin=0., vmax=Ar_max)
+		ax = fig.add_subplot(3, 3, i+1)
+		hputils.healmap_to_axes(ax, Ar_map[i], values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, vmin=0., vmax=Ar_max nest=False)
 		#hp.visufunc.mollview(map=Ar_map[i], nest=True, min=0., max=Ar_max, xsize=4000, fig=1, sub=(3,4,i+1), title=r'$\mu = %.1f$' % mu_eval[i], cbar=False)
 	#fig.subplots_adjust(left=0.05, right=0.8, bottom=0.1, top=0.9)
 	plt.show()

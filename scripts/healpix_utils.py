@@ -22,6 +22,8 @@
 #       
 #       
 
+# TODO: Change to nest=True if query_lsd.py is run again.
+
 import matplotlib.pyplot as plt
 import numpy as np
 import healpy as hp

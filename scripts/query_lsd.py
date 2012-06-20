@@ -43,13 +43,13 @@ def mapper(qresult, nside, bounds):
 		# Determine healpix index of each star
 		theta = np.pi/180. * (90. - obj['b'])
 		phi = np.pi/180. * obj['l']
-		pix_indices = hp.ang2pix(nside, theta, phi, nest=False)
+		pix_indices = hp.ang2pix(nside, theta, phi, nest=True)
 		
 		# Group together stars having same index
 		for pix_index, block_indices in iterators.index_by_key(pix_indices):
 			# Filter out pixels by bounds
 			if bounds != None:
-				theta_0, phi_0 = hp.pix2ang(nside, pix_index, nest=False)
+				theta_0, phi_0 = hp.pix2ang(nside, pix_index, nest=True)
 				l_0 = 180./np.pi * phi_0
 				b_0 = 90. - 180./np.pi * theta_0
 				if (l_0 < bounds[0]) or (l_0 > bounds[1]) or (b_0 < bounds[2]) or (b_0 > bounds[3]):

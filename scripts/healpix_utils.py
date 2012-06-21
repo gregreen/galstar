@@ -25,6 +25,7 @@
 # TODO: Change to nest=True if query_lsd.py is run again.
 
 import matplotlib.pyplot as plt
+import matplotlib as mplib
 import numpy as np
 import healpy as hp
 
@@ -75,13 +76,17 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 	liberally from Eddie Schlafly's util_efs.imshow.
 	
 	Input:
-	    ax         Axes to which to plot healpix map
-	    m          Healpix map
-	    nside      Healpix nside parameter
+	    ax         Axes to which to plot healpix map.
+	    m          Healpix map.
+	    nside      Healpix nside parameter.
 	    nest       True if map is stored in nested healpix ordering.
 	    lb_bounds  (l_min, l_max, b_min, b_max). Default: all l,b included.
 	    size       (x_size, y_size). # of pixels in each dimension.
-	    **kwargs   Additional parameters to pass to pyplot.imshow
+	    **kwargs   Additional parameters to pass to pyplot.imshow.
+	
+	Output:
+	    image      Image object returned by ax.imshow. This can be used,
+	               for example, to create a colorbar.
 	'''
 	
 	lb_bounds_internal = np.array(lb_bounds)
@@ -132,7 +137,9 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 		print "Ignoring option 'extent'."
 	kwargs['origin'] = 'lower'
 	kwargs['extent'] = lb_bounds_internal
-	ax.imshow(img.T, **kwargs)
+	image = ax.imshow(img.T, **kwargs)
+	
+	return image
 
 
 def main():
@@ -140,16 +147,30 @@ def main():
 	nest = True
 	npix = hp.pixelfunc.nside2npix(nside)
 	#m = np.arange(npix)
-	m = np.random.random(npix)
+	maps = np.random.random((6, npix))
 	
 	#hp.mollview(map=m)
 	#plt.show()
 	
 	#plt.clf()
 	
+	mplib.rc('text', usetex=True)
+	mplib.rc('axes', grid=False)
+	
 	fig = plt.figure(figsize=(7,5))
-	ax = fig.add_subplot(1,1,1)#, projection='mollweide')
-	healmap_to_axes(ax, m, nside, nest=nest, size=(5000,3000), center_gal=True, clip_on=False, lb_bounds=[0., 360., -90., 90.])
+	image = None
+	for i, m in enumerate(maps):
+		ax = fig.add_subplot(2,3,i+1)#, projection='mollweide')
+		y, x = np.unravel_index(i, (2,3))
+		if y != 1:
+			ax.set_xticklabels([])
+		if x != 0:
+			ax.set_yticklabels([])
+		image = healmap_to_axes(ax, m, nside, nest=nest, size=(500,300), center_gal=True, clip_on=False, lb_bounds=[0., 360., -90., 90.])
+	fig.subplots_adjust(wspace=0., hspace=0., right=0.88)
+	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+	cb = fig.colorbar(image, cax=cax)
+	
 	plt.show()
 	
 	return 0

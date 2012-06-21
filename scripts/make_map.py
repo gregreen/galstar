@@ -23,6 +23,7 @@
 #       
 
 import matplotlib as mplib
+import matplotlib.patheffects as PathEffects
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -155,25 +156,28 @@ def main():
 	parser.add_argument('-lb', '--lb_bounds', type=float, nargs=4, default=(0., 360., -90., 90.), help='(l_min, l_max, b_min, b_max).')
 	parser.add_argument('-mol', '--mollweide', action='store_true', help='Use Mollweide projection (incompatible with setting bounds on l and b).')
 	parser.add_argument('-sz', '--size', type=int, nargs=2, default=(500,200), help='Dimensions of each image: (xsize, ysize).')
+	parser.add_argument('-nst', '--nest', action='store_true', help='Maps are stored in nested ordering scheme.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
 	
+	# Load in pixels
 	mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(values.input)
 	print '%d pixel(s) loaded.' % len(pix_index)
 	
+	# Generate reddening map at a range of distances
 	mu_eval = np.array([6., 7., 8., 9., 10., 11., 12., 13., 14.], dtype=np.float64)
 	Ar_map = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=values.nside)
 	Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
 	print 'max. A_r: %.2f' % Ar_max
 	
 	np.seterr(all='ignore')
-	
-	mplib.rc('text',usetex=True)
+	mplib.rc('text', usetex=True)
 	mplib.rc('axes', grid=False)
 	
+	# Handle case where user wants Mollweide projection
 	lb_bounds = list(values.lb_bounds)
 	if values.mollweide and (values.lb_bounds != [0., 360., -90., 90.]):
 		lb_bounds[0] = 0.
@@ -184,14 +188,35 @@ def main():
 	
 	fig = plt.figure(1, figsize=(9,5), dpi=150)
 	center_gal = (lb_bounds == [0., 360., -90., 90.])
-	for i in xrange(Ar_map.shape[0]):
+	image = None
+	
+	for i, m in enumerate(Ar_map):
 		print 'Plotting map at mu = %.1f ...' % mu_eval[i]
+		
+		# Plot reddening at this distance modulus
 		ax = None
 		if values.mollweide:
 			ax = fig.add_subplot(3, 3, i+1, projection='mollweide')
 		else:
 			ax = fig.add_subplot(3, 3, i+1)
-		hputils.healmap_to_axes(ax, Ar_map[i], values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, nest=False, vmin=0., vmax=Ar_max)
+			y, x = np.unravel_index(i, (3,3))
+			if y != 2:
+				ax.set_xticklabels([])
+			if x != 0:
+				ax.set_yticklabels([])
+		image = hputils.healmap_to_axes(ax, m, values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, nest=values.nest, vmin=0., vmax=Ar_max)
+		
+		# Label images
+		x_min, x_max = ax.get_xlim()
+		y_min, y_max = ax.get_ylim()
+		x, y = x_min + 0.95*(x_max - x_min), y_min + 0.95*(y_max - y_min)
+		txt = ax.text(x, y, r'$\mu = %.1f$' % mu_eval[i], color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
+		txt.set_path_effects([PathEffects.withStroke(linewidth=1, foreground='k')])
+	
+	fig.subplots_adjust(wspace=0., hspace=0., right=0.88)
+	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+	cb = fig.colorbar(image, cax=cax)
+	
 	plt.show()
 	
 	return 0

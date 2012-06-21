@@ -84,11 +84,13 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 	    **kwargs   Additional parameters to pass to pyplot.imshow
 	'''
 	
+	lb_bounds_internal = np.array(lb_bounds)
+	
 	# Make grid of pixels to plot
 	xsize, ysize = size
 	l, b = np.mgrid[0:xsize, 0:ysize].astype(np.float32) + 0.5
-	l = lb_bounds[0] + (lb_bounds[1] - lb_bounds[0]) * l / float(xsize)
-	b = lb_bounds[2] + (lb_bounds[3] - lb_bounds[2]) * b / float(ysize)
+	l = lb_bounds[0] + (lb_bounds_internal[1] - lb_bounds_internal[0]) * l / float(xsize)
+	b = lb_bounds[2] + (lb_bounds_internal[3] - lb_bounds_internal[2]) * b / float(ysize)
 	theta, phi = lb2thetaphi(l, b)
 	del l, b
 	
@@ -97,15 +99,26 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 	img = m[pix]
 	del pix
 	img.shape = (xsize, ysize)
+	
+	# Center map on l=0
 	if center_gal:
 		phi[phi >= 360.] -= 360.
 		shift = int(np.round(ysize/2. - np.unravel_index(np.argmin(np.abs(phi)), img.shape)[0]))
 		np.roll(img, shift, axis=0)
-		lb_bounds[0] -= 180.
-		lb_bounds[1] -= 180.
+		lb_bounds_internal[0] -= 180.
+		lb_bounds_internal[1] -= 180.
 	
-	# Plot to axes provided
-	if 'interpolation' not in kwargs:
+	# Handle special case where the axes use the Mollweide projection
+	if ax.name == 'mollweide':
+		if not center_gal:
+			lb_bounds_internal[0] -= 180.
+			lb_bounds_internal[1] -= 180.
+		if (np.abs(lb_bounds_internal[0] + 180.) > 0.001) or (np.abs(lb_bounds_internal[1] - 180.) > 0.001) or (np.abs(lb_bounds_internal[2] + 90.) > 0.001) or (np.abs(lb_bounds_internal[3] - 90.) > 0.001):
+			print 'Warning: Mollweide projection requires lb_bounds = (0., 360., -90., 90.).'
+		lb_bounds_internal = list(deg2rad(np.array(lb_bounds_internal)))
+	
+	# Plot to given axes
+	if (ax.name != 'mollweide') and ('interpolation' not in kwargs):
 		kwargs['interpolation'] = 'nearest'
 	if 'vmin' not in kwargs:
 		kwargs['vmin'] = np.min(img[np.isfinite(img)])
@@ -118,23 +131,25 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 	if 'extent' in kwargs:
 		print "Ignoring option 'extent'."
 	kwargs['origin'] = 'lower'
-	kwargs['extent'] = lb_bounds
+	kwargs['extent'] = lb_bounds_internal
 	ax.imshow(img.T, **kwargs)
 
 
 def main():
 	nside = 4
+	nest = True
 	npix = hp.pixelfunc.nside2npix(nside)
-	m = np.arange(npix)
+	#m = np.arange(npix)
+	m = np.random.random(npix)
 	
-	hp.mollview(map=m)
+	#hp.mollview(map=m)
 	#plt.show()
 	
 	#plt.clf()
 	
 	fig = plt.figure(figsize=(7,5))
-	ax = fig.add_subplot(2,1,1)
-	healmap_to_axes(ax, m, nside, nest=False, size=(5000,100), center_gal=True)#, lb_bounds=[0., 360., -30., 30.])
+	ax = fig.add_subplot(1,1,1)#, projection='mollweide')
+	healmap_to_axes(ax, m, nside, nest=nest, size=(5000,3000), center_gal=True, clip_on=False, lb_bounds=[0., 360., -90., 90.])
 	plt.show()
 	
 	return 0

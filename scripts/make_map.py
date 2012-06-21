@@ -122,7 +122,8 @@ def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=512):
 		raise Exception('mu_anchors and pix_index must contain same # of elements.')
 	
 	# Create an empty map for each value of mu
-	Ar_map = np.zeros((len(mu), 12*nside*nside), dtype=np.float64)
+	Ar_map = np.empty((len(mu), 12*nside*nside), dtype=np.float64)
+	Ar_map.fill(np.inf)
 	
 	# Sort the elements in mu
 	if len(mu) == 0:
@@ -152,6 +153,7 @@ def main():
 	parser.add_argument('-n', '--nside', type=int, default=512, help='Healpix nside parameter.')
 	parser.add_argument('-o', '--output', type=str, help='Output filename (of type FITS) for reddening map.')
 	parser.add_argument('-lb', '--lb_bounds', type=float, nargs=4, default=(0., 360., -90., 90.), help='(l_min, l_max, b_min, b_max).')
+	parser.add_argument('-mol', '--mollweide', action='store_true', help='Use Mollweide projection (incompatible with setting bounds on l and b).')
 	parser.add_argument('-sz', '--size', type=int, nargs=2, default=(500,200), help='Dimensions of each image: (xsize, ysize).')
 	if 'python' in sys.argv[0]:
 		offset = 2
@@ -164,8 +166,7 @@ def main():
 	
 	mu_eval = np.array([6., 7., 8., 9., 10., 11., 12., 13., 14.], dtype=np.float64)
 	Ar_map = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=values.nside)
-	Ar_max = np.max(Ar_map)
-	Ar_map[(Ar_map == 0)] = np.inf
+	Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
 	print 'max. A_r: %.2f' % Ar_max
 	
 	np.seterr(all='ignore')
@@ -173,15 +174,24 @@ def main():
 	mplib.rc('text',usetex=True)
 	mplib.rc('axes', grid=False)
 	
-	fig = plt.figure(1, figsize=(9,5), dpi=150)
-	center_gal = (values.lb_bounds == (0., 360., -90., 90.))
 	lb_bounds = list(values.lb_bounds)
+	if values.mollweide and (values.lb_bounds != [0., 360., -90., 90.]):
+		lb_bounds[0] = 0.
+		lb_bounds[1] = 360.
+		lb_bounds[2] = -90.
+		lb_bounds[3] = 90.
+		print 'Ignoring option --lb_bounds, as it is incompatible with --mollweide.'
+	
+	fig = plt.figure(1, figsize=(9,5), dpi=150)
+	center_gal = (lb_bounds == [0., 360., -90., 90.])
 	for i in xrange(Ar_map.shape[0]):
 		print 'Plotting map at mu = %.1f ...' % mu_eval[i]
-		ax = fig.add_subplot(3, 3, i+1)
-		hputils.healmap_to_axes(ax, Ar_map[i], values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, vmin=0., vmax=Ar_max nest=False)
-		#hp.visufunc.mollview(map=Ar_map[i], nest=True, min=0., max=Ar_max, xsize=4000, fig=1, sub=(3,4,i+1), title=r'$\mu = %.1f$' % mu_eval[i], cbar=False)
-	#fig.subplots_adjust(left=0.05, right=0.8, bottom=0.1, top=0.9)
+		ax = None
+		if values.mollweide:
+			ax = fig.add_subplot(3, 3, i+1, projection='mollweide')
+		else:
+			ax = fig.add_subplot(3, 3, i+1)
+		hputils.healmap_to_axes(ax, Ar_map[i], values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, nest=False, vmin=0., vmax=Ar_max)
 	plt.show()
 	
 	return 0

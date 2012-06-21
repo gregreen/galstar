@@ -45,8 +45,6 @@ for ((n=0; n<=$maxpix; n++)); do
 	statsfn="$pixindex.stats"
 	binfn="${pixindex}_DM_Ar.dat"
 	
-	echo $binfn
-	
 	# Run galstar with the current pixel
 	m=`expr $n + 1`
 	echo "$m of $npix: Running galstar on healpix pixel $pixindex..."

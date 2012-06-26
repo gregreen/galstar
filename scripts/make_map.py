@@ -36,6 +36,7 @@ import sys, argparse
 from os.path import abspath
 
 import healpix_utils as hputils
+import iterators
 
 
 def load_reddening(fname):
@@ -112,7 +113,7 @@ def load_reddening(fname):
 	return mu_anchors_list, Ar_anchors_list, np.array(pix_index_list, dtype=np.uint64), np.array(chi2dof_list, dtype=np.float64)
 
 
-def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=512):
+def eval_Ar_old(mu_anchors, Ar_anchors, pix_index, mu, nside=512):
 	if type(mu_anchors) is not list:
 		mu_anchors = [mu_anchors]
 	if type(Ar_anchors) is not list:
@@ -146,6 +147,55 @@ def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=512):
 					break
 	
 	return Ar_map
+
+
+def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=512):
+	if type(mu_anchors) is not list:
+		mu_anchors = [mu_anchors]
+	if type(Ar_anchors) is not list:
+		Ar_anchors = [Ar_anchors]
+	if len(mu_anchors) != len(Ar_anchors):
+		raise Exception('mu_anchors and Ar_anchors must contain same # of elements.')
+	if len(mu_anchors) != len(pix_index):
+		raise Exception('mu_anchors and pix_index must contain same # of elements.')
+	
+	# Create an empty map for each value of mu
+	Ar_map = np.empty((len(mu_eval), 12*nside*nside), dtype=np.float64)
+	Ar_map.fill(np.inf)
+	
+	# Sort the elements in mu
+	if len(mu_eval) == 0:
+		mu_eval = [mu_eval]
+	mu_eval.sort()
+	
+	# Evaluate each pixel in the maps
+	for mu_arr, indices in iterators.index_by_unsortable_key(mu_anchors):
+		Ar_arr = np.empty((len(mu_arr), len(indices)), dtype=np.float64)
+		for i in indices:
+			Ar_arr[:,i] = Ar_anchors[i]
+		
+		n = 0
+		j = 1
+		pix = pix_index[indices]
+		while j <= len(mu_arr):
+			if mu_arr[j] >= mu_eval[n]:
+				slope = (Ar_arr[j] - Ar_arr[j-1]) / (mu_arr[j] - mu_arr[j-1])
+				Ar_map[n, pix] = Ar_arr[j-1] + slope * (mu_eval[n] - mu_arr[j-1])
+				
+				#print '%.3f <= %.3f <= %.3f' % (mu_arr[j-1], mu_eval[n], mu_arr[j])
+				#print 'Delta_mu = %.3g' % (mu_eval[n] - mu_arr[j-1])
+				#print 'slope:'
+				#print slope
+				#print ''
+				
+				n += 1
+				if n >= len(mu_eval):
+					break
+			else:
+				j += 1
+	
+	return Ar_map
+
 
 
 def write_maps(fname, maps, mu, nest=False):
@@ -225,7 +275,7 @@ def main():
 	print 'max. A_r: %.2f' % Ar_max
 	
 	if values.diff:
-		Ar_map[1:,:] -= Ar_map[:-1,:]
+		Ar_map[1:,:] = Ar_map[1:,:] - Ar_map[:-1,:]
 		Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
 	
 	# Handle case where user wants Mollweide projection
@@ -269,8 +319,14 @@ def main():
 		txt = ax.text(x, y, r'$\mu = %.2f$' % mu_eval[i], color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
 		txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='k')])
 	
+	# Add title
+	if values.diff:
+		fig.suptitle(r'$\Delta A_r$', fontsize=20, y=0.95)
+	else:
+		fig.suptitle(r'$A_r$', fontsize=20, y=0.95)
+	
 	# Add colorbar
-	fig.subplots_adjust(wspace=0., hspace=0., right=0.88)
+	fig.subplots_adjust(wspace=0., hspace=0., right=0.88, top=0.9)
 	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
 	cb = fig.colorbar(image, cax=cax)
 	

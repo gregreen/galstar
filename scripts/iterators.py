@@ -58,7 +58,8 @@ class data_by_key(object):
 
 
 class index_by_key(object):
-	'''Returns sets of indices referring to each value of the key, in ascending order of key value.'''
+	'''Returns sets of indices referring to each value of the key,
+	in ascending order of key value.'''
 	
 	def __init__(self, key):
 		self.indices = key.argsort()
@@ -87,6 +88,29 @@ class index_by_key(object):
 			return block_key, block_indices
 
 
+class index_by_unsortable_key(object):
+	'''Returns sets of indices referring to each value of the key,
+	where the key is not sortable (does not admit < or > operators).'''
+	
+	def __init__(self, key):
+		self.key = key
+		self.unused = np.ones(len(key), dtype=np.bool)
+	
+	def __iter__(self):
+		return self
+	
+	def next(self):
+		if np.all(~self.unused):
+			raise StopIteration
+		else:
+			block_indices = []
+			unused_indices = np.where(self.unused)[0]
+			for i in unused_indices:
+				if np.all(self.key[i] == self.key[unused_indices[0]]):
+					block_indices.append(i)
+					self.unused[i] = False
+			return self.key[unused_indices[0]], block_indices
+
 
 
 def main():
@@ -95,6 +119,15 @@ def main():
 	
 	for key, block_indices in index_by_key(x):
 		print key, y[block_indices]
+	
+	print ''
+	
+	x = [np.array([1,2,3]), np.array([2,3,4]), np.array([1,2,3]), np.array([4,6,-1]), np.array([4,6,-1]), np.array([4,6,-2]), np.array([1,2,3])]
+	y = np.array([1, 2, 3, 4, 5, 6, 7])
+	for key, block_indices in index_by_unsortable_key(x):
+		print key, y[block_indices]
+	
+	print ''
 	
 	return 0
 

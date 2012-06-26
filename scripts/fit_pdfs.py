@@ -199,7 +199,7 @@ def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000.):
 
 
 # Maximize the line integral using an algorithm from NLopt
-def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=15., algorithm='CRS'):
+def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=25., maxeval=10000, algorithm='CRS'):
 	N_regions = guess.size - 1
 	
 	opt = None
@@ -228,6 +228,7 @@ def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=15., algorithm='CR
 	
 	# Set stopping conditions
 	opt.set_maxtime(maxtime)
+	opt.set_maxeval(maxeval)
 	#opt.set_xtol_abs(0.1)
 	
 	# Set the objective function
@@ -310,7 +311,7 @@ def gen_guess(pdfs, N_regions=15):
 	opt.set_local_optimizer(local_opt)
 	
 	# Set stopping conditions
-	opt.set_maxtime(5.)
+	opt.set_maxtime(2.)
 	
 	# Set the objective function
 	opt.set_min_objective(lambda x, grad: guess_measure(x, y_mean, y_err, weight))
@@ -333,7 +334,7 @@ def gen_guess(pdfs, N_regions=15):
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000, maxtime=15., p0=1.e-5, ev_range=5.):
+def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000, maxtime=25., maxeval=10000, p0=1.e-5, ev_range=25.):
 	# Load pdfs
 	sys.stderr.write('Loading binned pdfs...\n')
 	bounds, p = None, None
@@ -373,10 +374,10 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 		x, success, measure = min_brute(p, guess, p0=p0, regulator=regulator)
 	elif method == 'nlopt MLSL':
 		sys.stderr.write('Fitting reddening profile using NLopt (nlopt.G_MLSL_LDS with local optimizer nlopt.LN_COBYLA)...\n')
-		x, success, measure = min_nlopt(p, guess, p0=p0, regulator=regulator, maxtime=maxtime, algorithm='MLSL')
+		x, success, measure = min_nlopt(p, guess, p0=p0, regulator=regulator, maxtime=maxtime, maxeval=maxeval, algorithm='MLSL')
 	elif method == 'nlopt CRS':
 		sys.stderr.write('Fitting reddening profile using NLopt (nlopt.GN_CRS2_LM)...\n')
-		x, success, measure = min_nlopt(p, guess, p0=p0, regulator=regulator, maxtime=maxtime, algorithm='CRS')
+		x, success, measure = min_nlopt(p, guess, p0=p0, regulator=regulator, maxtime=maxtime, maxeval=maxeval, algorithm='CRS')
 	
 	measure = nlopt_measure(x, np.array([]), p, p0, regulator)
 	line_int = line_integral(x, p)
@@ -580,7 +581,7 @@ def main():
 	parser.add_argument('-N', '--N', type=int, default=20, help='# of piecewise-linear regions in DM-Ar relation (default: 20)')
 	parser.add_argument('-mtd', '--method', type=str, choices=('anneal', 'leastsq', 'brute', 'nlopt CRS', 'nlopt MLSL'), default='nlopt CRS', help='Optimization method (default: nlopt CRS)')
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out unconverged stars.')
-	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(2,2), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 2 2).')
+	parser.add_argument('-sm', '--smooth', type=float, nargs=2, default=(2,2), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 2 2).')
 	parser.add_argument('-reg', '--regulator', type=float, default=1000., help='Width of support of prior on Delta_Ar (default: 1000).')
 	parser.add_argument('-o', '--outfn', type=str, nargs=2, default=None, help='Output filename for reddening profile and healpix pixel number.')
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
@@ -588,7 +589,8 @@ def main():
 	parser.add_argument('-ovp', '--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
 	parser.add_argument('-dw', '--dwell', type=int, default=1000, help='dwell parameter for annealing algorithm. The higher the value, the greater the chance of convergence (default: 1000).')
 	parser.add_argument('-W', '--maxtime', type=float, default=25., help='Maximum walltime (in seconds) for NLopt routines (default: 25).')
-	parser.add_argument('-p0', '--floor', type=float, default=1.e-5, help='Floor on stellar line integrals (default: 1.e-5).')
+	parser.add_argument('-M', '--maxeval', type=int, default=10000, help='Maximum # of evaluations for NLopt routines (default: 10000).')
+	parser.add_argument('-p0', '--floor', type=float, default=5.e-3, help='Floor on stellar line integrals (default: 5.e-3).')
 	parser.add_argument('-ev', '--evidence_range', type=float, default=25., help='Maximum difference in ln(evidence) from max. value before star is considered outlier (default: 25).')
 	parser.add_argument('-nsp', '--nonsparse', action='store_true', help='Binned pdfs are not stored in sparse format.')
 	parser.add_argument('-pltind', '--plot_individual', type=int, nargs=2, default=None, help='Plot individual pdfs with reddening profile.')
@@ -604,7 +606,7 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, p0=values.floor, ev_range=values.evidence_range)
+	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, maxeval=values.maxeval, p0=values.floor, ev_range=values.evidence_range)
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	

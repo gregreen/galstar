@@ -588,7 +588,7 @@ def main():
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-ovp', '--overplot', type=str, default=None, help='Overplot true values from galfast FITS file')
 	parser.add_argument('-dw', '--dwell', type=int, default=1000, help='dwell parameter for annealing algorithm. The higher the value, the greater the chance of convergence (default: 1000).')
-	parser.add_argument('-W', '--maxtime', type=float, default=25., help='Maximum walltime (in seconds) for NLopt routines (default: 25).')
+	parser.add_argument('-W', '--maxtime', type=float, default=100., help='Maximum walltime (in seconds) for NLopt routines (default: 100).')
 	parser.add_argument('-M', '--maxeval', type=int, default=10000, help='Maximum # of evaluations for NLopt routines (default: 10000).')
 	parser.add_argument('-p0', '--floor', type=float, default=5.e-3, help='Floor on stellar line integrals (default: 5.e-3).')
 	parser.add_argument('-ev', '--evidence_range', type=float, default=25., help='Maximum difference in ln(evidence) from max. value before star is considered outlier (default: 25).')

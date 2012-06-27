@@ -271,7 +271,15 @@ def main():
 	#mu_eval = np.array([6., 7., 8., 9., 10., 11., 12., 13., 14.], dtype=np.float64)
 	mu_eval = np.array(values.mu, dtype=np.float64)
 	Ar_map = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=values.nside)
-	Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
+	
+	# Determine maximum A_r within bounds
+	theta, phi = hp.pix2ang(values.nside, pix_index, nest=values.nest)
+	l, b = hputils.thetaphi2lb(theta, phi)
+	pix_mask = (l >= values.lb_bounds[0]) & (l <= values.lb_bounds[1]) & (b <= values.lb_bounds[2]) & (b <= values.lb_bounds[3])
+	Ar_map_clipped = Ar_map[:,pix_mask]
+	Ar_max = np.max(Ar_map_clipped[np.isfinite(Ar_map_clipped)])
+	del Ar_map_clipped
+	#Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
 	print 'max. A_r: %.2f' % Ar_max
 	
 	if values.diff:

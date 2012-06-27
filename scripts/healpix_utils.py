@@ -32,16 +32,34 @@ import healpy as hp
 
 def lb2thetaphi(l, b):
 	'''
-	Convert Galactic (l, b) to spherical coordinates, (theta, phi).
+	Convert Galactic (l, b) to spherical coordinates (theta, phi).
 	Uses the physics convention, where theta is in the range [0, 180],
 	and phi is in the range [0, 360].
 	
 	Input:
 	    l      Galactic longitude, in degrees
 	    b      Galactic latitude, in degrees
+	
 	Output:
 	    theta  Angle from the z-axis, in radians
 	    phi    Angle from the prime meridian, in radians
+	'''
+	return np.pi/180. * (90. - b), np.pi/180. * l
+
+
+def thetaphi2lb(theta, phi):
+	'''
+	Convert spherical (theta, phi) to Galactic coordinates (l, b).
+	Uses the physics convention, where theta is in the range [0, 180],
+	and phi is in the range [0, 360].
+	
+	Input:
+	    theta  Angle from the z-axis, in radians
+	    phi    Angle from the prime meridian, in radians
+	
+	Output:
+	    l      Galactic longitude, in degrees
+	    b      Galactic latitude, in degrees
 	'''
 	return np.pi/180. * (90. - b), np.pi/180. * l
 
@@ -52,6 +70,7 @@ def deg2rad(theta):
 	
 	Input:
 	    theta    angle or numpy array of angles, in degrees
+	
 	Output:
 	    angle(s) in radians
 	'''
@@ -64,38 +83,43 @@ def rad2deg(theta):
 	
 	Input:
 	    theta    angle or numpy array of angles, in radians
+	
 	Output:
 	    angle(s) in degrees
 	'''
 	return 180./np.pi * theta
 
 
-def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size=[1000,1000], center_gal=False, **kwargs):
+def healmap_rasterize(m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size=[1000,1000], center_gal=False, return_theta_phi=False):
 	'''
-	Plot healpix map to the given pyplot axes. This function borrows
-	liberally from Eddie Schlafly's util_efs.imshow.
+	Rasterize a healpix map in Cartesian projection.
 	
 	Input:
-	    ax         Axes to which to plot healpix map.
-	    m          Healpix map.
-	    nside      Healpix nside parameter.
-	    nest       True if map is stored in nested healpix ordering.
-	    lb_bounds  (l_min, l_max, b_min, b_max). Default: all l,b included.
-	    size       (x_size, y_size). # of pixels in each dimension.
-	    **kwargs   Additional parameters to pass to pyplot.imshow.
+	    m           Healpix map.
+	    nside       Healpix nside parameter.
+	    nest        True if map is stored in nested healpix ordering.
+	    lb_bounds   (l_min, l_max, b_min, b_max). Default: all l,b included.
+	    size        (x_size, y_size). # of pixels in each dimension.
+	    center_gal  If True, place rasterized pixel closest to l=0 at
+	                center of image.
+	    
+	    return_theta_phi  If True, spherical theta and phi (physics
+	                      convention) for each rasterized pixel are
+	                      returned.
 	
 	Output:
-	    image      Image object returned by ax.imshow. This can be used,
-	               for example, to create a colorbar.
+	    img         Rasterized image of healpix map in Cartesian projection.
+	    
+	If return_theta_phi is True, the following are also returned:
+	    theta       Spherical theta coordinate in rad (physics convention).
+	    phi         Spherical phi coordinate in rad (physics convention).
 	'''
-	
-	lb_bounds_internal = np.array(lb_bounds)
 	
 	# Make grid of pixels to plot
 	xsize, ysize = size
 	l, b = np.mgrid[0:xsize, 0:ysize].astype(np.float32) + 0.5
-	l = lb_bounds[0] + (lb_bounds_internal[1] - lb_bounds_internal[0]) * l / float(xsize)
-	b = lb_bounds[2] + (lb_bounds_internal[3] - lb_bounds_internal[2]) * b / float(ysize)
+	l = lb_bounds[0] + (lb_bounds[1] - lb_bounds[0]) * l / float(xsize)
+	b = lb_bounds[2] + (lb_bounds[3] - lb_bounds[2]) * b / float(ysize)
 	theta, phi = lb2thetaphi(l, b)
 	del l, b
 	
@@ -110,6 +134,40 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 		phi[phi >= 360.] -= 360.
 		shift = int(np.round(ysize/2. - np.unravel_index(np.argmin(np.abs(phi)), img.shape)[0]))
 		np.roll(img, shift, axis=0)
+	
+	if return_theta_phi:
+		return img, theta, phi
+	else:
+		return img
+
+
+def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size=[1000,1000], center_gal=False, **kwargs):
+	'''
+	Plot healpix map to the given pyplot axes. This function borrows
+	liberally from Eddie Schlafly's util_efs.imshow.
+	
+	Input:
+	    ax          Axes to which to plot healpix map.
+	    m           Healpix map.
+	    nside       Healpix nside parameter.
+	    nest        True if map is stored in nested healpix ordering.
+	    lb_bounds   (l_min, l_max, b_min, b_max). Default: all l,b included.
+	    size        (x_size, y_size). # of pixels in each dimension.
+	    center_gal  If True, place rasterized pixel closest to l=0 at
+	                center of image.
+	    **kwargs    Additional parameters to pass to pyplot.imshow.
+	
+	Output:
+	    image       Image object returned by ax.imshow. This can be used,
+	                for example, to create a colorbar.
+	'''
+	
+	img, theta, phi = healmap_rasterize(m, nside, nest, lb_bounds, size, center_gal, True)
+	
+	lb_bounds_internal = np.array(lb_bounds)
+	
+	# Center map on l=0
+	if center_gal:
 		lb_bounds_internal[0] -= 180.
 		lb_bounds_internal[1] -= 180.
 	

@@ -30,11 +30,11 @@ binfilelist=`tar -tf $TARIN | grep .dat`
 
 # If tarball is compresse and is not being shared (i.e. DIV = 1), unzip it
 decompressed=0
-if [ "${fname##*.}" -eq "gz" ]; then
+if [ "${tarin##*.}" == "gz" ]; then
 	if [ $DIV -eq 1 ]; then
 		echo "Decompressing $tarin ..."
 		gzip -d $tarin
-		tarin="${tarin##*.gz}"
+		tarin="${tarin%.gz}"
 		echo "Done decompressing. Filename is now $tarin."
 		decompressed=1
 	fi

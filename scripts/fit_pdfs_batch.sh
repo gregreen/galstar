@@ -28,6 +28,18 @@ outfn=`readlink -m $OUTFN`
 tarin=`readlink -m $TARIN`
 binfilelist=`tar -tf $TARIN | grep .dat`
 
+# If tarball is compresse and is not being shared (i.e. DIV = 1), unzip it
+decompressed=0
+if [ "${fname##*.}" -eq "gz" ]; then
+	if [ $DIV -eq 1 ]; then
+		echo "Decompressing $tarin ..."
+		gzip -d $tarin
+		tarin="${tarin##*.gz}"
+		echo "Done decompressing. Filename is now $tarin."
+		decompressed=1
+	fi
+fi
+
 # Determine number of pixels in tarball
 npix=0
 for binfile in $binfilelist; do
@@ -86,6 +98,12 @@ for binfile in $binfilelist; do
 	
 	counter=`expr $counter + 1`
 done
+
+# Recompress tarball, if it was earlier decompressed
+if [ $decompressed -eq 1 ]; then
+	echo "Recompressing $tarin."
+	gzip -9 $tarin
+fi
 
 gzip -9 $outfn
 

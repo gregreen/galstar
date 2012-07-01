@@ -61,7 +61,7 @@ def thetaphi2lb(theta, phi):
 	    l      Galactic longitude, in degrees
 	    b      Galactic latitude, in degrees
 	'''
-	return np.pi/180. * (90. - b), np.pi/180. * l
+	return 180./np.pi * phi, 90. - 180./np.pi * theta
 
 
 def deg2rad(theta):

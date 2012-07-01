@@ -31,13 +31,13 @@ binfilelist=`tar -tf $TARIN | grep .dat`
 # If tarball is compresse and is not being shared (i.e. DIV = 1), unzip it
 decompressed=0
 if [ "${tarin##*.}" == "gz" ]; then
-	if [ $DIV -eq 1 ]; then
-		echo "Decompressing $tarin ..."
-		gzip -d $tarin
-		tarin="${tarin%.gz}"
-		echo "Done decompressing. Filename is now $tarin."
-		decompressed=1
-	fi
+	#if [ $DIV -eq 1 ]; then
+	echo "Decompressing $tarin ..."
+	gzip -d $tarin
+	tarin="${tarin%.gz}"
+	echo "Done decompressing. Filename is now $tarin."
+	decompressed=1
+	#fi
 fi
 
 # Determine number of pixels in tarball
@@ -99,13 +99,13 @@ for binfile in $binfilelist; do
 	counter=`expr $counter + 1`
 done
 
-# Recompress tarball, if it was earlier decompressed
+# Recompress galstar tarball, if it was earlier decompressed
 if [ $decompressed -eq 1 ]; then
 	echo "Recompressing $tarin."
 	gzip -9 $tarin
 fi
 
-gzip -9 $outfn
+#gzip -9 $outfn
 
 cd $workingdir
-echo "Done."
+echo "Galstar has docked with the orbiting HQ."

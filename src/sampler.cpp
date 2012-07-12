@@ -57,8 +57,7 @@ void TLF::load(const std::string &fn)
 	for(unsigned int i=0; i<lf.size(); i++) { (*lf_interp)[i] = lf[i]; }
 	
 	log_lf_norm *= Mr1 / (double)(lf.size());
-	log_lf_norm = log(log_lf_norm
-);
+	log_lf_norm = log(log_lf_norm);
 	
 	std::cerr << "# Loaded Phi(" << Mr0 << " <= Mr <= " <<  Mr0 + dMr*(lf.size()-1) << ") LF from " << fn << "\n";
 }
@@ -137,13 +136,23 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn, const doubl
 		
 		sed->Mr = Mr;
 		sed->FeH = FeH;
-		ss >> sed->v[0] >> sed->v[1] >> sed->v[3] >> sed->v[4];
 		
-		sed->v[2]  = sed->Mr;			// Mr
-		sed->v[1] += sed->v[2];			// Mg
-		sed->v[0] += sed->v[1];			// Mu
-		sed->v[3]  = sed->v[2] - sed->v[3];	// Mi
-		sed->v[4]  = sed->v[3] - sed->v[4];	// Mz
+		// A kludge is used to determine whether the photometry is PS or SDSS
+		if(fabs(Acoef[0] - 3.172/2.271) < 1e-5) {
+			ss >> sed->v[0] >> sed->v[2] >> sed->v[3] >> sed->v[4];
+			sed->v[1] = sed->Mr;			// Mr
+			sed->v[0] += sed->v[1];			// Mg
+			sed->v[2] = sed->v[1] - sed->v[2];	// Mi
+			sed->v[3] = sed->v[2] - sed->v[3];	// Mz
+			sed->v[4] = sed->v[3] - sed->v[4];	// My
+		} else {
+			ss >> sed->v[0] >> sed->v[1] >> sed->v[3] >> sed->v[4];
+			sed->v[2]  = sed->Mr;			// Mr
+			sed->v[1] += sed->v[2];			// Mg
+			sed->v[0] += sed->v[1];			// Mu
+			sed->v[3]  = sed->v[2] - sed->v[3];	// Mi
+			sed->v[4]  = sed->v[3] - sed->v[4];	// Mz
+		}
 		
 		count++;
 	}
@@ -269,7 +278,7 @@ inline double TModel::log_p_FeH(double cos_l, double sin_l, double cos_b, double
 	double mu_D_poor = mu_D + 0.14;
 	double sigma_D_poor = 0.2;
 	P_tmp += 0.37 * (1-f_H) * exp(-sqr(FeH-mu_D_poor)/(2.*sigma_D_poor*sigma_D_poor)) / (sqrttwopi*sigma_D_poor);
-	#undef sqrt2pi
+	#undef sqrttwopi
 	
 	return log(P_tmp);
 }

@@ -113,7 +113,7 @@ class TGalacticModel:
 
 
 def dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius=1.):
-	return (pi*radius**2.) * (1000.*2.30258509/5.) * exp((3.*2.30258509/5.)*DM)
+	return (pi*radius**2.) * (1000.*2.30258509/5.) * exp(3.*2.30258509/5. * DM)
 
 
 

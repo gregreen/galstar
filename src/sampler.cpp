@@ -73,6 +73,13 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn, const doubl
 	// Set the reddening coefficient for each band
 	for(unsigned int i=0; i<NBANDS; i++){ Acoef[i] = Acoef_[i]; }
 	
+	// A kluge to determine whether photometry is PS1 or SDSS
+	bool PS1Photometry = false;
+	if(fabs(Acoef[0] - 3.172/2.271) < 1e-5) {
+		PS1Photometry = true;
+		std::cerr << "# PS1 photometry being used." << std::endl;
+	}
+	
 	// Load the SEDs
 	
 	double Mr, FeH, dMr_tmp, dFeH_tmp;
@@ -137,8 +144,7 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn, const doubl
 		sed->Mr = Mr;
 		sed->FeH = FeH;
 		
-		// A kludge is used to determine whether the photometry is PS or SDSS
-		if(fabs(Acoef[0] - 3.172/2.271) < 1e-5) {
+		if(PS1Photometry) {
 			ss >> sed->v[0] >> sed->v[2] >> sed->v[3] >> sed->v[4];
 			sed->v[1] = sed->Mr;			// Mr
 			sed->v[0] += sed->v[1];			// Mg

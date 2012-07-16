@@ -239,7 +239,7 @@ def main():
 	parser.add_argument('-nst', '--nest', action='store_true', help='Maps are stored in nested ordering scheme.')
 	parser.add_argument('-d', '--diff', action='store_true', help='Show differential extinction at each distance modulus.')
 	parser.add_argument('-mu', '--mu', type=float, nargs='+', default=(5., 6.5, 8., 9.5, 11., 12.5, 14., 15.5, 17.), help='Distance moduli at which to show reddening.')
-	parser.add_argument('-rc', '--rowcol', type=float, nargs=2, default=(3,3), help='Distance moduli at which to show reddening.')
+	parser.add_argument('-rc', '--rowcol', type=int, nargs=2, default=(3,3), help='Distance moduli at which to show reddening.')
 	parser.add_argument('-fig', '--figsize', type=float, nargs=2, default=(9,5), help='Width and height of figure, in inches.')
 	parser.add_argument('-po', '--plotout', type=str, default=None, help='Output filename for plot.')
 	parser.add_argument('-fo', '--fitsout', type=str, default=None, help='Output filename (of type FITS) for reddening map.')
@@ -285,6 +285,7 @@ def main():
 	Ar_95pct = Ar_map_clipped[int(0.95*(Ar_map_clipped.size-1.))]
 	Ar_99pct = Ar_map_clipped[int(0.99*(Ar_map_clipped.size-1.))]
 	del Ar_map_clipped
+	print 'bounds: (%.1f %.1f %.1f %.1f)' % (np.min(l), np.max(l), np.min(b), np.max(b))
 	#Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
 	print 'max. A_r: %.2f' % Ar_max
 	print '95th %%ile: %.2f' % Ar_95pct
@@ -308,7 +309,7 @@ def main():
 	mplib.rc('axes', grid=False)
 	
 	fig = plt.figure(1, figsize=values.figsize, dpi=150)
-	center_gal = (lb_bounds == [0., 360., -90., 90.])
+	center_gal = (lb_bounds[0] == 0.) and (lb_bounds[1] == 360.)
 	image = None
 	nrows, ncol = values.rowcol
 	

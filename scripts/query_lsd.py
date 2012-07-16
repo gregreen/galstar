@@ -36,20 +36,20 @@ import iterators
 import matplotlib.pyplot as plt
 
 
-def mapper(qresult, nside, bounds):
+def mapper(qresult, nside, nest, bounds):
 	obj = lsd.colgroup.fromiter(qresult, blocks=True)
 	
 	if (obj != None) and (len(obj) > 0):
 		# Determine healpix index of each star
 		theta = np.pi/180. * (90. - obj['b'])
 		phi = np.pi/180. * obj['l']
-		pix_indices = hp.ang2pix(nside, theta, phi, nest=True)
+		pix_indices = hp.ang2pix(nside, theta, phi, nest=nest)
 		
 		# Group together stars having same index
 		for pix_index, block_indices in iterators.index_by_key(pix_indices):
 			# Filter out pixels by bounds
 			if bounds != None:
-				theta_0, phi_0 = hp.pix2ang(nside, pix_index, nest=True)
+				theta_0, phi_0 = hp.pix2ang(nside, pix_index, nest=nest)
 				l_0 = 180./np.pi * phi_0
 				b_0 = 90. - 180./np.pi * theta_0
 				if (l_0 < bounds[0]) or (l_0 > bounds[1]) or (b_0 < bounds[2]) or (b_0 > bounds[3]):
@@ -91,11 +91,12 @@ def start_file(base_fname, index):
 def main():
 	parser = argparse.ArgumentParser(prog='query_lsd.py', description='Generate galstar input files from PanSTARRS data.', add_help=True)
 	parser.add_argument('out', type=str, help='Base filename for output.')
-	parser.add_argument('-n', '--nside', type=int, default=512, help='healpix nside parameter (default: 512).')
+	parser.add_argument('-n', '--nside', type=int, default=512, help='Healpix nside parameter (default: 512).')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max.')
 	parser.add_argument('-fs', '--filesize', type=int, default=85000, help='Number of stars per input file (default: 85000).')
 	parser.add_argument('-min', '--min_stars', type=int, default=15, help='Minimum # of stars in pixel.')
 	parser.add_argument('-vis', '--visualize', action='store_true', help='Show plot of footprint.')
+	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering scheme.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -150,7 +151,8 @@ def main():
 	b_max = -1.e100
 	
 	# Save each pixel to the file with the least number of stars
-	for (pix_index, obj) in query.execute([(mapper, values.nside, values.bounds), reducer], group_by_static_cell=True, bounds=query_bounds):
+	nest = (not values.ring)
+	for (pix_index, obj) in query.execute([(mapper, values.nside, nest, values.bounds), reducer], group_by_static_cell=True, bounds=query_bounds):
 		N_pix_total += 1
 		N_stars_total += len(obj)
 		
@@ -228,7 +230,7 @@ def main():
 	
 	# Show footprint of stored pixels on sky
 	if values.visualize:
-		hp.visufunc.mollview(map=np.log(pix_map), nest=True, title='Footprint', coord='G', xsize=5000)
+		hp.visufunc.mollview(map=np.log(pix_map), nest=nest, title='Footprint', coord='G', xsize=5000)
 		plt.show()
 	
 	return 0

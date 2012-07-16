@@ -58,7 +58,7 @@ done
 # Add ASCII file containing std. out/err to tar archive and compress archive
 tar -rf $tarfn $outfn
 rm $outfn
-gzip -9 $tarfn
+gzip -1 $tarfn
 
 cd $workingdir
 echo "Done."

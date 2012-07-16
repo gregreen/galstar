@@ -102,7 +102,7 @@ done
 # Recompress galstar tarball, if it was earlier decompressed
 if [ $decompressed -eq 1 ]; then
 	echo "Recompressing $tarin."
-	gzip -9 $tarin
+	gzip -1 $tarin
 fi
 
 #gzip -9 $outfn

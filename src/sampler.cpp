@@ -146,11 +146,11 @@ TModel::TModel(const std::string &lf_fn, const std::string &seds_fn, const doubl
 		
 		if(PS1Photometry) {
 			ss >> sed->v[0] >> sed->v[2] >> sed->v[3] >> sed->v[4];
-			sed->v[1] = sed->Mr;			// Mr
-			sed->v[0] += sed->v[1];			// Mg
-			sed->v[2] = sed->v[1] - sed->v[2];	// Mi
-			sed->v[3] = sed->v[2] - sed->v[3];	// Mz
-			sed->v[4] = sed->v[3] - sed->v[4];	// My
+			sed->v[1] = sed->Mr;			// Begin with r
+			sed->v[0] += sed->v[1];			// g = (g-r) + r
+			sed->v[2] = sed->v[1] - sed->v[2];	// i = r - (r-i)
+			sed->v[3] = sed->v[2] - sed->v[3];	// z = i - (i-z)
+			sed->v[4] = sed->v[3] - sed->v[4];	// y = z - (z-y)
 		} else {
 			ss >> sed->v[0] >> sed->v[1] >> sed->v[3] >> sed->v[4];
 			sed->v[2]  = sed->Mr;			// Mr

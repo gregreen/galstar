@@ -236,6 +236,8 @@ def main():
 	parser.add_argument('-lb', '--lb_bounds', type=float, nargs=4, default=(0., 360., -90., 90.), help='(l_min, l_max, b_min, b_max).')
 	parser.add_argument('-mol', '--mollweide', action='store_true', help='Use Mollweide projection (incompatible with setting bounds on l and b).')
 	parser.add_argument('-sz', '--size', type=int, nargs=2, default=(500,200), help='Dimensions of each image: (xsize, ysize).')
+	parser.add_argument('-dpi', '--dpi', type=float, default=150, help='Dots per inch of output image.')
+	parser.add_argument('-max', '--max_Ar', type=float, default=None, help='Maximum Ar in color scale.')
 	parser.add_argument('-nst', '--nest', action='store_true', help='Maps are stored in nested ordering scheme.')
 	parser.add_argument('-d', '--diff', action='store_true', help='Show differential extinction at each distance modulus.')
 	parser.add_argument('-mu', '--mu', type=float, nargs='+', default=(5., 6.5, 8., 9.5, 11., 12.5, 14., 15.5, 17.), help='Distance moduli at which to show reddening.')
@@ -290,6 +292,11 @@ def main():
 	print 'max. A_r: %.2f' % Ar_max
 	print '95th %%ile: %.2f' % Ar_95pct
 	print '99th %%ile: %.2f' % Ar_99pct
+	Ar_cutoff = None
+	if values.max_Ar != None:
+		Ar_cutoff = values.max_Ar
+	else:
+		Ar_cutoff = Ar_99pct
 	
 	if values.diff:
 		Ar_map[1:,:] = Ar_map[1:,:] - Ar_map[:-1,:]
@@ -308,7 +315,7 @@ def main():
 	mplib.rc('text', usetex=True)
 	mplib.rc('axes', grid=False)
 	
-	fig = plt.figure(1, figsize=values.figsize, dpi=150)
+	fig = plt.figure(1, figsize=values.figsize, dpi=values.dpi)
 	center_gal = (lb_bounds[0] == 0.) and (lb_bounds[1] == 360.)
 	image = None
 	nrows, ncol = values.rowcol
@@ -327,7 +334,7 @@ def main():
 				ax.set_xticklabels([])
 			if x != 0:
 				ax.set_yticklabels([])
-		image = hputils.healmap_to_axes(ax, m, values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, nest=values.nest, vmin=0., vmax=Ar_99pct)
+		image = hputils.healmap_to_axes(ax, m, values.nside, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, nest=values.nest, vmin=0., vmax=Ar_cutoff)
 		
 		# Label images
 		x_min, x_max = ax.get_xlim()
@@ -352,7 +359,7 @@ def main():
 		fname = abspath(values.plotout)
 		if not (values.plotout.endswith('.png') or values.plotout.endswith('.pdf') or values.plotout.endswith('.eps')):
 			fname += '.png'
-		fig.savefig(fname)
+		fig.savefig(fname, dpi=values.dpi)
 	
 	if values.show:
 		plt.show()

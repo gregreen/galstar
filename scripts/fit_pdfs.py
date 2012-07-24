@@ -22,6 +22,8 @@
 #       
 #       
 
+# TODO: Add option to tie pixel to adjacent pixels in input map
+
 import sys, argparse
 from os.path import abspath, exists
 from time import time

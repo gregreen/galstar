@@ -32,7 +32,7 @@ import healpy as hp
 import pyfits
 import gzip
 
-import sys, argparse
+import os, sys, argparse
 from os.path import abspath
 
 import healpix_utils as hputils

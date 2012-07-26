@@ -32,8 +32,9 @@ import healpy as hp
 import pyfits
 import gzip
 
-import os, sys, argparse
-from os.path import abspath
+import sys, argparse
+import os
+from os.path import abspath, isdir
 
 import healpix_utils as hputils
 import iterators
@@ -66,6 +67,7 @@ def load_reddening(fname):
 	
 	# Store (DM, Ar) fit for each healpix pixel
 	for filename in fname:
+		#print 'Opening %s ...' % filename
 		f = open(abspath(filename), 'rb')
 		
 		while True:
@@ -258,11 +260,15 @@ def main():
 	
 	# Load in pixels
 	input_files = None
-	if (len(values.input) == 1) and os.isdir(values.input[0]):
-		input_files = filter(lambda f: s.endswith('.dat'), os.listdir(values.input[0]))
+	if (len(values.input) == 1) and isdir(values.input[0]):
+		input_files = []
+		for f in os.listdir(values.input[0]):
+			if f.endswith('.dat'):
+				input_files.append(os.path.join(values.input[0], f))
+		#input_files = filter(lambda f: f.endswith('.dat'), os.listdir(values.input[0]))
 	else:
 		input_files = values.input
-	mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(values.input)
+	mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(input_files)
 	print '%d pixel(s) loaded.' % len(pix_index)
 	
 	# Output reddening maps to a FITS file

@@ -200,7 +200,7 @@ def eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=512):
 
 
 
-def write_maps(fname, maps, mu, nest=False):
+def write_maps(fname, maps, mu, nest=True):
 	'''
 	Write extinction map to a FITS file.
 	
@@ -219,6 +219,7 @@ def write_maps(fname, maps, mu, nest=False):
 	if len(mu) != len(maps):
 		raise Exception('<mu> must have same length as <maps>.')
 	
+	'''
 	cols = []
 	cols.append(pyfits.Column(name='MU', format='%dD' % len(mu), array=mu))
 	for i, m in enumerate(maps):
@@ -229,6 +230,28 @@ def write_maps(fname, maps, mu, nest=False):
 	tbhdu.header.update('NSIDE', hp.npix2nside(maps.shape[1]), 'Healpix nside parameter.')
 	
 	tbhdu.writeto(fname, clobber=True)
+	'''
+	
+	hdu = []
+	hdu.append(pyfits.PrimaryHDU(mu))
+	for m in maps:
+		hdu.append(pyfits.ImageHDU(m))
+	hdulist = pyfits.HDUList(hdu)
+	hdulist.writeto(fname, clobber=True)
+
+
+def read_maps(fname):
+	'''
+	Read in extinction map from a FITS file.
+	
+	Input:
+	    fname  input filename
+	'''
+	
+	d,h = pyfits.read(fname)
+	# TODO: Finish this function
+
+
 
 
 def main():
@@ -274,6 +297,7 @@ def main():
 	# Output reddening maps to a FITS file
 	if values.fitsout != None:
 		mu = mu_anchors[0].__copy__()
+		print 'Saving extinction map at mu = ', mu
 		maps = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=values.nside)
 		fname = abspath(values.fitsout)
 		if not fname.endswith('.fits'):

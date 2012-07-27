@@ -33,6 +33,8 @@ import scipy.ndimage.filters as filters
 from scipy import weave
 import scipy.optimize
 
+import healpy as hp
+
 import nlopt
 
 import matplotlib as mplib
@@ -568,6 +570,55 @@ def output_profile(fname, pixnum, bounds, Delta_Ar, N_stars, line_int, measure, 
 	f.write(mu_anchors.tostring())
 	f.write(Ar_anchors.tostring())
 	f.close()
+
+
+
+#
+# Load in neighboring pixels
+#
+
+def get_neighbors(map_fname, mu_anchors, pixindex, nside=512, nest=True):
+	# Determine the healpix index of the neighboring pixels
+	index = hp.get_all_neighbours(nside, pixindex, nest=nest)
+	
+	# Load in the neigbhoring pixels from the map
+	mu_map = []
+	
+	
+	Ar_neighbor = np.empty([len(mu_map), len(index)], dtype=np.float64)
+	
+	
+	# Determine reddening in each distance bin
+	n = 0
+	j = 1
+	while j <= len(mu_map):
+		if mu_map[j] >= mu_anchors[n]:
+			slope = (Ar_neighbor[j] - Ar_neighbor[j-1]) / (mu_map[j] - mu_map[j-1])
+			Ar_neighbor[n, pix] = Ar_neighbor[j-1] + slope * (mu_anchors[n] - mu_map[j-1])
+			
+			#print '%.3f <= %.3f <= %.3f' % (mu_arr[j-1], mu_eval[n], mu_arr[j])
+			#print 'Delta_mu = %.3g' % (mu_eval[n] - mu_arr[j-1])
+			#print 'slope:'
+			#print slope
+			#print ''
+			
+			n += 1
+			if n >= len(mu_anchors):
+				break
+		else:
+			j += 1
+	Delta_Ar = Ar_neighbor[1:] - Ar_neighbor[:-1]
+	
+	# Assign weight to each pixel based on distance
+	theta, phi = hp.pix2ang(nside, index, nest=nest)
+	theta_0, phi_0 = hp.pix2ang(nside, pixindex, nest=nest)
+	dist = np.arccos(np.sin(theta_0) * np.sin(theta) + np.cos(theta_0) * np.cos(theta) * np.cos(phi - phi_0))
+	sigma_dist = hp.npix2resol(nside, arcmin=False)
+	weight = np.exp(-dist * dist / (2. * sigma_dist * sigma_dist))
+	weight /= np.sum(weight)
+	
+	# Return reddening in each bin for each neighboring pixel, as well as weight assigned to each neighbor
+	return Delta_Ar, weight
 
 
 

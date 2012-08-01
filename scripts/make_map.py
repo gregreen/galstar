@@ -393,7 +393,7 @@ def main():
 				fig.suptitle(r'$A_r$', fontsize=20, y=0.95)
 			
 			# Add colorbar
-			fig.subplots_adjust(wspace=0., hspace=0., right=0.88, top=0.9)
+			fig.subplots_adjust(wspace=0., hspace=0., left=0.08, right=0.89, top=0.84)
 			cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
 			cb = fig.colorbar(image, cax=cax)
 			
@@ -416,6 +416,7 @@ def main():
 				print 'Saving plot to %s' % fname
 				fig.savefig(fname, dpi=values.dpi)
 				fig.clf()
+				plt.close(fig)
 	
 	if values.show:
 		plt.show()

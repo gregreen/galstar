@@ -118,7 +118,7 @@ def healmap_rasterize(m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size
 	# Make grid of pixels to plot
 	xsize, ysize = size
 	l, b = np.mgrid[0:xsize, 0:ysize].astype(np.float32) + 0.5
-	l = lb_bounds[0] + (lb_bounds[1] - lb_bounds[0]) * l / float(xsize)
+	l = lb_bounds[1] - (lb_bounds[1] - lb_bounds[0]) * l / float(xsize)
 	b = lb_bounds[2] + (lb_bounds[3] - lb_bounds[2]) * b / float(ysize)
 	theta, phi = lb2thetaphi(l, b)
 	del l, b
@@ -180,6 +180,10 @@ def healmap_to_axes(ax, m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], si
 		if (np.abs(lb_bounds_internal[0] + 180.) > 0.001) or (np.abs(lb_bounds_internal[1] - 180.) > 0.001) or (np.abs(lb_bounds_internal[2] + 90.) > 0.001) or (np.abs(lb_bounds_internal[3] - 90.) > 0.001):
 			print 'Warning: Mollweide projection requires lb_bounds = (0., 360., -90., 90.).'
 		lb_bounds_internal = list(deg2rad(np.array(lb_bounds_internal)))
+	
+	tmp_l_max = lb_bounds_internal[1]
+	lb_bounds_internal[1] = lb_bounds_internal[0]
+	lb_bounds_internal[0] = tmp_l_max
 	
 	# Plot to given axes
 	if (ax.name != 'mollweide') and ('interpolation' not in kwargs):

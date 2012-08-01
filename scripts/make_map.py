@@ -277,9 +277,9 @@ def main():
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
 	
-	if values.rowcol[0] * values.rowcol[1] != len(values.mu):
-		print 'Number of rows and columns must correspond to number of distance moduli in plot.'
-		return 1
+	#if values.rowcol[0] * values.rowcol[1] != len(values.mu):
+	#	print 'Number of rows and columns must correspond to number of distance moduli in plot.'
+	#	return 1
 	
 	# Load in pixels
 	input_files = None
@@ -350,21 +350,27 @@ def main():
 	mplib.rc('text', usetex=True)
 	mplib.rc('axes', grid=False)
 	
-	fig = plt.figure(1, figsize=values.figsize, dpi=values.dpi)
 	center_gal = (lb_bounds[0] == 0.) and (lb_bounds[1] == 360.)
-	image = None
 	nrows, ncol = values.rowcol
+	
+	fig = None
+	image = None
 	
 	for i, m in enumerate(Ar_map):
 		print 'Plotting map at mu = %.2f ...' % mu_eval[i]
 		
+		# Determine whether to make a new figure
+		if i % (nrows*ncol) == 0:
+			fig = plt.figure(1, figsize=values.figsize, dpi=values.dpi)
+			#ax_index = 0
+		
 		# Plot reddening at this distance modulus
 		ax = None
 		if values.mollweide:
-			ax = fig.add_subplot(nrows, ncol, i+1, projection='mollweide')
+			ax = fig.add_subplot(nrows, ncol, (i+1) % (nrows*ncol), projection='mollweide')
 		else:
-			ax = fig.add_subplot(nrows, ncol, i+1)
-			y, x = np.unravel_index(i, values.rowcol)
+			ax = fig.add_subplot(nrows, ncol, (i+1) % (nrows*ncol))
+			y, x = np.unravel_index(i % (nrows*ncol), values.rowcol)
 			if y != nrows - 1:
 				ax.set_xticklabels([])
 			if x != 0:
@@ -377,24 +383,39 @@ def main():
 		x, y = x_min + 0.95*(x_max - x_min), y_min + 0.95*(y_max - y_min)
 		txt = ax.text(x, y, r'$\mu = %.2f$' % mu_eval[i], color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
 		txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='k')])
-	
-	# Add title
-	if values.diff:
-		fig.suptitle(r'$\Delta A_r$', fontsize=20, y=0.95)
-	else:
-		fig.suptitle(r'$A_r$', fontsize=20, y=0.95)
-	
-	# Add colorbar
-	fig.subplots_adjust(wspace=0., hspace=0., right=0.88, top=0.9)
-	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
-	cb = fig.colorbar(image, cax=cax)
-	
-	# Save plot
-	if values.plotout != None:
-		fname = abspath(values.plotout)
-		if not (values.plotout.endswith('.png') or values.plotout.endswith('.pdf') or values.plotout.endswith('.eps')):
-			fname += '.png'
-		fig.savefig(fname, dpi=values.dpi)
+		
+		# Finish figure if filled up
+		if ((i+1) % (nrows*ncol) == 0) or (i == len(Ar_map) - 1):
+			# Add title
+			if values.diff:
+				fig.suptitle(r'$\Delta A_r$', fontsize=20, y=0.95)
+			else:
+				fig.suptitle(r'$A_r$', fontsize=20, y=0.95)
+			
+			# Add colorbar
+			fig.subplots_adjust(wspace=0., hspace=0., right=0.88, top=0.9)
+			cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
+			cb = fig.colorbar(image, cax=cax)
+			
+			# Save plot
+			if values.plotout != None:
+				fname = abspath(values.plotout)
+				fmt = '.png'
+				if values.plotout.endswith('.png'):
+					fmt = '.png'
+					fname = fname[:-4]
+				elif values.plotout.endswith('.pdf'):
+					fmt = '.pdf'
+					fname = fname[:-4]
+				elif values.plotout.endswith('.eps'):
+					fmt = '.eps'
+					fname = fname[:-4]
+				if len(Ar_map) != 1:
+					fname += '.%d' % int(i / (nrows*ncol))
+				fname += fmt
+				print 'Saving plot to %s' % fname
+				fig.savefig(fname, dpi=values.dpi)
+				fig.clf()
 	
 	if values.show:
 		plt.show()

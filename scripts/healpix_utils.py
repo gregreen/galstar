@@ -132,8 +132,9 @@ def healmap_rasterize(m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size
 	# Center map on l=0
 	if center_gal:
 		phi[phi >= 360.] -= 360.
-		shift = int(np.round(ysize/2. - np.unravel_index(np.argmin(np.abs(phi)), img.shape)[0]))
-		np.roll(img, shift, axis=0)
+		shift = int(np.round(xsize/2. - np.unravel_index(np.argmin(np.abs(phi)), img.shape)[0]))
+		#print 'Rolling by %d pixels (%.2f%% of xsize)' % (shift, 100.*float(shift)/xsize)
+		img = np.roll(img, shift, axis=0)
 	
 	if return_theta_phi:
 		return img, theta, phi

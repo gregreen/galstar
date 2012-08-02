@@ -379,14 +379,59 @@ class ExtinctionMap():
 		'''
 		Return the healpix numbers of the pixels which have been loaded.
 		'''
-		return np.where(np.isfinite(self.Ar))[0]
+		return np.where(np.isfinite(self.Ar[0]))[0]
 	
-	def Ar_percentile(self, percentile):
+	def pixel_bounds(self):
+		'''
+		Determine the bounds in Galactic longitude and latitude of the
+		valid pixels in the map.
+		
+		Output:
+		    l_min, l_max, b_min, b_max
+		'''
+		pix_index = self.valid_pixels()
+		theta, phi = hp.pix2ang(self.nside, pix_index, nest=self.nested)
+		l, b = thetaphi2lb(theta, phi)
+		del theta, phi
+		return np.min(l), np.max(l), np.min(b), np.max(b)
+	
+	def Ar_percentile(self, percentile, lb_bounds=None, mu_eval=None):
 		'''
 		Determine the threshold in Ar below which a given percentage of
 		pixels lie.
+		
+		Inputs:
+		    percentile  Percentile (0-100), or list of percentiles
+		    lb_bounds   l_min, l_max, b_min, b_max
+		    mu_eval     Distance modulus at which to determine percentile
+		
+		Output:
+		    Ar threshold, or list of thresholds
 		'''
-		pass
+		pix_index = self.valid_pixels()
+		theta, phi = hp.pix2ang(self.nside, pix_index, nest=self.nested)
+		l, b = thetaphi2lb(theta, phi)
+		del theta, phi
+		Ar_map_clipped = None
+		if mu_eval == None:
+			Ar_map_clipped = self.Ar[-1]
+		else:
+			Ar_map_clipped = self.evaluate(mu_eval)[0]
+		if lb_bounds != None:
+			pix_mask = (l >= values.lb_bounds[0]) & (l <= values.lb_bounds[1]) & (b >= values.lb_bounds[2]) & (b <= values.lb_bounds[3])
+			Ar_map_clipped = Ar_map_clipped[pix_index[pix_mask]]
+		else:
+			Ar_map_clipped = Ar_map_clipped[pix_index]
+		Ar_map_clipped = Ar_map_clipped[np.isfinite(Ar_map_clipped)]
+		Ar_map_clipped.sort()
+		if type(percentile) is list:
+			percentile = np.array(percentile)
+		index = percentile/100. * (Ar_map_clipped.size-1.)
+		if type(index) is np.ndarray:
+			index = index.astype(np.uint32)
+		else:
+			index = int(index)
+		return Ar_map_clipped[index]
 
 
 
@@ -411,6 +456,9 @@ def main():
 	fig.subplots_adjust(wspace=0., hspace=0., right=0.88)
 	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
 	cb = fig.colorbar(image, cax=cax)
+	
+	print m.Ar_percentile([50, 75, 90, 99, 100], mu_eval=10.)
+	print m.Ar[-1, m.valid_pixels()]
 	
 	plt.show()
 	

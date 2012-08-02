@@ -291,8 +291,11 @@ def main():
 		#input_files = filter(lambda f: f.endswith('.dat'), os.listdir(values.input[0]))
 	else:
 		input_files = values.input
-	m = hputils.ExtinctionMap(input_files, FITS=False, nside=values.nside, nested=values.nest)	
-	#mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(input_files)
+	m = None
+	if (len(values.input) == 1) and (values.input[0].endswith('.fits')):
+		m = hputils.ExtinctionMap(input_files)
+	else:
+		m = hputils.ExtinctionMap(input_files, FITS=False, nside=values.nside, nested=values.nest)
 	print '%d pixel(s) loaded.' % m.npix()
 	
 	# Output reddening maps to a FITS file
@@ -305,19 +308,8 @@ def main():
 	Ar_map = m.evaluate(mu_eval)
 	
 	# Determine maximum A_r within bounds
-	pix_index = m.valid_pixels
-	theta, phi = hp.pix2ang(values.nside, pix_index, nest=values.nest)
-	l, b = hputils.thetaphi2lb(theta, phi)
-	pix_mask = (l >= values.lb_bounds[0]) & (l <= values.lb_bounds[1]) & (b >= values.lb_bounds[2]) & (b <= values.lb_bounds[3])
-	Ar_map_clipped = Ar_map[-1, pix_index[pix_mask]]
-	Ar_map_clipped = Ar_map_clipped[np.isfinite(Ar_map_clipped)]
-	Ar_max = np.max(Ar_map_clipped)
-	Ar_map_clipped.sort()
-	Ar_95pct = Ar_map_clipped[int(0.95*(Ar_map_clipped.size-1.))]
-	Ar_99pct = Ar_map_clipped[int(0.99*(Ar_map_clipped.size-1.))]
-	del Ar_map_clipped
-	print 'bounds: (%.1f %.1f %.1f %.1f)' % (np.min(l), np.max(l), np.min(b), np.max(b))
-	#Ar_max = np.max(Ar_map[np.isfinite(Ar_map)])
+	Ar_95pct, Ar_99pct, Ar_max = m.Ar_percentile([95, 99, 100], lb_bounds)
+	print 'bounds: (%.1f %.1f %.1f %.1f)' % tuple(m.pixel_bounds())
 	print 'max. A_r: %.2f' % Ar_max
 	print '95th %%ile: %.2f' % Ar_95pct
 	print '99th %%ile: %.2f' % Ar_99pct

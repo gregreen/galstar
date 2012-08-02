@@ -293,7 +293,7 @@ def main():
 		input_files = values.input
 	m = None
 	if (len(values.input) == 1) and (values.input[0].endswith('.fits')):
-		m = hputils.ExtinctionMap(input_files)
+		m = hputils.ExtinctionMap(input_files[0])
 	else:
 		m = hputils.ExtinctionMap(input_files, FITS=False, nside=values.nside, nested=values.nest)
 	print '%d pixel(s) loaded.' % m.npix()
@@ -308,8 +308,9 @@ def main():
 	Ar_map = m.evaluate(mu_eval)
 	
 	# Determine maximum A_r within bounds
-	Ar_95pct, Ar_99pct, Ar_max = m.Ar_percentile([95, 99, 100], lb_bounds)
+	Ar_95pct, Ar_99pct, Ar_max = m.Ar_percentile([95, 99, 100], lb_bounds=values.lb_bounds, mu_eval=15.)
 	print 'bounds: (%.1f %.1f %.1f %.1f)' % tuple(m.pixel_bounds())
+	print 'At mu = 15:'
 	print 'max. A_r: %.2f' % Ar_max
 	print '95th %%ile: %.2f' % Ar_95pct
 	print '99th %%ile: %.2f' % Ar_99pct

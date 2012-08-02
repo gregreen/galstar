@@ -245,31 +245,31 @@ class ExtinctionMap():
 		primary.header.update('NSIDE', self.nside)
 		primary.header.update('FIRSTPIX', 0)
 		primary.header.update('LASTPIX', hp.nside2npix(self.nside))
-		primary.header.update('UNITS', 'MAGNITUDES')
-		primary.header.update('NDISTANCES', self.Ar.shape[0])
-		img.header.update('DESCRIPTION', 'DIST MODULI')
-		img.header.update('DTYPE', 'FLOAT64')
+		primary.header.update('UNITS', 'MAGS')
+		primary.header.update('NDIST', self.Ar.shape[0])
+		primary.header.update('DESC', 'DISTMODS')
+		primary.header.update('DTYPE', 'FLOAT64')
 		hdu = []
 		hdu.append(primary)
 		
 		# Image HDUs with # of stars and fit measure
 		img = pyfits.ImageHDU(self.N_stars)
-		img.header.update('DESCRIPTION', 'NSTARS')
+		img.header.update('DESC', 'NSTARS')
 		img.header.update('DTYPE', 'UINT32')
 		hdu.append(img)
 		img = pyfits.ImageHDU(self.measure)
-		img.header.update('DESCRIPTION', 'FIT MEASURE')
+		img.header.update('DESC', 'MEASURE')
 		img.header.update('DTYPE', 'FLOAT64')
 		hdu.append(img)
 		
 		# Image HDUs with Ar
 		for mu,Ar in zip(self.mu, self.Ar):
 			img = pyfits.ImageHDU(Ar)
-			img.header.update('DESCRIPTION', 'EXTINCTION')
+			img.header.update('DESC', 'EXTINCTN')
 			img.header.update('DTYPE', 'FLOAT64')
 			img.header.update('BAND', 'PS r')
-			img.header.update('UNITS', 'MAGNITUDES')
-			img.header.update('DIST MODULUS', mu)
+			img.header.update('UNITS', 'MAGS')
+			img.header.update('DISTMOD', mu)
 			hdu.append(img)
 		
 		hdulist = pyfits.HDUList(hdu)
@@ -292,7 +292,7 @@ class ExtinctionMap():
 		self.mu = f[0].data
 		self.N_stars = f[1].data
 		self.measure = f[2].data
-		self.Ar = np.empty(int(f[0].header['NDISTANCES']), dtype=np.float64)
+		self.Ar = np.empty((int(f[0].header['NDIST']), hp.nside2npix(self.nside)), dtype=np.float64)
 		for i,img in enumerate(f[3:]):
 			self.Ar[i,:] = img.data
 		f.close()
@@ -353,7 +353,6 @@ class ExtinctionMap():
 			if (m >= self.mu[0]) and (m <= self.mu[-1]):
 				for i,mu_anchor in enumerate(self.mu[1:]):
 					if mu_anchor >= m:
-						print self.mu[i], m, self.mu[i+1]
 						slope = (self.Ar[i+1] - self.Ar[i]) / (self.mu[i+1] - self.mu[i])
 						Ar_map[k] = self.Ar[i] + slope * (m - self.mu[i])
 						break
@@ -373,7 +372,7 @@ class ExtinctionMap():
 		Return # of valid pixels in map (i.e. where Ar is not stored
 		as the default, NaN).
 		'''
-		return np.sum(np.isfinite(self.Ar))
+		return np.sum(np.isfinite(self.Ar[0]))
 	
 	def valid_pixels(self):
 		'''
@@ -418,7 +417,7 @@ class ExtinctionMap():
 		else:
 			Ar_map_clipped = self.evaluate(mu_eval)[0]
 		if lb_bounds != None:
-			pix_mask = (l >= values.lb_bounds[0]) & (l <= values.lb_bounds[1]) & (b >= values.lb_bounds[2]) & (b <= values.lb_bounds[3])
+			pix_mask = (l >= lb_bounds[0]) & (l <= lb_bounds[1]) & (b >= lb_bounds[2]) & (b <= lb_bounds[3])
 			Ar_map_clipped = Ar_map_clipped[pix_index[pix_mask]]
 		else:
 			Ar_map_clipped = Ar_map_clipped[pix_index]
@@ -432,6 +431,9 @@ class ExtinctionMap():
 		else:
 			index = int(index)
 		return Ar_map_clipped[index]
+		
+	def rasterize(mu, resolution='native', lb_bounds='auto'):
+		pass
 
 
 

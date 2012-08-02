@@ -291,28 +291,22 @@ def main():
 		#input_files = filter(lambda f: f.endswith('.dat'), os.listdir(values.input[0]))
 	else:
 		input_files = values.input
-	mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(input_files)
-	print '%d pixel(s) loaded.' % len(pix_index)
+	m = hputils.ExtinctionMap(input_files, FITS=False, nside=values.nside, nested=values.nest)	
+	#mu_anchors, Ar_anchors, pix_index, chi2dof = load_reddening(input_files)
+	print '%d pixel(s) loaded.' % m.npix()
 	
 	# Output reddening maps to a FITS file
 	if values.fitsout != None:
-		mu = mu_anchors[0].__copy__()
-		print 'Saving extinction map at mu = ', mu
-		maps = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu, nside=values.nside)
-		fname = abspath(values.fitsout)
-		if not fname.endswith('.fits'):
-			fname += '.fits'
-		print 'Writing extinction map to %s ...' % fname
-		write_maps(fname, maps, mu, values.nest)
-		del maps
+		print 'Saving extinction map to %s...' % values.fitsout
+		m.save(values.fitsout)
 	
 	# Generate reddening map at a range of distances
-	#mu_eval = np.array([6., 7., 8., 9., 10., 11., 12., 13., 14.], dtype=np.float64)
 	mu_eval = np.array(values.mu, dtype=np.float64)
-	Ar_map = eval_Ar(mu_anchors, Ar_anchors, pix_index, mu_eval, nside=values.nside)
+	Ar_map = m.evaluate(mu_eval)
 	
 	# Determine maximum A_r within bounds
-	theta, phi = hp.pix2ang(values.nside, np.array(pix_index).astype(int), nest=values.nest)
+	pix_index = m.valid_pixels
+	theta, phi = hp.pix2ang(values.nside, pix_index, nest=values.nest)
 	l, b = hputils.thetaphi2lb(theta, phi)
 	pix_mask = (l >= values.lb_bounds[0]) & (l <= values.lb_bounds[1]) & (b >= values.lb_bounds[2]) & (b <= values.lb_bounds[3])
 	Ar_map_clipped = Ar_map[-1, pix_index[pix_mask]]

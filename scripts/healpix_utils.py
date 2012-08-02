@@ -230,7 +230,6 @@ class ExtinctionMap():
 			self.load(fname)
 		else:
 			self.load_from_binaries(fname, nside, nested)
-		
 	
 	def save(self, fname):
 		'''
@@ -368,6 +367,26 @@ class ExtinctionMap():
 		measure of the relative goodness of fit in different pixels.
 		'''
 		return np.divide(self.measure, self.N_stars - len(self.mu) - 1)
+	
+	def npix(self):
+		'''
+		Return # of valid pixels in map (i.e. where Ar is not stored
+		as the default, NaN).
+		'''
+		return np.sum(np.isfinite(self.Ar))
+	
+	def valid_pixels(self):
+		'''
+		Return the healpix numbers of the pixels which have been loaded.
+		'''
+		return np.where(np.isfinite(self.Ar))[0]
+	
+	def Ar_percentile(self, percentile):
+		'''
+		Determine the threshold in Ar below which a given percentage of
+		pixels lie.
+		'''
+		pass
 
 
 

@@ -98,7 +98,8 @@ def healmap_rasterize(m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size
 	Rasterize a healpix map in Cartesian projection.
 	
 	Input:
-	    m           Healpix map.
+	    m           Healpix map, list of maps, or ndarray with first index
+	                identifying separate maps.
 	    nside       Healpix nside parameter.
 	    nest        True if map is stored in nested healpix ordering.
 	    lb_bounds   (l_min, l_max, b_min, b_max). Default: all l,b included.
@@ -121,23 +122,42 @@ def healmap_rasterize(m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size
 	# Make grid of pixels to plot
 	xsize, ysize = size
 	l, b = np.mgrid[0:xsize, 0:ysize].astype(np.float32) + 0.5
+	#print xsize, ysize
+	#print l.shape, b.shape
 	l = lb_bounds[1] - (lb_bounds[1] - lb_bounds[0]) * l / float(xsize)
 	b = lb_bounds[2] + (lb_bounds[3] - lb_bounds[2]) * b / float(ysize)
 	theta, phi = lb2thetaphi(l, b)
 	del l, b
+	#print size
 	
 	# Convert coordinates to healpix pixels and create 2D map
 	pix = hp.ang2pix(nside, theta, phi, nest=nest)
-	img = m[pix]
+	img = None
+	if type(m) == list:
+		img = []
+		for submap in m:
+			img.append(m[pix])
+			img[-1].shape = (xsize, ysize)
+	elif len(m.shape) == 2:
+		img = m[:,pix]
+		img.shape = (img.shape[0], xsize, ysize)
+	else:
+		img = m[pix]
+		img.shape = (xsize, ysize)
 	del pix
-	img.shape = (xsize, ysize)
 	
 	# Center map on l=0
 	if center_gal:
 		phi[phi >= 360.] -= 360.
 		shift = int(np.round(xsize/2. - np.unravel_index(np.argmin(np.abs(phi)), img.shape)[0]))
 		#print 'Rolling by %d pixels (%.2f%% of xsize)' % (shift, 100.*float(shift)/xsize)
-		img = np.roll(img, shift, axis=0)
+		if type(m) == list:
+			for i,subimg in enumerate(img):
+				img[i] = np.roll(subimg, shift, axis=0)
+		elif len(m.shape) == 2:
+			img = np.roll(img, shift, axis=1)
+		else:
+			img = np.roll(img, shift, axis=0)
 	
 	if return_theta_phi:
 		return img, theta, phi
@@ -432,35 +452,176 @@ class ExtinctionMap():
 			index = int(index)
 		return Ar_map_clipped[index]
 		
-	def rasterize(mu, resolution='native', lb_bounds='auto'):
-		pass
+	def rasterize(self, mu_eval, size='native', lb_bounds='auto', center_gal=False, **kwargs):
+		'''
+		Rasterize the extinction map.
+		
+		Input:
+			mu_eval     Distance modulus or moduli at which to rasterize map
+			size        Width and height of rasterized image(s) to produce.
+			            If 'native' or 'auto' is given, then estimate
+			            correct resolution given nside parameter of map
+			            and the (l,b) bounds of the image.
+			lb_bounds   Bounds in Galactic l and b (in degrees) to rasterize.
+			            If 'auto' is given, then the bounds are set to
+			            include all the valid pixels. If 'full' is given,
+			            then the bounds are set to (0, 360, -90, 90).
+			center_gal  If True, place rasterized pixel closest to l=0 at
+	                    center of image.
+			
+			**kwargs    Additional parameters to pass to healmap_rasterize.
+		
+		Output:
+			img         Rasterized image of healpix map in Cartesian projection.
+		'''
+		# Interpret size and lb_bounds
+		resolution = rad2deg(hp.pixelfunc.nside2resol(self.nside))
+		if type(lb_bounds) == str:
+			if lb_bounds.lower() == 'auto':
+				lb_bounds = list(self.pixel_bounds())
+				lb_bounds[0] -= resolution
+				lb_bounds[1] += resolution
+				lb_bounds[2] -= resolution
+				lb_bounds[3] += resolution
+				if lb_bounds[2] < -90.:
+					lb_bounds[2] = -90.
+				if lb_bounds[3] > 90.:
+					lb_bounds[3] = 90.
+			elif lb_bounds.lower() == 'full':
+				lb_bounds = [0., 360., -90., 90.]
+			else:
+				raise ValueError('Unrecognized bounds option: %s' % lb_bounds)
+		if type(size) == str:
+			if size.lower() in ['native', 'auto']:
+				size = [int(3.*(lb_bounds[1] - lb_bounds[0])/resolution), int(3.*(lb_bounds[3] - lb_bounds[2])/resolution)]
+			else:
+				raise ValueError('Unrecognized size option: %s' % size)
+		if 'nside' in kwargs:
+			print "Ignoring option 'nside'."
+		if 'nest' in kwargs:
+			print "Ignoring option 'nest'."
+		
+		if center_gal:
+			lb_bounds[0] -= 180.
+			lb_bounds[1] -= 180.
+		
+		# Evaluate healpix map and pass to rasterizing function
+		m = self.evaluate(mu_eval)
+		return healmap_rasterize(m, self.nside, nest=self.nested, lb_bounds=lb_bounds, size=size, center_gal=center_gal, **kwargs), lb_bounds
+	
+	def to_axes(self, ax, mu_eval, size='native', lb_bounds='auto', center_gal=False, log_scale=False, **kwargs):
+		'''
+		Plot the extinction map to the given axes.
+		
+		Input:
+		    ax          Axes or list of axes two which to plot map.
+			mu_eval     Distance modulus or moduli at which to rasterize map.
+			size        Width and height of rasterized image(s) to produce.
+			            If 'native' or 'auto' is given, then estimate
+			            correct resolution given nside parameter of map
+			            and the (l,b) bounds of the image.
+			lb_bounds   Bounds in Galactic l and b (in degrees) to rasterize.
+			            If 'auto' is given, then the bounds are set to
+			            include all the valid pixels. If 'full' is given,
+			            then the bounds are set to (0, 360, -90, 90).
+			center_gal  If True, place rasterized pixel closest to l=0 at
+	                    center of image.
+			
+			**kwargs    Additional parameters to pass to pyplot.imshow.
+		
+		Output:
+			image       Image object returned by ax.imshow. This can be used,
+						for example, to create a colorbar.
+		'''
+		# Rasterize the map
+		img, lb_bounds = self.rasterize(mu_eval, size=size, lb_bounds=lb_bounds, center_gal=center_gal)
+		
+		if type(mu_eval) not in [list, np.ndarray]:
+			mu_eval = [mu_eval]
+		if len(img.shape) == 2:
+			img.shape = (1, img.shape[0], img.shape[1])
+		if type(ax) != list:
+			ax = [ax]
+		
+		# Set imshow options
+		vmin, vmax = None, None
+		if 'vmin' not in kwargs:
+			vmin, vmax = self.Ar_percentile([5, 95], lb_bounds=lb_bounds, mu_eval=np.max(mu_eval))
+			if log_scale:
+				kwargs['vmin'] = np.log(vmin) #np.log(np.min(img[np.isfinite(img)]))
+			else:
+				kwargs['vmin'] = vmin #np.min(img[np.isfinite(img)])
+		if 'vmax' not in kwargs:
+			if log_scale:
+				kwargs['vmax'] = np.log(vmax) #np.log(np.max(img[np.isfinite(img)]))
+			else:
+				kwargs['vmax'] = vmax #np.max(img[np.isfinite(img)])
+		if 'aspect' not in kwargs:
+			kwargs['aspect'] = 'auto'
+		if 'origin' in kwargs:
+			print "Ignoring option 'origin'."
+		if 'extent' in kwargs:
+			print "Ignoring option 'extent'."
+		kwargs['origin'] = 'lower'
+		
+		if center_gal:
+			lb_bounds[0] -= 180.
+			lb_bounds[1] -= 180.
+		
+		# Plot each distance to a different axis
+		for subax, subimg in zip(ax, img):
+			lb_bounds_internal = np.array(lb_bounds)
+			
+			# Handle special case where the axes use the Mollweide projection
+			if subax.name == 'mollweide':
+				if not center_gal:
+					lb_bounds_internal[0] -= 180.
+					lb_bounds_internal[1] -= 180.
+				if (np.abs(lb_bounds_internal[0] + 180.) > 0.001) or (np.abs(lb_bounds_internal[1] - 180.) > 0.001) or (np.abs(lb_bounds_internal[2] + 90.) > 0.001) or (np.abs(lb_bounds_internal[3] - 90.) > 0.001):
+					print 'Warning: Mollweide projection requires lb_bounds = (0., 360., -90., 90.).'
+				lb_bounds_internal = list(deg2rad(np.array(lb_bounds_internal)))
+			
+			tmp_l_max = lb_bounds_internal[1]
+			lb_bounds_internal[1] = lb_bounds_internal[0]
+			lb_bounds_internal[0] = tmp_l_max
+			
+			# Plot to given axes
+			if (subax.name != 'mollweide') and ('interpolation' not in kwargs):
+				kwargs['interpolation'] = 'nearest'
+			kwargs['extent'] = lb_bounds_internal
+			if log_scale:
+				image = subax.imshow(np.log(subimg.T), **kwargs)
+			else:
+				image = subax.imshow(subimg.T, **kwargs)
+		
+		return image
 
 
 
 def main():
 	fname = ['../output/gal_plane_reddening_pt1_500%d.dat' % i for i in range(3)]
 	m = ExtinctionMap(fname, FITS=False)
-	healpix_img = m.evaluate(np.linspace(5., 15., 6))
 	
+	# Set up figure
 	mplib.rc('text', usetex=True)
 	mplib.rc('axes', grid=False)
-	
 	fig = plt.figure(figsize=(7,5))
-	image = None
-	for i, hpimg in enumerate(healpix_img):
-		ax = fig.add_subplot(2,3,i+1)#, projection='mollweide')
+	ax = []
+	for i in range(6):
+		ax.append(fig.add_subplot(2,3,i+1))#, projection='mollweide'))
 		y, x = np.unravel_index(i, (2,3))
 		if y != 1:
-			ax.set_xticklabels([])
+			ax[-1].set_xticklabels([])
 		if x != 0:
-			ax.set_yticklabels([])
-		image = healmap_to_axes(ax, hpimg, m.nside, nest=m.nested, size=(500,300), center_gal=True, clip_on=False, lb_bounds=[0., 360., -90., 90.], vmax=3.)
+			ax[-1].set_yticklabels([])
+	
+	# Plot map to axes
+	image = m.to_axes(ax, np.linspace(5., 15., 6), log_scale=False, vmin=0.)
+	
+	# Add color bar
 	fig.subplots_adjust(wspace=0., hspace=0., right=0.88)
 	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
 	cb = fig.colorbar(image, cax=cax)
-	
-	print m.Ar_percentile([50, 75, 90, 99, 100], mu_eval=10.)
-	print m.Ar[-1, m.valid_pixels()]
 	
 	plt.show()
 	

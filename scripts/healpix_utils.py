@@ -23,6 +23,7 @@
 #       
 
 # TODO: Change to nest=True if query_lsd.py is run again.
+# TODO: Add pix_index option to evaluate function
 
 import matplotlib.pyplot as plt
 import matplotlib as mplib
@@ -357,7 +358,7 @@ class ExtinctionMap():
 					break
 			f.close()
 	
-	def evaluate(self, mu_eval):
+	def evaluate(self, mu_eval, pix_index=None):
 		'''
 		Evaluate Ar at the given distance modulus, or list of distance
 		moduli, mu_eval.
@@ -365,16 +366,24 @@ class ExtinctionMap():
 		if type(mu_eval) not in [list, np.ndarray]:
 			mu_eval = [mu_eval]
 		
+		query_map = self.Ar
+		if pix_index != None:
+			query_map = self.Ar[:,pix_index]
+		
 		# Create an empty map for each value of mu
-		Ar_map = np.empty((len(mu_eval), hp.nside2npix(self.nside)), dtype=np.float64)
+		Ar_map = None
+		if (pix_index == None) or (type(pix_index) in [list, np.ndarray]):
+			Ar_map = np.empty((len(mu_eval), query_map.shape[1]), dtype=np.float64)
+		else:
+			Ar_map = np.empty(len(mu_eval), dtype=np.float64)
 		Ar_map.fill(np.NaN)
 		
 		for k,m in enumerate(mu_eval):
 			if (m >= self.mu[0]) and (m <= self.mu[-1]):
 				for i,mu_anchor in enumerate(self.mu[1:]):
 					if mu_anchor >= m:
-						slope = (self.Ar[i+1] - self.Ar[i]) / (self.mu[i+1] - self.mu[i])
-						Ar_map[k] = self.Ar[i] + slope * (m - self.mu[i])
+						slope = (query_map[i+1] - query_map[i]) / (self.mu[i+1] - self.mu[i])
+						Ar_map[k] = query_map[i] + slope * (m - self.mu[i])
 						break
 		
 		return Ar_map
@@ -509,7 +518,7 @@ class ExtinctionMap():
 		m = self.evaluate(mu_eval)
 		return healmap_rasterize(m, self.nside, nest=self.nested, lb_bounds=lb_bounds, size=size, center_gal=center_gal, **kwargs), lb_bounds
 	
-	def to_axes(self, ax, mu_eval, size='native', lb_bounds='auto', center_gal=False, log_scale=False, **kwargs):
+	def to_axes(self, ax, mu_eval, size='native', lb_bounds='auto', center_gal=False, log_scale=False, diff=False, **kwargs):
 		'''
 		Plot the extinction map to the given axes.
 		
@@ -519,13 +528,17 @@ class ExtinctionMap():
 			size        Width and height of rasterized image(s) to produce.
 			            If 'native' or 'auto' is given, then estimate
 			            correct resolution given nside parameter of map
-			            and the (l,b) bounds of the image.
+			            and the (l,b) bounds of the image. (Default: 'native')
 			lb_bounds   Bounds in Galactic l and b (in degrees) to rasterize.
 			            If 'auto' is given, then the bounds are set to
 			            include all the valid pixels. If 'full' is given,
 			            then the bounds are set to (0, 360, -90, 90).
+			            (Default: 'auto')
 			center_gal  If True, place rasterized pixel closest to l=0 at
-	                    center of image.
+	                    center of image. (Default: False)
+	        log_scale   Use a logarithmic scale. (Default: False)
+	        diff        Plot the difference between extinction at subsequent
+	                    distances. (Default: False)
 			
 			**kwargs    Additional parameters to pass to pyplot.imshow.
 		
@@ -540,6 +553,8 @@ class ExtinctionMap():
 			mu_eval = [mu_eval]
 		if len(img.shape) == 2:
 			img.shape = (1, img.shape[0], img.shape[1])
+		elif diff:
+			img[1:] = img[1:] - img[:-1]
 		if type(ax) != list:
 			ax = [ax]
 		
@@ -616,12 +631,24 @@ def main():
 			ax[-1].set_yticklabels([])
 	
 	# Plot map to axes
-	image = m.to_axes(ax, np.linspace(5., 15., 6), log_scale=False, vmin=0.)
+	image = m.to_axes(ax, np.linspace(5., 15., 6), log_scale=False, diff=False, vmin=0.)
 	
 	# Add color bar
 	fig.subplots_adjust(wspace=0., hspace=0., right=0.88)
 	cax = fig.add_axes([0.9, 0.1, 0.03, 0.8])
 	cb = fig.colorbar(image, cax=cax)
+	
+	fits_fname = '../output/test.fits'
+	#m.save(fits_fname)
+	
+	import fit_pdfs as fp
+	pix_index = np.nanargmax(m.evaluate(15.))
+	mu_anchors = np.linspace(5., 15., 6)
+	Delta_Ar, weight = fp.get_neighbors(fits_fname, pix_index, mu_anchors=mu_anchors)
+	#print Delta_Ar
+	print weight
+	for mu, DAr in zip(mu_anchors, Delta_Ar):
+		print mu, DAr
 	
 	plt.show()
 	

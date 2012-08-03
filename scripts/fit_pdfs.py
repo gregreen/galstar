@@ -42,6 +42,7 @@ import matplotlib.pyplot as plt
 
 from galstar_io import *
 from galstarutils import get_objects
+import healpix_utils as hputils
 
 
 
@@ -180,7 +181,7 @@ def min_anneal(pdfs, guess, p0=1.e-5, regulator=1000., dwell=1000):
 
 
 # Return a measure to minimize with NLopt
-def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000.):
+def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000., Delta_y_neighbor=None, weight_neighbor=None):
 	if grad.size > 0:
 		raise Exception('Gradient-free methods only, please!')
 	
@@ -199,11 +200,16 @@ def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000.):
 	#print ''
 	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
 	
+	# Tie this pixel to neighbors
+	if Delta_y_neighbor != None:
+		Delta_y_tension = weight_neighbor * (Delta_y_neighbor - Delta_y).T / (2. * 10. * 10.)
+		measure += np.sum(Delta_y_tension * Delta_y_tension)
+	
 	return measure
 
 
 # Maximize the line integral using an algorithm from NLopt
-def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=25., maxeval=10000, algorithm='CRS'):
+def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=25., maxeval=10000, algorithm='CRS', Delta_Ar_neighbor=None, weight_neighbor=None):
 	N_regions = guess.size - 1
 	
 	opt = None
@@ -236,7 +242,7 @@ def min_nlopt(pdfs, guess, p0=1.e-5, regulator=1000., maxtime=25., maxeval=10000
 	#opt.set_xtol_abs(0.1)
 	
 	# Set the objective function
-	opt.set_min_objective(lambda x, grad: nlopt_measure(x, grad, pdfs, p0, regulator))
+	opt.set_min_objective(lambda x, grad: nlopt_measure(x, grad, pdfs, p0, regulator, Delta_Ar_neighbor, weight_neighbor))
 	
 	# Run optimization algorithm
 	x = opt.optimize(guess)
@@ -338,7 +344,7 @@ def gen_guess(pdfs, N_regions=15):
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000, maxtime=25., maxeval=10000, p0=1.e-5, ev_range=25.):
+def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000, maxtime=25., maxeval=10000, p0=1.e-5, ev_range=25., iterate=None):
 	# Load pdfs
 	sys.stderr.write('Loading binned pdfs...\n')
 	bounds, p = None, None
@@ -353,12 +359,18 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	sys.stderr.write('# of stars filtered out: %d of %d.\n\n' % (np.sum(~mask), p.shape[0]))
 	p = smooth_bins(p[mask], smooth)
 	
+	# Load in neighboring pixels from previous iteration
+	Delta_Ar_neighbor, weight_neighbor = None, None
+	if iterate != None:
+		Delta_Ar_neighbor, weight_neighbor = get_neighbors(abspath(iterate[0]), int(iterate[1]))
+		Delta_Ar_neighbor *= float(p.shape[2]) / (bounds[3] - bounds[2])
+	
 	# Generate a guess based on the stacked pdfs
 	sys.stderr.write('Generating guess...\n')
 	guess, y_mean = gen_guess(p, N_regions=N_regions)
 	guess_Delta_Ar = guess * ((bounds[3] - bounds[2]) / float(p.shape[2]))
 	Delta_Ar_mean = y_mean * ((bounds[3] - bounds[2]) / float(p.shape[2]))
-	guess_fitness = nlopt_measure(guess, np.array([]), p, p0, regulator)
+	guess_fitness = nlopt_measure(guess, np.array([]), p, p0, regulator, Delta_Ar_neighbor, weight_neighbor)
 	sys.stderr.write('Guess: %s\n' % np.array_str(guess_Delta_Ar, max_line_width=N_regions*100, precision=8))
 	sys.stderr.write('Guess measure: %.3f\n\n' % guess_fitness)
 	guess_line_int = line_integral(guess, p)
@@ -383,7 +395,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 		sys.stderr.write('Fitting reddening profile using NLopt (nlopt.GN_CRS2_LM)...\n')
 		x, success, measure = min_nlopt(p, guess, p0=p0, regulator=regulator, maxtime=maxtime, maxeval=maxeval, algorithm='CRS')
 	
-	measure = nlopt_measure(x, np.array([]), p, p0, regulator)
+	measure = nlopt_measure(x, np.array([]), p, p0, regulator, Delta_Ar_neighbor, weight_neighbor)
 	line_int = line_integral(x, p)
 	N_outliers = np.sum(line_int == 0.)
 	N_softened = np.sum(line_int < p0)
@@ -577,48 +589,32 @@ def output_profile(fname, pixnum, bounds, Delta_Ar, N_stars, line_int, measure, 
 # Load in neighboring pixels
 #
 
-def get_neighbors(map_fname, mu_anchors, pixindex, nside=512, nest=True):
-	# Determine the healpix index of the neighboring pixels
-	index = hp.get_all_neighbours(nside, pixindex, nest=nest)
+def get_neighbors(map_fname, pixindex, mu_anchors=None):
+	m = hputils.ExtinctionMap(map_fname, FITS=True)
 	
-	# Load in the neigbhoring pixels from the map
-	mu_map = []
+	if mu_anchors == None:
+		mu_anchors = m.mu
 	
-	
-	Ar_neighbor = np.empty([len(mu_map), len(index)], dtype=np.float64)
-	
-	
-	# Determine reddening in each distance bin
-	n = 0
-	j = 1
-	while j <= len(mu_map):
-		if mu_map[j] >= mu_anchors[n]:
-			slope = (Ar_neighbor[j] - Ar_neighbor[j-1]) / (mu_map[j] - mu_map[j-1])
-			Ar_neighbor[n, pix] = Ar_neighbor[j-1] + slope * (mu_anchors[n] - mu_map[j-1])
-			
-			#print '%.3f <= %.3f <= %.3f' % (mu_arr[j-1], mu_eval[n], mu_arr[j])
-			#print 'Delta_mu = %.3g' % (mu_eval[n] - mu_arr[j-1])
-			#print 'slope:'
-			#print slope
-			#print ''
-			
-			n += 1
-			if n >= len(mu_anchors):
-				break
-		else:
-			j += 1
-	Delta_Ar = Ar_neighbor[1:] - Ar_neighbor[:-1]
+	# Query neighboring pixels
+	neighbor_index = hp.pixelfunc.get_all_neighbours(m.nside, pixindex, nest=m.nested)
+	Delta_Ar = m.evaluate(mu_anchors, pix_index=neighbor_index)
+	Delta_Ar[1:] = Delta_Ar[1:] - Delta_Ar[:-1]
+	mask = np.isfinite(Delta_Ar[0,:])
+	neighbor_index = neighbor_index[mask]
+	Delta_Ar = Delta_Ar[:,mask]
 	
 	# Assign weight to each pixel based on distance
-	theta, phi = hp.pix2ang(nside, index, nest=nest)
-	theta_0, phi_0 = hp.pix2ang(nside, pixindex, nest=nest)
+	theta, phi = hp.pix2ang(m.nside, neighbor_index, nest=m.nested)
+	theta_0, phi_0 = hp.pix2ang(m.nside, pixindex, nest=m.nested)
+	print theta - theta_0
+	print phi - phi_0
 	dist = np.arccos(np.sin(theta_0) * np.sin(theta) + np.cos(theta_0) * np.cos(theta) * np.cos(phi - phi_0))
-	sigma_dist = hp.npix2resol(nside, arcmin=False)
+	sigma_dist = hp.pixelfunc.nside2resol(m.nside, arcmin=False)
 	weight = np.exp(-dist * dist / (2. * sigma_dist * sigma_dist))
 	weight /= np.sum(weight)
 	
 	# Return reddening in each bin for each neighboring pixel, as well as weight assigned to each neighbor
-	return Delta_Ar, weight
+	return Delta_Ar.T, weight
 
 
 
@@ -647,6 +643,7 @@ def main():
 	parser.add_argument('-ev', '--evidence_range', type=float, default=25., help='Maximum difference in ln(evidence) from max. value before star is considered outlier (default: 25).')
 	parser.add_argument('-nsp', '--nonsparse', action='store_true', help='Binned pdfs are not stored in sparse format.')
 	parser.add_argument('-pltind', '--plot_individual', type=int, nargs=2, default=None, help='Plot individual pdfs with reddening profile.')
+	parser.add_argument('-it', '--iterate', type=str, nargs=2, default=None, help='Tie pixel to neighbors in given reddening map. The healpix index of this pixel must be provided as the second argument.')
 	#parser.add_argument('-v', '--verbose', action='store_true', help='Print information on fit.')
 	if 'python' in sys.argv[0]:
 		offset = 2
@@ -659,7 +656,7 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, maxeval=values.maxeval, p0=values.floor, ev_range=values.evidence_range)
+	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, maxeval=values.maxeval, p0=values.floor, ev_range=values.evidence_range, iterate=values.iterate)
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	

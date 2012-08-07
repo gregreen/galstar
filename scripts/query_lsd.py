@@ -94,7 +94,9 @@ def main():
 	parser.add_argument('-n', '--nside', type=int, default=512, help='Healpix nside parameter (default: 512).')
 	parser.add_argument('-b', '--bounds', type=float, nargs=4, default=None, help='Restrict pixels to region enclosed by: l_min, l_max, b_min, b_max.')
 	parser.add_argument('-fs', '--filesize', type=int, default=85000, help='Number of stars per input file (default: 85000).')
-	parser.add_argument('-min', '--min_stars', type=int, default=15, help='Minimum # of stars in pixel.')
+	parser.add_argument('-min', '--min_stars', type=int, default=5, help='Minimum # of stars in pixel.')
+	parser.add_argument('-sdss', '--sdss', action='store_true', help='Only select objects identified in the SDSS catalog as stars.')
+	parser.add_argument('-ext', '--maxAr', type=float, default=None, help='Maximum allowed A_r.')
 	parser.add_argument('-vis', '--visualize', action='store_true', help='Show plot of footprint.')
 	parser.add_argument('-r', '--ring', action='store_true', help='Use healpix ring ordering scheme.')
 	if 'python' in sys.argv[0]:
@@ -119,7 +121,14 @@ def main():
 	
 	# Set up the query
 	db = lsd.DB(os.environ['LSD_DB'])
-	query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)"
+	query = None
+	if values.sdss:
+		if values.maxAr == None:
+			query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from sdss, ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2) & (type == 6)"
+		else:
+			query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from sdss, ucal_magsqv(matchedto=sdss,nmax=1,dmax=5) where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2) & (type == 6) & (rExt <= %.4f)" % values.maxAr	
+	else:
+		query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)"
 	query = db.query(query)
 	
 	# Determine the base output filename (without the '.in' extension)

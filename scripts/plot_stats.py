@@ -33,10 +33,12 @@ from os.path import abspath
 from operator import itemgetter
 from math import sqrt
 
+from galstar_io import *
 
 DM, Ar, Mr, FeH = range(4)
 
-
+'''
+# This code is made obsolete by galstar_io.py
 def read_stats(fname):
 	f = open(fname, 'rb')
 	mean = np.empty(4, dtype=float)
@@ -62,6 +64,7 @@ def read_stats(fname):
 		for j in range(i):
 			cov[i][j] = cov[j][i]
 	return converged, mean, cov, ML_dim, ML
+'''
 
 err_spline = None
 
@@ -117,77 +120,20 @@ def get_objects_ascii(txt_fname):
 def main():
 	parser = argparse.ArgumentParser(prog='plot_stats.py', description='Plot overview of galstar output', add_help=True)
 	parser.add_argument('files', type=str, nargs='+', help='Galstar statistics datafiles to open')
-	parser.add_argument('--converged', action='store_true', help='Filter out nonconverged stars')
-	parser.add_argument('--filterr', type=float, help='Filter out stars with errors greater than specified amount')
-	parser.add_argument('--filtmag', type=float, help='Filter out stars with magnitude greater than specified amount')
-	parser.add_argument('--galfast_comp', type=str, help='Galfast fits file')
-	parser.add_argument('--galfast_only', action='store_true', help='Plot only galfast catalog')
-	parser.add_argument('--txt_comp', type=str, help='Text file containing true stellar parameter values')
-	parser.add_argument('--output', type=str, help='Output plot filename')
-	parser.add_argument('--errorbars', action='store_true', help='Show error bars on plots')
-	parser.add_argument('--useML', type=int, default=-1, help='Index of max. likelihood in stats file to use')
-	parser.add_argument('--norm', action='store_true', help='Normalize differences to standard deviation')
+	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out nonconverged stars')
+	parser.add_argument('-err', '--filterr', type=float, default=None, help='Filter out stars with errors greater than specified amount')
+	parser.add_argument('-mag', '--filtmag', type=float, default=None, help='Filter out stars with magnitude greater than specified amount')
+	#parser.add_argument('--galfast_comp', type=str, help='Galfast fits file')
+	#parser.add_argument('--galfast_only', action='store_true', help='Plot only galfast catalog')
+	#parser.add_argument('--txt_comp', type=str, help='Text file containing true stellar parameter values')
+	parser.add_argument('-o', '--output', type=str, help='Output plot filename')
+	parser.add_argument('-fig', '--figsize', type=float, nargs=2, default=(5,5), help='Figure size in inches (width, height)')
+	parser.add_argument('-norm', '--normalize', nargs='+', type=str, default=None, help='Normalize DM or Ar to standard deviation')
 	if sys.argv[0] == 'python':
 		offset = 2
 	else:
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
-	
-	# Sort filenames
-	files = values.files
-	z = [(ff, int((ff.split('_')[-1]).split('.')[0])) for ff in files]
-	z.sort(key=itemgetter(1))
-	for n in range(len(z)):
-		files[n] = z[n][0]
-	
-	# Read in means, covariances
-	N = len(files)
-	means = np.empty((N, 4), dtype=float)
-	cov = np.empty((N, 4, 4), dtype=float)
-	converged = np.empty(N, dtype=bool)
-	ML = np.empty((N, 2), dtype=float)
-	for i,fn in enumerate(files):
-		converged[i], means[i], cov[i], tmp1, tmp2 = read_stats(abspath(fn))
-		if values.useML != -1:
-			ML[i] = tmp2[values.useML]
-	
-	# Initialize filter
-	idx = np.empty(N, dtype=bool)
-	idx.fill(True)
-	
-	# Calculate filter for nonconverged stars
-	conv = np.empty(N, dtype=bool)
-	conv.fill(True)
-	if values.converged:
-		conv = (converged == True)
-	
-	# Calculate filters related to galfast output
-	ra_dec, mags, errs, params = None, None, None, None
-	filterr = np.empty(N, dtype=bool)
-	filterr.fill(True)
-	filtmag = np.empty(N, dtype=bool)
-	filtmag.fill(True)
-	if values.galfast_comp:
-		ra_dec, mags, errs, params = get_objects(abspath(values.galfast_comp))
-		# Stars with large errors
-		if values.filterr != None:
-			for i in range(N):
-				filterr[i] = (errs[i,:].max() <= values.filterr)
-		# Faint stars
-		if values.filtmag != None:
-			for i in range(N):
-				filtmag[i] = (mags[i,:].max() <= values.filtmag)
-	elif values.txt_comp:
-		params = get_objects_ascii(abspath(values.txt_comp))
-	
-	# Combine and apply filters
-	idx = np.logical_and(filterr, filtmag)
-	means = means[idx]
-	cov = cov[idx]
-	ML = ML[idx]
-	conv = conv[idx]
-	not_conv = np.logical_not(conv)
-	N = len(means)
 	
 	# Set matplotlib style attributes
 	mplib.rc('text',usetex=True)
@@ -195,120 +141,93 @@ def main():
 	mplib.rc('xtick.minor', size=4)
 	mplib.rc('axes', grid=False)
 	
-	# Scatter plot of (DM, Ar)
-	if (values.galfast_comp == None) and (values.txt_comp == None):
-		fig = plt.figure()
-		ax = fig.add_subplot(1,1,1)
-		xerr, yerr = np.empty(N, dtype=float), np.empty(N, dtype=float)
-		for i in range(N):
-			xerr[i] = sqrt(cov[i,DM,DM])
-			yerr[i] = sqrt(cov[i,Ar,Ar])
-		if values.useML != -1:
-			x = ML[:,0]
-			y = ML[:,1]
-		else:
-			x = means[:,DM]
-			y = means[:,Ar]
-		if values.errorbars:
-			ax.errorbar(x, y, xerr, yerr, linestyle='None')
-		else:
-			ax.plot(x, y, '.', linestyle='None', markersize=2)
-		ax.set_xlabel(r'$\mu$', fontsize=18)
-		ax.set_ylabel(r'$A_r$', fontsize=18)
-		ax.set_title(r'$\mathrm{Scatter\ Plot\ of\ } ( \mu , A_r )$', fontsize=22)
-		ax.set_ylim(0., ax.get_ylim()[1])
-	elif values.galfast_only:	# Only plot galfast input
-		fig = plt.figure()
-		ax = fig.add_subplot(1,1,1)
-		xerr, yerr = np.empty(N, dtype=float), np.empty(N, dtype=float)
-		for i in range(N):
-			xerr[i] = sqrt(cov[i,DM,DM])
-			yerr[i] = sqrt(cov[i,Ar,Ar])
-		params = params[idx]				# Apply same filter to galfast catalog as to galstar output
-		#x, y = None, None
-		x = params[:,DM]
-		y = params[:,Ar]
-		if values.errorbars:
-			ax.errorbar(x, y, xerr, yerr, linestyle='None')
-		else:
-			ax.plot(x, y, '.', linestyle='None', markersize=2)
-		ax.set_xlabel(r'$\mu$', fontsize=18)
-		ax.set_ylabel(r'$A_r$', fontsize=18)
-		ax.set_title(r'$\mathrm{Galfast\ Catalog}$', fontsize=22)
-	else:	# Compare with galfast input
-		# Determine geometry of scatter plot and histograms
-		scatter_left, scatter_bottom = 0.1, 0.1
-		scatter_width, scatter_height = 0.70, 0.60
-		buffer_x, buffer_y = 0.02, 0.02
-		histx_height, histy_height = 0.15, 0.116
-		rect_scatter = [scatter_left, scatter_bottom, scatter_width, scatter_height]
-		rect_histx = [scatter_left, scatter_bottom+scatter_height+buffer_y, scatter_width, histx_height]
-		rect_histy = [scatter_left+scatter_width+buffer_x, scatter_bottom, histy_height, scatter_height]
-		# Set up the figure with a scatter plot and two histograms
-		fig = plt.figure(figsize=(11,8.5))
-		ax_scatter = fig.add_axes(rect_scatter)
-		ax_histx = fig.add_axes(rect_histx)
-		ax_histy = fig.add_axes(rect_histy)
-		# Set tick positions
-		ax_scatter.xaxis.set_major_locator(MaxNLocator(5))
-		ax_scatter.yaxis.set_major_locator(MaxNLocator(5))
-		ax_scatter.xaxis.set_minor_locator(AutoMinorLocator())
-		ax_scatter.yaxis.set_minor_locator(AutoMinorLocator())
-		ax_histx.xaxis.set_major_formatter(NullFormatter())
-		ax_histx.yaxis.set_major_locator(MaxNLocator(3))
-		ax_histy.xaxis.set_major_locator(MaxNLocator(3))
-		ax_histy.yaxis.set_major_formatter(NullFormatter())
-		ax_histy.yaxis.set_minor_formatter(NullFormatter())
-		# Set up grid
-		ax_scatter.xaxis.grid(True, which='major')
-		ax_scatter.yaxis.grid(True, which='major')
-		ax_histx.yaxis.grid(True, which='major')
-		ax_histy.xaxis.grid(True, which='major')
-		# Set up data
-		xerr, yerr = np.empty(N, dtype=float), np.empty(N, dtype=float)
-		for i in range(N):
-			xerr[i] = sqrt(cov[i,DM,DM])
-			yerr[i] = sqrt(cov[i,Ar,Ar])
-		params = params[idx]				# Apply same filter to galfast catalog as to galstar output
-		x, y = None, None
-		if values.useML != -1:
-			x = ML[:,0]
-			y = ML[:,1]
-		else:
-			x = means[:,DM]
-			y = means[:,Ar]
-		x -= params[:,DM]
-		y -= params[:,Ar]
-		# Create scatterplot
-		if values.errorbars:
-			ax_scatter.errorbar(x[conv], y[conv], xerr[conv], yerr[conv], 'b', linestyle='None')
-			ax_scatter.errorbar(x[not_conv], y[not_conv], xerr[not_conv], yerr[not_conv], 'r', linestyle='None')
-		else:
-			if values.norm:
-				x = x/xerr
-				y = y/yerr
-			ax_scatter.plot(x[conv], y[conv], 'b.', linestyle='None', markersize=2)
-			ax_scatter.plot(x[not_conv], y[not_conv], 'r.', linestyle='None', markersize=2)
-		# Create histograms
-		xmin, xmax = ax_scatter.get_xlim()
-		ymin, ymax = ax_scatter.get_ylim()
-		ax_histx.hist(x[conv], range=(xmin, xmax), bins=20, alpha=0.5)
-		ax_histy.hist(y[conv], range=(ymin, ymax), bins=20, alpha=0.5, orientation='horizontal')
-		ax_histx.hist(x[not_conv], range=(xmin, xmax), bins=20, alpha=0.5, fc='r')
-		ax_histy.hist(y[not_conv], range=(ymin, ymax), bins=20, alpha=0.5, fc='r', orientation='horizontal')
-		ax_histx.set_xlim(xmin, xmax)
-		ax_histy.set_ylim(ymin, ymax)
-		# Set labels and title
-		if values.norm:
-			ax_scatter.set_xlabel(r'$\Delta \mu / \sigma_{\mu}$', fontsize=18)
-			ax_scatter.set_ylabel(r'$\Delta A_r / \sigma_{A_r}$', fontsize=18)
-		else:
-			ax_scatter.set_xlabel(r'$\Delta \mu$', fontsize=18)
-			ax_scatter.set_ylabel(r'$\Delta A_r$', fontsize=18)
-		if values.useML != -1:
-			fig.suptitle(r'$\mathrm{Comparison\ with\ Galfast\ Catalog\ (ML)}$', fontsize=22, y=0.95)
-		else:
-			fig.suptitle(r'$\mathrm{Comparison\ with\ Galfast\ Catalog\ (Means)}$', fontsize=22, y=0.95)
+	# Set up figure
+	fig = plt.figure(figsize=values.figsize, dpi=300)
+	fig.suptitle(r'$\mathrm{Scatter\ Plot\ of\ } ( \mu , A_r )$', fontsize=22)
+	
+	# Determine geometry of scatter plot and histograms
+	scatter_left, scatter_bottom = 0.16, 0.1
+	scatter_width, scatter_height = 0.62, 0.62
+	buffer_x, buffer_y = 0., 0. #0.08, 0.05
+	histx_height, histy_height = 0.17, 0.17
+	rect_scatter = [scatter_left, scatter_bottom, scatter_width, scatter_height]
+	rect_histx = [scatter_left, scatter_bottom+scatter_height+buffer_y, scatter_width, histx_height]
+	rect_histy = [scatter_left+scatter_width+buffer_x, scatter_bottom, histy_height, scatter_height]
+	
+	# Set up the figure with a scatter plot and two histograms
+	ax_scatter = fig.add_axes(rect_scatter)
+	ax_histx = fig.add_axes(rect_histx)
+	ax_histy = fig.add_axes(rect_histy)
+	
+	params = []
+	if values.normalize != None:
+		params = values.normalize
+		for i,p in enumerate(params):
+			params[i] = p.lower()
+	if 'dm' in params:
+		ax_scatter.set_xlabel(r'$\mu / \sigma_{\mu}$', fontsize=18)
+	else:
+		ax_scatter.set_xlabel(r'$\mu$', fontsize=18)
+	if 'ar' in params:
+		ax_scatter.set_ylabel(r'$A_r / \sigma_{A_r}$', fontsize=18)
+	else:
+		ax_scatter.set_ylabel(r'$A_r$', fontsize=18)
+	
+	# Info for histograms
+	DM = []
+	Ar = []
+	
+	# Handle each stats file separately
+	for f in values.files:
+		converged, ln_evidence, mean, cov = load_stats(f)
+		
+		# Apply filters
+		idx = np.empty(converged.size, dtype=bool)
+		idx.fill(True)
+		if values.converged:
+			idx = idx & (converged == True)
+		if values.filtmag != None:
+			idx = idx & np.all((mean < values.filtmag), axis=1)
+		mean = mean[idx]
+		
+		# Normalize to errors
+		if values.normalize != None:
+			err = np.sqrt(np.diagonal(cov, axis1=1, axis2=2)[idx])
+			if 'dm' not in params:
+				err[:,0] = 1.
+			if 'ar' not in params:
+				err[:,1] = 1.
+			mean = mean / err
+		
+		# Make scatterplot
+		ax_scatter.plot(mean[:,0], mean[:,1], 'b.', linestyle='None', markersize=2)
+		
+		# Append information for histograms
+		DM.append(mean[:,0])
+		Ar.append(mean[:,1])
+	
+	# Plot histograms
+	DM = np.hstack(DM)
+	Ar = np.hstack(Ar)
+	DM_sorted = np.sort(DM)
+	Ar_sorted = np.sort(Ar)
+	xmin, xmax = DM_sorted[int(0.02*(DM.size-1))], DM_sorted[int(0.98*(DM.size-1))]
+	ymin, ymax = Ar_sorted[int(0.02*(Ar.size-1))], Ar_sorted[int(0.98*(Ar.size-1))]
+	ymin = 0.
+	#if ymin < 0.:
+	#	ymin = 0.
+	ax_scatter.set_xlim(xmin, xmax)
+	ax_scatter.set_ylim(ymin, ymax)
+	#xmin, xmax = ax_scatter.get_xlim()
+	#ymin, ymax = ax_scatter.get_ylim()
+	ax_histx.hist(np.hstack(DM), range=(xmin, xmax), bins=20, alpha=0.5, orientation='vertical')
+	ax_histy.hist(np.hstack(Ar), range=(ymin, ymax), bins=20, alpha=0.5, orientation='horizontal')
+	ax_histx.set_xlim(xmin, xmax)
+	ax_histy.set_ylim(ymin, ymax)
+	ax_histx.set_yticklabels([])
+	ax_histy.set_xticklabels([])
+	ax_histx.set_xticklabels([])
+	ax_histy.set_yticklabels([])
 	
 	# Save plot to file
 	if values.output != None:

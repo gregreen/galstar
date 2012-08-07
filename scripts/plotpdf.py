@@ -62,7 +62,7 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), fname=None, labels=None, conve
 		for i in xrange(N_plots):
 			if not converged[i]:
 				xmax, ymax = grid[i].get_xlim()[1], grid[i].get_ylim()[1]
-				x, y = 0.95*xmax, 0.95*ymax
+				x, y = 0.90*xmax, 0.95*ymax
 				grid[i].text(x, y, '!', color='white', fontsize=24, horizontalalignment='right', verticalalignment='top')
 				#grid[i].scatter(x, y, color='r', s=10)
 	
@@ -83,16 +83,17 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), fname=None, labels=None, conve
 def main():
 	# Parse commandline arguments
 	parser = argparse.ArgumentParser(prog='plotpdf', description='Plots posterior distributions produced by galstar', add_help=True)
-	parser.add_argument('binfn', type=str, help='File containing binned probability density functions for each star along l.o.s. (also accepts gzipped files)')
-	parser.add_argument('statsfn', type=str, help='File containing summary statistics for each star.')
-	parser.add_argument('plotfn', type=str, help='Base filename (without extension) for plots.')
+	parser.add_argument('--binfn', nargs='+', type=str, required=True, help='File containing binned probability density functions for each star along l.o.s. (also accepts gzipped files)')
+	parser.add_argument('--statsfn', nargs='+', type=str, required=True, help='File containing summary statistics for each star.')
+	parser.add_argument('-o', '--plotfn', type=str, required=True, help='Base filename (without extension) for plots.')
 	parser.add_argument('-se', '--startend', type=int, nargs=2, default=(0,6), help='Start and end indices (default: 0 6).')
 	parser.add_argument('-rc', '--rowcol', type=int, nargs=2, default=(3,2), help='# of rows and columns, respectively (default: 2 3)')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
 	parser.add_argument('-sm', '--smooth', type=int, nargs=2, default=(1,1), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 1 1).')
-	parser.add_argument('-y', '--ymax', type=float, default=None, help='Upper bound on y in plots')
+	parser.add_argument('-y', '--ymax', type=float, default=None, help='Upper bound on y in plots.')
 	parser.add_argument('-p', '--params', type=str, nargs=2, default=('DM','Ar'), help='Name of x- and y-axes, respectively (default: DM Ar). Choices are (DM, Ar, Mr, FeH).')
-	#parser.add_argument('-cv', '--converged', action='store_true', help='Show only converged stars')
+	parser.add_argument('-cnv', '--converged', action='store_true', help='Show only converged stars.')
+	parser.add_argument('-stk', '--stack', action='store_true', help='Stack stellar pdfs.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -120,7 +121,7 @@ def main():
 	np.seterr(all='ignore')
 	
 	# Set matplotlib style attributes
-	mplib.rc('text',usetex=True)
+	mplib.rc('text', usetex=True)
 	mplib.rc('xtick.major', size=6)
 	mplib.rc('xtick.minor', size=4)
 	mplib.rc('ytick.major', size=6)
@@ -129,28 +130,62 @@ def main():
 	mplib.rc('ytick', direction='out')
 	mplib.rc('axes', grid=False)
 	
-	# For each figure, load in only the necessary probability density functions, and pass each to the plotter
-	for i in xrange(N_fig):
-		print 'Plotting figure %d of %d ...' % (i+1, N_fig)
-		plotfn = None
-		if N_fig != 1:
-			plotfn = '%s_%d.png' % (values.plotfn, i)
-		else:
-			plotfn = '%s.png' % (values.plotfn)
-		selection = (values.startend[0] + np.arange(i*N_ax, min((i+1)*N_ax, N_stars))).astype(np.uint32)
-		bounds, p = load_bins(values.binfn, True, selection)
-		clip = None
-		if values.ymax != None:
-			clip = list(bounds)
-			clip[3] = values.ymax
-		p = smooth_bins(p, values.smooth)
-		converged, ln_evidence, mean, cov = load_stats(values.statsfn, selection)
-		#p[p == 0] = np.min(p[p != 0])
-		#p = np.log(p)
-		#p[np.logical_not(np.isfinite(p))] = np.min(p[np.isfinite(p)])
-		fig = plot_surfs(p, bounds, clip, values.rowcol, plotfn, labels, converged, ln_evidence)
-		if not values.show:
-			plt.close(fig)
+	# Load in pdfs
+	pdf = []
+	converged = []
+	ln_evidence = []
+	bounds = None
+	N_stars = 0
+	for sf,bf in zip(values.statsfn, values.binfn):
+		conv, ln_ev, mean, cov = load_stats(sf)
+		bounds, p = load_bins(bf, True)
+		converged.append(conv)
+		pdf.append(p)
+		ln_evidence.append(ln_ev)
+		N_stars += conv.size
+		if N_stars >= values.startend[1]:
+			break
+	pdf = np.vstack(pdf)
+	converged = np.hstack(converged)
+	ln_evidence = np.hstack(ln_evidence)
+	if values.converged:
+		pdf = pdf[converged]
+	N_stars = pdf.shape[0]
+	pdf[~np.isfinite(pdf)] = 0.
+	print np.max(pdf)
+	pdf = smooth_bins(pdf, values.smooth)
+	print np.max(pdf)
+	
+	clip = None
+	if values.ymax != None:
+		clip = list(bounds)
+		clip[3] = values.ymax
+	
+	# Generate figures
+	if values.stack:
+		print 'Plotting stacked pdfs ...'
+		plotfn = '%s.png' % (values.plotfn)
+		imin, imax = values.startend[0], np.min([N_stars, values.startend[1]])
+		#print pdf.shape
+		pdf = np.sum(pdf[imin:imax], axis=0)
+		w,h = pdf.shape
+		pdf.shape = (1, w, h)
+		fig = plot_surfs(pdf, bounds, clip, [1,1], plotfn, labels)
+	else:
+		for i in range(values.startend[0], np.min([N_stars, values.startend[1]]), np.prod(values.rowcol)):
+			imax = np.min([i+6, converged.size])
+			print 'Plotting pdfs %d through %d of %d ...' % (i+1, imax, N_stars)
+			
+			plotfn = None
+			if np.min([N_stars, values.startend[1]]) - values.startend[0] <= np.prod(values.rowcol):
+				plotfn = '%s.png' % (values.plotfn)
+			else:
+				plotfn = '%s_%d.png' % (values.plotfn, (i-values.startend[0])/np.prod(values.rowcol))
+			
+			fig = plot_surfs(pdf[i:imax], bounds, clip, values.rowcol, plotfn, labels, converged[i:imax], ln_evidence[i:imax])
+			
+			if not values.show:
+				plt.close(fig)
 	
 	if values.show:
 		plt.show()

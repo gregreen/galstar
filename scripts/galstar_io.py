@@ -327,7 +327,9 @@ def smooth_bins(p, sigma):
 	
 	# Normalize each image to unit probability
 	for i in xrange(p_smooth.shape[0]):
-		p_smooth[i] /= np.sum(p_smooth[i])
+		norm = np.sum(p_smooth[i])
+		if norm != 0.:
+			p_smooth[i] /= norm
 	
 	return p_smooth
 

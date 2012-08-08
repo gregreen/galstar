@@ -92,19 +92,18 @@ bool generate_test_photometry(string test_fn, TModel &model, TStellarData &data)
 		if(!line.size()) { continue; }		// empty line
 		if(line[0] == '#') { continue; }	// comment
 		
+		istringstream ss(line);
 		if(count == 0) {
-			f >> data.l;
-			f >> data.b;
+			ss >> data.l >> data.b;
 			cout << "(l, b) = " << data.l << " " << data.b << endl;
 		} else {
-			istringstream ss(line);
 			ss >> DM >> Ar >> Mr >> FeH;
 			TStellarData::TMagnitudes tmp;
 			TSED sed = (*model.sed_interp)(Mr, FeH);
 			cout << "stellar parameters: " << DM << " " << Ar << " " << Mr << " " << FeH << endl;
 			cout << "grizy = {";
 			for(unsigned int i=0; i<NBANDS; i++) {
-				tmp.err[i] = 0.05;				// TODO: Set realistic errors from spline
+				tmp.err[i] = 0.1;				// TODO: Set realistic errors from spline
 				tmp.m[i] = sed.v[i] + DM + Ar*model.Acoef[i] + gsl_ran_gaussian_ziggurat(r, tmp.err[i]);
 				cout << (i != 0 ? " " : "") << tmp.m[i];
 			}

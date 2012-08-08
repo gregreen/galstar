@@ -36,10 +36,19 @@ def main():
 	values = parser.parse_args(sys.argv[offset:])
 	
 	params = np.random.rand(values.N, 4)
-	params[:,0] = params[:,0] * 14.5 + 5.5
+	params[:,0] = params[:,0] * 13.5 + 5.5
 	params[:,1] = params[:,1] * 5.
-	params[:,2] = params[:,2] * 28 - 0.8
+	params[:,2] = params[:,2] * 20. - 0.8
 	params[:,3] = params[:,3] * 2.4 - 2.45
+	
+	idx = (params[:,0] + params[:,1] + params[:,2] > 22.)
+	
+	while np.any(idx):
+		params[idx,:3] = np.random.rand(np.sum(idx), 3)
+		params[idx,0] = params[idx,0] * 13.5 + 5.5
+		params[idx,1] = params[idx,1] * 5.
+		params[idx,2] = params[idx,2] * 20. - 0.8
+		idx = (params[:,0] + params[:,1] + params[:,2] > 22.)
 	
 	header = '''# Format:
 # l  b

@@ -334,6 +334,7 @@ inline double logL_SED(const double (&M)[NBANDS], const double (&sigma)[NBANDS],
 // MCMC sampler
 //////////////////////////////////////////////////////////////////////////////////////
 
+double giant_Mr = 26.5;
 
 // pdf for individual star
 inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
@@ -350,9 +351,9 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 	
 	// If the giant or dwarf flag is set, make sure star is appropriate type
 	if(p.giant_flag == 1) {		// Dwarfs only
-		if(x[_Mr] < 4.) { return neginf; }
+		if(x[_Mr] < giant_Mr) { return neginf; }
 	} else if(p.giant_flag == 2) {	// Giants only
-		if(x[_Mr] > 4.) { return neginf; }
+		if(x[_Mr] > giant_Mr) { return neginf; }
 	}
 	
 	// P(Mr|G) from luminosity function
@@ -386,9 +387,9 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 	if(p.giant_flag == 0) {
 		x_0[_Mr] = gsl_ran_flat(r, -0.5, 27.5);	// Both giants and dwarfs
 	} else if(p.giant_flag == 1) {
-		x_0[_Mr] = gsl_ran_flat(r, 4.5, 27.5);	// Dwarfs only
+		x_0[_Mr] = gsl_ran_flat(r, giant_Mr + 0.5, 27.5);	// Dwarfs only
 	} else {
-		x_0[_Mr] = gsl_ran_flat(r, -0.5, 3.5);	// Giants only
+		x_0[_Mr] = gsl_ran_flat(r, -0.5, giant_Mr - 0.5);	// Giants only
 	}
 	x_0[_FeH] = gsl_ran_flat(r, -2.4, -0.1);
 }
@@ -533,7 +534,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		if(giant_flag == 1) {
 			chain.append(tmp_chain, false);		// Log dwarf solution
 		} else {
-			evidence = chain.append(tmp_chain, true, false, 10., 0.1, 0.1);	// Attach giant solution to dwarf solution, weighting each according to evidence
+			evidence = chain.append(tmp_chain, true, true, 10., 0.1, 0.1);	// Attach giant solution to dwarf solution, weighting each according to evidence
 		}
 		
 		if(!convergence[giant_flag-1]) { std::cout << (giant_flag == 1 ? "Dwarfs" : "Giants") << " did not converge." << std::endl; }

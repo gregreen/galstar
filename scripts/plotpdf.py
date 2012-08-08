@@ -37,7 +37,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 # Plot the given probability surfaces (p) to a single figure, saving if given a filename
 def plot_surfs(p, bounds, clip=None, shape=(3,2), figsize=(8.5, 11.), fname=None, labels=None, converged=None, ln_evidence=None, true_params=None):
 	# Set up the figure
-	fig = plt.figure(figsize=figsize, dpi=100)
+	fig = plt.figure(figsize=figsize, dpi=300)
 	grid = ImageGrid(fig, 111, nrows_ncols=shape, axes_pad=0.2, share_all=True, aspect=False)
 	
 	# Show the probability surfaces
@@ -78,9 +78,11 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), figsize=(8.5, 11.), fname=None
 		for i in xrange(N_plots):
 			grid[i].scatter(true_params[0][i], true_params[1][i], c='g', s=25)
 	
+	fig.subplots_adjust(bottom=0.15)
+	
 	if fname != None:
 		print 'Saving figure to %s ...' % fname
-		fig.savefig(abspath(fname), dpi=150)
+		fig.savefig(abspath(fname), dpi=300)
 	
 	return fig
 
@@ -142,8 +144,7 @@ def main():
 	pdf = []
 	converged = []
 	ln_evidence = []
-	DM_true = []
-	Ar_true = []
+	param_true = [[],[]]
 	bounds = None
 	N_stars = 0
 	for i,(sf,bf) in enumerate(zip(values.statsfn, values.binfn)):
@@ -153,29 +154,44 @@ def main():
 		pdf.append(p)
 		ln_evidence.append(ln_ev)
 		if values.testfn != None:
-			lb, DM_t, Ar_t, tmp_1, tmp_2 = load_true(values.testfn[i])
-			DM_true.append(DM_t)
-			Ar_true.append(Ar_t)
+			tmp_param = [None, None, None, None]
+			lb, tmp_param[0], tmp_param[1], tmp_param[2], tmp_param[3] = load_true(values.testfn[i])
+			param_list = ['dm', 'ar', 'mr', 'feh']
+			for i in range(2):
+				for k,l in enumerate(param_list):
+					if values.params[i].lower() == l:
+						param_true[i].append(tmp_param[k])
+						break
 		N_stars += conv.size
 		if N_stars >= values.startend[1]:
 			break
 	pdf = np.vstack(pdf)
 	converged = np.hstack(converged)
 	ln_evidence = np.hstack(ln_evidence)
-	DM_true = np.hstack(DM_true)
-	Ar_true = np.hstack(Ar_true)
+	if values.testfn != None:
+		param_true[0] = np.hstack(param_true[0])
+		param_true[1] = np.hstack(param_true[1])
 	
 	pdf[~np.isfinite(pdf)] = 0.
-	idx = (np.sum(np.sum(pdf, axis=1), axis=2) == 0.)
+	idx = (np.sum(np.sum(pdf, axis=1), axis=1) != 0.)
 	if values.converged:
 		idx = idx & converged
+	#print idx
+	#print np.sum(np.sum(pdf, axis=1), axis=1)[0]
+	#print pdf[0][pdf[0] > 0.]
+	
 	pdf = pdf[idx]
 	ln_evidence = ln_evidence[idx]
-	DM_true = DM_true[idx]
-	Ar_true = Ar_true[idx]
+	if values.testfn != None:
+		param_true[0] = param_true[0][idx]
+		param_true[1] = param_true[1][idx]
 	converged = converged[idx]
 	N_stars = pdf.shape[0]
 	pdf = smooth_bins(pdf, values.smooth)
+	
+	#print np.sum(np.sum(pdf, axis=1), axis=1)[0]
+	#print pdf[0][pdf[0] > 0.]
+	#print param_true
 	
 	clip = None
 	if values.ymax != None:
@@ -194,7 +210,7 @@ def main():
 		fig = plot_surfs(pdf, bounds, clip, [1,1], values.figsize, plotfn, labels)
 	else:
 		for i in range(values.startend[0], np.min([N_stars, values.startend[1]]), np.prod(values.rowcol)):
-			imax = np.min([i+6, converged.size])
+			imax = np.min([i+6, converged.size, values.startend[1]])
 			print 'Plotting pdfs %d through %d of %d ...' % (i+1, imax, N_stars)
 			
 			plotfn = None
@@ -205,7 +221,7 @@ def main():
 			
 			true_params = None
 			if values.testfn != None:
-				true_params = (DM_true[i:imax], Ar_true[i:imax])
+				true_params = (param_true[0][i:imax], param_true[1][i:imax])
 			
 			if values.nomarks:
 				fig = plot_surfs(pdf[i:imax], bounds, clip, values.rowcol, values.figsize, plotfn, labels, true_params=true_params)

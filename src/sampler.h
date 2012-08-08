@@ -273,7 +273,7 @@ struct TStellarData {
 		
 		// Exit if N_stars is unrealistically large
 		if(N_stars > 1e7) {
-			std::cerr << "Error reading " << infile << ". Header indicates " << N_stars << " stars. Aborting attempt to read file." << std::endl;
+			std::cerr << "Error reading " << infile << ". Header absurdly indicates " << N_stars << " stars. Aborting attempt to read file." << std::endl;
 			f.close();
 			return false;
 		}

@@ -77,6 +77,50 @@ bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns,
 	return true;
 }
 
+bool generate_test_photometry(string test_fn, TModel &model, TStellarData &data) {
+	ifstream f(test_fn.c_str());
+	if(!f) { f.close(); return false; }
+	
+	string line;
+	double DM, Ar, Mr, FeH;
+	gsl_rng *r;
+	seed_gsl_rng(&r);
+	
+	unsigned int count = 0;
+	
+	while(getline(f, line)) {
+		if(!line.size()) { continue; }		// empty line
+		if(line[0] == '#') { continue; }	// comment
+		
+		if(count == 0) {
+			f >> data.l;
+			f >> data.b;
+			cout << "(l, b) = " << data.l << " " << data.b << endl;
+		} else {
+			istringstream ss(line);
+			ss >> DM >> Ar >> Mr >> FeH;
+			TStellarData::TMagnitudes tmp;
+			TSED sed = (*model.sed_interp)(Mr, FeH);
+			cout << "stellar parameters: " << DM << " " << Ar << " " << Mr << " " << FeH << endl;
+			cout << "grizy = {";
+			for(unsigned int i=0; i<NBANDS; i++) {
+				tmp.err[i] = 0.05;				// TODO: Set realistic errors from spline
+				tmp.m[i] = sed.v[i] + DM + Ar*model.Acoef[i] + gsl_ran_gaussian_ziggurat(r, tmp.err[i]);
+				cout << (i != 0 ? " " : "") << tmp.m[i];
+			}
+			cout << "}" << endl;
+			data.star.push_back(tmp);
+		}
+		
+		count++;
+	}
+	
+	cout << "Generated test photometry using stellar parameters in " << test_fn << "." << endl;
+	
+	gsl_rng_free(r);
+	f.close();
+	return true;
+}
 
 int main(int argc, char **argv) {
 	vector<string> output_pdfs;
@@ -91,6 +135,7 @@ int main(int argc, char **argv) {
 	uint32_t pix_index;
 	string infile("NONE");
 	string statsfn("NONE");
+	string test_fn = "NONE";
 	string photometry = "PS";
 	double errfloor = 20.;
 	bool sparse = true;
@@ -127,6 +172,7 @@ int main(int argc, char **argv) {
 		("append", "Append output to existing files.")
 		("dwarf", "Assume star is a dwarf (Mr > 4)")
 		("giant", "Assume star is a giant (Mr < 4)")
+		("test", po::value<string>(&test_fn), "ASCII containing stellar parameters with which to generate test input.")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -144,8 +190,8 @@ int main(int argc, char **argv) {
 	if(infile_str.size() == 2) {
 		infile = infile_str[0];
 		pix_index = (uint32_t)atoi(infile_str[1].c_str());
-	} else {
-		cerr << "'infile' is a required argument. E.g. '--infile pix.in 10' selects the 10th set of stars from pix.in." << endl;
+	} else if(test_fn == "NONE") {
+		cerr << "If 'infile' is not specified, 'test' must be given." << endl << "E.g. '--infile pix.in 10' selects the 10th set of stars from pix.in." << endl;
 		return -1;
 	}
 	if(vm.count("nonsparse")) { sparse = false; }
@@ -156,7 +202,7 @@ int main(int argc, char **argv) {
 	TMultiBinner<4> multibinner;
 	if(!construct_binners(multibinner, output_fns, output_pdfs)) { return -1; }
 	
-	// Construct Model /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Construct Model ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	double Acoef_tmp[NBANDS];
 	if(photometry == "PS") {
 		for(unsigned int i=0; i<NBANDS; i++){ Acoef_tmp[i] = AcoefPS1[i]; }
@@ -178,12 +224,18 @@ int main(int argc, char **argv) {
 	
 	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.qh << " " << model.nh << "\n";
 	
-	
-	// Construct data set /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Load stellar photometry ////////////////////////////////////////////////////////////////////////////////////////////////////////
 	TStellarData data;
-	if(!data.load_data_binary(infile, pix_index, errfloor)) {
-		cerr << "Failed to load data from " << infile << "." << endl;
-		return -1;
+	if(test_fn == "NONE") {
+		if(!data.load_data_binary(infile, pix_index, errfloor)) {
+			cerr << "Failed to load data from " << infile << "." << endl;
+			return -1;
+		}
+	} else { // Generate photometry from stellar model
+		if(!generate_test_photometry(test_fn, model, data)) {
+			cerr << "Failed to generate test photometry from " << test_fn << "." << endl;
+			return -1;
+		}
 	}
 	double m[NBANDS], err[NBANDS];
 	double l, b;

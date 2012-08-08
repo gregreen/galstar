@@ -30,6 +30,47 @@ import scipy.ndimage.filters as filters
 import scipy.weave as weave
 
 
+def load_true(fname):
+	'''
+	Load in true stellar parameters from ASCII file. File format:
+	    l b
+	    DM Ar Mr FeH
+	    DM Ar Mr FeH
+	    DM Ar Mr FeH
+	    ...
+	
+	Input:
+	    fname
+	
+	Output:
+	    (l,b), DM, Ar, Mr, FeH
+	'''
+	f = open(fname, 'r')
+	lb = np.empty(2, dtype=np.float64)
+	DM, Ar, Mr, FeH = [], [], [], []
+	
+	count = 0
+	for line in f:
+		line_clean = line.rstrip()
+		if len(line_clean) == 0:
+			continue
+		elif line_clean[0] == '#':
+			continue
+		tmp = line_clean.split()
+		if count == 0:
+			lb[0] = float(tmp[0])
+			lb[1] = float(tmp[1])
+		else:
+			DM.append(float(tmp[0]))
+			Ar.append(float(tmp[1]))
+			Mr.append(float(tmp[2]))
+			FeH.append(float(tmp[3]))
+		count += 1
+	
+	f.close()
+	
+	return lb, np.array(DM, dtype=np.float64), np.array(Ar, dtype=np.float64), np.array(Mr, dtype=np.float64), np.array(FeH, dtype=np.float64)
+
 def load_stats(fname, selection=None):
 	'''
 	Load statistics on each star from galstar output.

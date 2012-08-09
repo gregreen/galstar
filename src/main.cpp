@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
 	bool sparse = true;
 	bool append = false;
 	unsigned int giant_flag = 0;
-	unsigned int N_steps = 2000;
+	unsigned int N_steps = 6000;
 	unsigned int N_samplers = 25;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;

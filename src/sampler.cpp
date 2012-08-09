@@ -423,13 +423,15 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		sampler.step(N_steps, false, 4.);
 		sampler.clear();
 		
+		//std::cout << std::endl << "===================================================================" << std::endl << std::endl;
+		
 		// Main run
 		count = 0;
 		convergence = false;
 		tmp_max_rounds = max_rounds;
 		while((count < tmp_max_rounds) && !convergence) {
 			sampler.set_scale(3.);
-			sampler.step(N_steps, true, 10.);
+			sampler.step(N_steps, true, 0., 0.15);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);
@@ -518,7 +520,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		count = 0;
 		convergence[giant_flag-1] = false;
 		while((count < max_rounds) && !convergence[giant_flag-1]) {
-			sampler.step(N_steps, true, 0, 1.0);
+			sampler.step(N_steps, true, 0);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);

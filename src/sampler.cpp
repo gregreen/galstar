@@ -518,7 +518,7 @@ bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes 
 		count = 0;
 		convergence[giant_flag-1] = false;
 		while((count < max_rounds) && !convergence[giant_flag-1]) {
-			sampler.step(N_steps, true, 0);
+			sampler.step(N_steps, true, 0, 1.0);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);

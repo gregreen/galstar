@@ -6,8 +6,8 @@ BuildDirs=/home/greg/projects/galstar/build
 CMakeDir=/usr/share/cmake-2.8/Modules
 Current CMake Binary=file:///usr/bin/cmake
 CurrentBuildDir=file:///home/greg/projects/galstar/build
-CurrentBuildType=Release
-CurrentInstallDir=file:///home/greg/projects/galstar/staging
+CurrentBuildType=Debug
+CurrentInstallDir=file:///usr/local
 ProjectRootRelative=./
 
 [Launch]
@@ -86,7 +86,7 @@ Working Directory=
 isExecutable=false
 
 [MakeBuilder]
-Default Make Environment Profile=0
+Default Make Environment Profile=
 Number Of Jobs=1
 
 [Project]

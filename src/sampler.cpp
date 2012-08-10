@@ -398,7 +398,7 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
-	unsigned int max_rounds = 3;		// After <max_rounds> rounds, the Markov chains are terminated
+	unsigned int max_rounds = 1;		// After <max_rounds> rounds, the Markov chains are terminated
 	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
 	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
 	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
@@ -440,7 +440,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 			}
 			if(highest_GR < convergence_threshold) { convergence = true; }
 			count++;
-			if(!convergence && (count == tmp_max_rounds) && (highest_GR < 2.) && (tmp_max_rounds < 4*max_rounds)) { tmp_max_rounds += max_rounds; std::cout << "Extending run." << std::endl; }
+			if(!convergence && (count == tmp_max_rounds) && (highest_GR < 2.) && (tmp_max_rounds < 3*max_rounds)) { tmp_max_rounds += max_rounds; std::cout << "Extending run." << std::endl; }
 		}
 		
 		sampler.print_stats();

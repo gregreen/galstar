@@ -103,7 +103,7 @@ bool generate_test_photometry(string test_fn, TModel &model, TStellarData &data)
 			cout << "stellar parameters: " << DM << " " << Ar << " " << Mr << " " << FeH << endl;
 			cout << "grizy = {";
 			for(unsigned int i=0; i<NBANDS; i++) {
-				tmp.err[i] = 0.1;				// TODO: Set realistic errors from spline
+				tmp.err[i] = 0.02;				// TODO: Set realistic errors from spline
 				tmp.m[i] = sed.v[i] + DM + Ar*model.Acoef[i] + gsl_ran_gaussian_ziggurat(r, tmp.err[i]);
 				cout << (i != 0 ? " " : "") << tmp.m[i];
 			}

@@ -139,6 +139,7 @@ int main(int argc, char **argv) {
 	double errfloor = 20.;
 	bool sparse = true;
 	bool append = false;
+	bool noprior = false;
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 40;
@@ -172,6 +173,7 @@ int main(int argc, char **argv) {
 		("dwarf", "Assume star is a dwarf (Mr > 4)")
 		("giant", "Assume star is a giant (Mr < 4)")
 		("test", po::value<string>(&test_fn), "ASCII containing stellar parameters with which to generate test input.")
+		("noprior", "Do not apply priors (i.e. only calculate likelihood).")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -195,6 +197,7 @@ int main(int argc, char **argv) {
 	}
 	if(vm.count("nonsparse")) { sparse = false; }
 	if(vm.count("append")) { append = true; }
+	if(vm.count("noprior")) { noprior = true; }
 	errfloor /= 1000.;
 	
 	vector<string> output_fns;
@@ -246,6 +249,7 @@ int main(int argc, char **argv) {
 	// Initialize class passed to sampling function, used to define the model and contain observed stellar magnitudes
 	MCMCParams p(l, b, *data.star.begin(), model, data);
 	p.giant_flag = giant_flag;	// Set flag which determines whether the model should consider only giants, only dwarfs, or both
+	p.noprior = noprior;
 	
 	// Pass each star in turn to the sampling function
 	unsigned int count = 0;

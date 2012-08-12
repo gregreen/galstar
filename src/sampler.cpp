@@ -356,17 +356,19 @@ inline double calc_logP(const double *const x, unsigned int N, MCMCParams &p) {
 		if(x[_Mr] > giant_Mr) { return neginf; }
 	}
 	
-	// P(Mr|G) from luminosity function
-	double loglf_tmp = p.model.lf(x[_Mr]);
-	logP += loglf_tmp;
-	
-	// P(DM|G) from model of galaxy
-	double logdn_tmp = p.log_dn_interp(x[_DM]);
-	logP += logdn_tmp;
-	
-	// P(FeH|DM,G) from Ivezich et al (2008)
-	double logpFeH_tmp = p.log_p_FeH_fast(x[_DM], x[_FeH]);
-	logP += logpFeH_tmp;
+	if(!(p.noprior)) {
+		// P(Mr|G) from luminosity function
+		double loglf_tmp = p.model.lf(x[_Mr]);
+		logP += loglf_tmp;
+		
+		// P(DM|G) from model of galaxy
+		double logdn_tmp = p.log_dn_interp(x[_DM]);
+		logP += logdn_tmp;
+		
+		// P(FeH|DM,G) from Ivezich et al (2008)
+		double logpFeH_tmp = p.log_p_FeH_fast(x[_DM], x[_FeH]);
+		logP += logpFeH_tmp;
+	}
 	
 	// P(g,r,i,z,y|Ar,Mr,DM) from model spectra
 	double M[NBANDS];

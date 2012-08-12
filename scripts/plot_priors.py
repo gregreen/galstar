@@ -61,21 +61,30 @@ class TGalacticModel:
 		return x, y, z
 	
 	def rho_thin(self, r, z):
-		return self.rho_0 * exp(-(abs(z+self.Z0) - abs(self.Z0))/self.H1 - (r-self.R0)/self.L1)
+		return self.rho_0 * np.exp(-(abs(z+self.Z0) - abs(self.Z0))/self.H1 - (r-self.R0)/self.L1)
 	
 	def rho_thick(self, r, z):
-		return self.rho_0 * self.f * exp(-(abs(z+self.Z0) - abs(self.Z0))/self.H2 - (r-self.R0)/self.L2)
+		return self.rho_0 * self.f * np.exp(-(abs(z+self.Z0) - abs(self.Z0))/self.H2 - (r-self.R0)/self.L2)
 	
 	def rho_halo(self, r, z):
+		print r.shape
+		print z.shape
 		r_eff2 = r*r + (z/self.qh)*(z/self.qh)
-		if r_eff2 <= self.Rbr*self.Rbr:
-			return self.rho_0 * self.fh * (r_eff2/self.R0/self.R0)**(self.nh/2.)
+		print r_eff2.shape
+		if type(r_eff2) == np.ndarray:
+			ret = np.empty(r_eff2.size, dtype=np.float64)
+			idx = (r_eff2 <= self.Rbr*self.Rbr)
+			print idx.shape
+			ret[idx] = self.rho_0 * self.fh * np.power(r_eff2[idx]/self.R0/self.R0, self.nh/2.)
+			ret[~idx] = self.rho_0 * self.fh_outer * np.power(r_eff2[~idx]/self.R0/self.R0, self.nh_outer/2.)
+			return ret
 		else:
-			return self.rho_0 * self.fh_outer * (r_eff2/self.R0/self.R0)**(self.nh_outer/2.)
+			if r_eff2 <= self.Rbr*self.Rbr:
+				return self.rho_0 * self.fh * (r_eff2/self.R0/self.R0)**(self.nh/2.)
+			else:
+				return self.rho_0 * self.fh_outer * (r_eff2/self.R0/self.R0)**(self.nh_outer/2.)
 	
-	def rho(self, DM, cos_l, sin_l, cos_b, sin_b, component=None):
-		x,y,z = self.Cartesian_coords(DM, cos_l, sin_l, cos_b, sin_b,)
-		r = sqrt(x*x + y*y)
+	def rho_rz(self, r, z, component=None):
 		if component == 'disk':
 			return self.rho_thin(r,z) + self.rho_thick(r,z)
 		elif component == 'thin':
@@ -86,6 +95,21 @@ class TGalacticModel:
 			return self.rho_halo(r,z)
 		else:
 			return self.rho_thin(r,z) + self.rho_thick(r,z) + self.rho_halo(r,z)
+	
+	def rho(self, DM, cos_l, sin_l, cos_b, sin_b, component=None):
+		x,y,z = self.Cartesian_coords(DM, cos_l, sin_l, cos_b, sin_b,)
+		r = sqrt(x*x + y*y)
+		return self.rho_rz(r, z, component=component)
+		'''if component == 'disk':
+			return self.rho_thin(r,z) + self.rho_thick(r,z)
+		elif component == 'thin':
+			return self.rho_thin(r,z)
+		elif component == 'thick':
+			return self.rho_thick(r,z)
+		elif component == 'halo':
+			return self.rho_halo(r,z)
+		else:
+			return self.rho_thin(r,z) + self.rho_thick(r,z) + self.rho_halo(r,z)'''
 	
 	def dn_dDM(self, DM, cos_l, sin_l, cos_b, sin_b, radius=1., component=None):
 		return self.rho(DM, cos_l, sin_l, cos_b, sin_b, component) * dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius)
@@ -116,7 +140,6 @@ def dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius=1.):
 	return (pi*radius**2.) * (1000.*2.30258509/5.) * exp(3.*2.30258509/5. * DM)
 
 
-
 def Gaussian(x, mu=0., sigma=1.):
 	Delta = (x-mu)/sigma
 	return exp(-Delta*Delta/2.) / 2.50662827 / sigma
@@ -127,6 +150,53 @@ def plot_hist(ax, bin_x, p_x, var_name):
 	ax.set_xlabel(r'$%s$'%var_name, fontsize=14)
 	ax.set_ylabel(r'$\mathrm{d}n / \mathrm{d}%s$'%var_name, fontsize=14)
 	return ax.get_xlim(), ax.get_ylim()
+
+
+def plot_Galactic_slice(Rmax, Zmax, component=None, log_scale=True):
+	# Determine density in slice
+	model = TGalacticModel()
+	R = np.abs(np.linspace(-Rmax*1000, Rmax*1000, 500))
+	Z = np.abs(np.linspace(-Zmax*1000, Zmax*1000, 500))
+	RR, ZZ = np.meshgrid(R, Z)
+	rho = model.rho_rz(RR.flatten(), ZZ.flatten(), component=component)
+	
+	# Remove overdensity at center
+	idx = np.isfinite(rho)
+	rho[~idx] = np.max(rho[idx])
+	rho_sorted = rho.__copy__()
+	rho_sorted.sort()
+	rho_max = rho_sorted[int(0.95*(rho_sorted.size-1))]
+	idx = (rho > rho_max)
+	rho[idx] = rho_max
+	
+	if log_scale:
+		rho = np.log(rho)
+	
+	rho.shape = (R.size, Z.size)
+	
+	# Set matplotlib options
+	mplib.rc('text',usetex=True)
+	mplib.rc('xtick.major', size=6)
+	mplib.rc('xtick.minor', size=4)
+	mplib.rc('axes', grid=True)
+	
+	# Set up figure
+	fig = plt.figure(figsize=(12,7), dpi=100)
+	title = None
+	if log_scale:
+		title = r'$\mathrm{Stellar\ number\ density\ (arbitrary\ log\ scale)}$'
+	else:
+		r'$\mathrm{Stellar\ number\ density\ (arbitrary\ scale)}$'
+	fig.suptitle(title, fontsize=22, y=0.95)
+	ax = fig.add_subplot(1,1,1)
+	fig.subplots_adjust(top=0.88)
+	ax.imshow(rho, extent=(-Rmax, Rmax, -Zmax, Zmax), cmap='gray')
+	ax.set_xlabel(r'$R \, (\mathrm{kpc})$', fontsize=18)
+	ax.set_ylabel(r'$Z \, (\mathrm{kpc})$', fontsize=18)
+	ax.grid(which='major', alpha=0.2)
+	
+	fig.savefig('../plots/log_rho.png', dpi=300)
+	plt.show()
 
 
 def main():

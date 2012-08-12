@@ -316,6 +316,9 @@ struct MCMCParams {
 	// Flag whether to include only giants, only dwarfs, or both
 	unsigned int giant_flag;	// 0 = both, 1 = dwarfs, 2 = giants
 	
+	// Flag whether to use priors
+	bool noprior;
+	
 	TLinearInterp *log_dn_arr, *f_halo_arr, *mu_disk_arr;
 	
 	MCMCParams(double _l, double _b, TStellarData::TMagnitudes &_mag, TModel &_model, TStellarData &_data)
@@ -351,6 +354,9 @@ struct MCMCParams {
 		
 		// Set the giant flag to include both giants and dwarfs
 		giant_flag = 0;
+		
+		// Use priors by default
+		noprior = false;
 	}
 	
 	~MCMCParams() {

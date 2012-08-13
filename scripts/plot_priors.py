@@ -67,14 +67,10 @@ class TGalacticModel:
 		return self.rho_0 * self.f * np.exp(-(abs(z+self.Z0) - abs(self.Z0))/self.H2 - (r-self.R0)/self.L2)
 	
 	def rho_halo(self, r, z):
-		print r.shape
-		print z.shape
 		r_eff2 = r*r + (z/self.qh)*(z/self.qh)
-		print r_eff2.shape
 		if type(r_eff2) == np.ndarray:
 			ret = np.empty(r_eff2.size, dtype=np.float64)
 			idx = (r_eff2 <= self.Rbr*self.Rbr)
-			print idx.shape
 			ret[idx] = self.rho_0 * self.fh * np.power(r_eff2[idx]/self.R0/self.R0, self.nh/2.)
 			ret[~idx] = self.rho_0 * self.fh_outer * np.power(r_eff2[~idx]/self.R0/self.R0, self.nh_outer/2.)
 			return ret
@@ -242,12 +238,12 @@ def main():
 	mplib.rc('xtick.minor', size=4)
 	mplib.rc('axes', grid=True)
 	fig = plt.figure(figsize=(8.5,11.))
-	fig.suptitle(r'$\mathrm{Priors \ for} \ ( \ell = %d^{\circ} , \, b = %d^{\circ} )$' % (round(l) , round(b)), fontsize=22, y=0.95)
+	fig.suptitle(r'$\mathrm{Priors \ for} \ ( \ell = %d^{\circ} , \, b = %d^{\circ} )$' % (round(l) , round(b)), fontsize=24, y=0.97)
 	ax = []
 	for i in range(2):
 		ax.append(fig.add_subplot(2, 1, i+1))
 	#fig.subplots_adjust(left=0.12, right=0.90, hspace=0.25)
-	fig.subplots_adjust(left=0.16, right=0.88, hspace=0.25)
+	fig.subplots_adjust(left=0.14, right=0.90, top=0.88, bottom=0.08, hspace=0.20)
 	
 	# Intialize Galactic model
 	model = TGalacticModel()
@@ -279,8 +275,9 @@ def main():
 	# Plot dn/dDM
 	y_min = min(dn_dDM_disk.min(), dn_dDM_halo.min())
 	ax[0].fill_between(DM_range, y_min, dn_dDM, alpha=0.4, facecolor='k', label='__nolabel__')
-	ax[0].fill_between(DM_range, y_min, dn_dDM_disk, alpha=0.4, facecolor='g'); rect = Rectangle((0,0),0,0,facecolor='g',label=r'$\mathrm{disk}$',alpha=0.6); ax[0].add_patch(rect)
-	ax[0].fill_between(DM_range, y_min, dn_dDM_halo, alpha=0.4, facecolor='b'); rect = Rectangle((0,0),0,0,facecolor='b',label=r'$\mathrm{halo}$',alpha=0.6); ax[0].add_patch(rect)
+	ax[0].fill_between(DM_range, y_min, dn_dDM_disk, alpha=0.4, facecolor='g'); rect = Rectangle((0,0), 0, 0, facecolor='g', label=r'$\mathrm{disk}$', alpha=0.6); ax[0].add_patch(rect)
+	ax[0].fill_between(DM_range, y_min, dn_dDM_halo, alpha=0.4, facecolor='b'); rect = Rectangle((0,0), 0, 0, facecolor='b', label=r'$\mathrm{halo}$', alpha=0.6); ax[0].add_patch(rect)
+	ax[0].set_title(r'$\mathrm{Probability}$', fontsize=20)
 	ax[0].set_xlabel(r'$\mu$', fontsize=20)
 	ax[0].set_ylabel(r'$p(\mu)$', fontsize=18)
 	ax[0].yaxis.set_major_locator(MaxNLocator(nbins=5))
@@ -295,6 +292,7 @@ def main():
 	ax[1].fill_between(DM_range, y_min, rho, alpha=0.4, facecolor='k')
 	ax[1].fill_between(DM_range, y_min, rho_disk, alpha=0.4, facecolor='g')
 	ax[1].fill_between(DM_range, y_min, rho_halo, alpha=0.4, facecolor='b')
+	ax[1].set_title(r'$\mathrm{Density}$', fontsize=20)
 	ax[1].set_xlabel(r'$\mu$', fontsize=20)
 	ax[1].set_ylabel(r'$\rho (\mu)$', fontsize=18)
 	ax[1].set_yscale('log')

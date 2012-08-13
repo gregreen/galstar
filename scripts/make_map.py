@@ -340,6 +340,26 @@ def main():
 	center_gal = (lb_bounds[0] == 0.) and (lb_bounds[1] == 360.)
 	nrows, ncol = values.rowcol
 	
+	# Set up figures and axes
+	fig, ax = [], []
+	for i in range(len(values.mu)):
+		if i % (nrows*ncol) = 0:
+			fig.append(plt.figure(figsize=values.figsize, dpi=value.dpi))
+		if values.mollweide:
+			ax.append(fig[-1].add_subplot(nrows, ncol, (i+1) % (nrows*ncol), projection='mollweide'))
+		else:
+			ax.append(fig[-1].add_subplot(nrows, ncol, (i+1) % (nrows*ncol)))
+			y, x = np.unravel_index(i % (nrows*ncol), values.rowcol)
+			if y != nrows - 1:
+				ax[-1].set_xticklabels([])
+			if x != 0:
+				ax[-1].set_yticklabels([])
+	
+	# Give axes to m to plot
+	image = m.to_axes(ax, values.mu, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, log_scale=False, diff=value.diff)
+	
+	
+	
 	fig = None
 	image = None
 	

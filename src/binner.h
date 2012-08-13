@@ -80,12 +80,12 @@ struct TBinner2D {
 	void operator ()(const double *const pos, double weight) { add_point(pos, weight); }
 	
 	// Accessors /////////////////////////////////////////////////////////////////////////////////////////////
-	bool write_binary(std::string fname, bool append_to_file=false, bool sparse=false);			// Write binned data to file, possibly appending to existing file
+	bool write_binary(std::string fname, bool append_to_file=false, bool sparse=false, void* header=NULL, std::streamsize header_bytes=0);	// Write binned data to file, possibly appending to existing file
 	void write_to_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10., std::ios::openmode writemode = std::ios::out);	// Write binned data to file
-	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);	// Load binned data from file
-	void write_npz(std::string fname);									// Write numpy .npz file
-	void print_bins();											// Print out the bins to cout
-	void get_ML(double (&ML)[2]);										// Return maximum likelihood
+	void load_from_file(std::string fname, bool ascii=true, bool log_pdf=false, double zero_diff=-10.);		// Load binned data from file
+	void write_npz(std::string fname);										// Write numpy .npz file
+	void print_bins();												// Print out the bins to cout
+	void get_ML(double (&ML)[2]);											// Return maximum likelihood
 };
 
 
@@ -254,7 +254,7 @@ void TBinner2D<N>::write_to_file(std::string fname, bool ascii, bool log_pdf, do
 // Data (if full array) (8*N_files*width[0]*width[1] Bytes):
 // 	bin[N_files][width[0]][width[1]]	(double)
 template<unsigned int N>
-bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file, bool sparse) {
+bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file, bool sparse, void* header, std::streamsize header_bytes) {
 	// If writing to new file, delete file, if it already exists
 	if(!append_to_file) { std::remove(fname.c_str()); }
 	
@@ -282,6 +282,11 @@ bool TBinner2D<N>::write_binary(std::string fname, bool append_to_file, bool spa
 		outfile.write(reinterpret_cast<char *>(&(min[0])), 2*sizeof(double));
 		outfile.write(reinterpret_cast<char *>(&(max[0])), 2*sizeof(double));
 		outfile.write(reinterpret_cast<char *>(&(dx[0])), 2*sizeof(double));
+	}
+	
+	// If extra header information is provided, write it before the binned data
+	if(header != NULL) {
+		outfile.write(reinterpret_cast<char*>(&header), header_bytes);
 	}
 	
 	// Write the binned data

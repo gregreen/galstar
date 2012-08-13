@@ -397,7 +397,7 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 }
 
 // N_threads	 # of parallel affine samplers to run
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, unsigned int N_threads=4)
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, double p_replacement=0.1, unsigned int N_threads=4)
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
 	unsigned int max_rounds = 1;		// After <max_rounds> rounds, the Markov chains are terminated
@@ -422,7 +422,8 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		
 		// Burn-in
 		sampler.set_scale(5.);
-		sampler.step(N_steps, false, 4.);
+		sampler.step(N_steps/2, false, 4., 0.);
+		sampler.step(N_steps/2, false, 0, p_replacement);
 		sampler.clear();
 		
 		//std::cout << std::endl << "===================================================================" << std::endl << std::endl;
@@ -432,8 +433,8 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		convergence = false;
 		tmp_max_rounds = max_rounds;
 		while((count < tmp_max_rounds) && !convergence) {
-			sampler.set_scale(3.);
-			sampler.step(N_steps, true, 0., 0.10);
+			sampler.set_scale(2.);
+			sampler.step(N_steps, true, 0., p_replacement);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);
@@ -452,7 +453,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		if((n+1 == max_attempts) || convergence) {
 			stats = sampler.get_stats();
 			
-			evidence = sampler.get_chain().get_ln_Z_harmonic(true, 1e6, 0.1, 0.1);
+			evidence = sampler.get_chain().get_ln_Z_harmonic(true, 10., 0.05, 0.1);
 			double L_norm = 0.;
 			for(unsigned int i=0; i<NBANDS; i++) {
 				if(mag.err[i] < 1.e9) {

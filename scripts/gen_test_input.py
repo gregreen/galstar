@@ -29,6 +29,7 @@ def main():
 	parser = argparse.ArgumentParser(prog='gen_test_input.py', description='Generates test input file for galstar.', add_help=True)
 	parser.add_argument('coordinates', type=float, nargs=2, metavar='l b', help='Galactic latitude and longitude, in degrees.')
 	parser.add_argument('N', type=int, help='# of stars to generate.')
+	#parser.add_argument('-b', '--binary', action='store_true', help='Generate binary stars.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:

@@ -171,6 +171,8 @@ struct TModel
 
 struct TStellarData {
 	struct TMagnitudes {
+		uint64_t obj_id;
+		double l, b;
 		double m[NBANDS];
 		double err[NBANDS];
 		double DM_est;		// Estimate of distance to star. Used in sorting stars.
@@ -235,10 +237,14 @@ struct TStellarData {
 	// Each pixel has the form
 	// 
 	// 	Header:
-	// 		l		(double)
-	// 		b		(double)
+	// 		healpix_index	(uint32)
+	// 		l_mean		(double)
+	// 		b_mean		(double)
 	// 		N_stars		(uint32)
 	// 	Data - For each star:
+	// 		obj_id		(uint64)
+	// 		l_star		(double)
+	// 		b_star		(double)
 	// 		mag[NBANDS]	(double)
 	// 		err[NBANDS]	(double)
 	// 
@@ -262,7 +268,7 @@ struct TStellarData {
 			f.read(reinterpret_cast<char*>(&l), sizeof(l));
 			f.read(reinterpret_cast<char*>(&b), sizeof(b));
 			f.read(reinterpret_cast<char*>(&N_stars), sizeof(N_stars));
-			if(i < pix_index) { f.seekg(N_stars * 2*NBANDS*sizeof(double), std::ios::cur); }
+			if(i < pix_index) { f.seekg(N_stars * (3 + 2*NBANDS)*sizeof(double), std::ios::cur); }
 		}
 		
 		if(f.eof()) {
@@ -282,6 +288,9 @@ struct TStellarData {
 		star.reserve(N_stars);
 		for(uint32_t i=0; i<N_stars; i++) {
 			TMagnitudes tmp;
+			f.read(reinterpret_cast<char*>(&(tmp.obj_id)), sizeof(uint64_t));
+			f.read(reinterpret_cast<char*>(&(tmp.l)), sizeof(double));
+			f.read(reinterpret_cast<char*>(&(tmp.b)), sizeof(double));
 			f.read(reinterpret_cast<char*>(&(tmp.m[0])), NBANDS*sizeof(double));
 			f.read(reinterpret_cast<char*>(&(tmp.err[0])), NBANDS*sizeof(double));
 			for(unsigned int i=0; i<NBANDS; i++) { tmp.err[i] = sqrt(tmp.err[i]*tmp.err[i] + err_floor*err_floor); }
@@ -395,7 +404,7 @@ struct MCMCParams {
 // Functions for individual star
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, double p_replacement, unsigned int N_threads);
 bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
 
 // Debugging functions

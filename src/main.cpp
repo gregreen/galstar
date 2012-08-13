@@ -77,7 +77,8 @@ bool construct_binners(TMultiBinner<4> &multibinner, vector<string> &output_fns,
 	return true;
 }
 
-bool generate_test_photometry(string test_fn, TModel &model, TStellarData &data) {
+// TODO: Allow generation of binary input
+bool generate_test_photometry(string test_fn, TModel &model, TStellarData &data, bool binary=false) {
 	ifstream f(test_fn.c_str());
 	if(!f) { f.close(); return false; }
 	
@@ -143,6 +144,7 @@ int main(int argc, char **argv) {
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 2000;
 	unsigned int N_samplers = 40;
+	double p_replacement = 0.1;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
@@ -166,14 +168,15 @@ int main(int argc, char **argv) {
 		("statsfile", po::value<string>(&statsfn), "Base filename for statistics output")
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
+		("preplacement", po::value<double>(&p_replacement), "Fraction of time to do replacement step.")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
 		("nonsparse", "Write binned PDFs as full arrays (produces significantly larger output).")
 		("append", "Append output to existing files.")
 		("dwarf", "Assume star is a dwarf (Mr > 4)")
 		("giant", "Assume star is a giant (Mr < 4)")
-		("test", po::value<string>(&test_fn), "ASCII containing stellar parameters with which to generate test input.")
 		("noprior", "Do not apply priors (i.e. only calculate likelihood).")
+		("test", po::value<string>(&test_fn), "ASCII containing stellar parameters with which to generate test input.")
 	;
 	po::positional_options_description pd;
 	pd.add("pdfs", -1);
@@ -266,7 +269,7 @@ int main(int argc, char **argv) {
 		bool converged;
 		double evidence;
 		if(giant_flag != 0) {
-			converged = sample_affine(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, N_threads);
+			converged = sample_affine(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, p_replacement, N_threads);
 		} else {
 			converged = sample_affine_both(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, N_threads);
 		}
@@ -275,8 +278,10 @@ int main(int argc, char **argv) {
 		// Output binned pdfs and statistics for current star
 		bool append_to_file = (append || (count != 0));
 		// Write out the marginalized posteriors
+		double *tmp_obj_id = reinterpret_cast<double*>(&(it->obj_id));
+		double header[3] = {*tmp_obj_id, it->l, it->b};
 		for(unsigned int i=0; i<multibinner.get_num_binners(); i++) {
-			bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file, sparse);
+			bool write_success = multibinner.get_binner(i)->write_binary(output_fns.at(i), append_to_file, sparse, &(header[0]), 3*sizeof(double));
 		}
 		// Write out summary of statistics
 		if(statsfn != "NONE") {

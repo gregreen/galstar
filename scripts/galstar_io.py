@@ -292,6 +292,8 @@ def load_bins_sparse(fname, selection=None):
 	# Create an empty array to populate
 	N_files_sel = sel_sorted.size;
 	bin_data = np.zeros((N_files_sel, bin_width[0], bin_width[1]), dtype=np.float64)
+	obj_id = np.empty(N_files_sel, dtype=np.uint64)
+	lb = np.empty((N_files_sel, 2), dtype=np.float64)
 	
 	# Load in all the stars
 	code = """
@@ -309,9 +311,18 @@ def load_bins_sparse(fname, selection=None):
 		infile.read(reinterpret_cast<char *>(&(dx[0])), 2*sizeof(double));
 		
 		uint16_t i, j;
-		double value;
+		uint64_t tmp_obj_id;
+		double value, tmp_l, tmp_b;
 		int m = 0;
 		for(int n=0; n<(int)N_files; n++) {
+			// Read in information about star
+			infile.read(reinterpret_cast<char*>(&tmp_obj_id), sizeof(double));
+			infile.read(reinterpret_cast<char*>(&tmp_l), sizeof(double));
+			infile.read(reinterpret_cast<char*>(&tmp_b), sizeof(double));
+			obj_id((int)m) = tmp_obj_id;
+			lb((int)m, 0) = tmp_l;
+			lb((int)m, 1) = tmp_b;
+			
 			uint32_t N_nonzero;
 			infile.read(reinterpret_cast<char*>(&N_nonzero), sizeof(uint32_t));
 			//std::cout << "nonzero: " << N_nonzero << std::endl;
@@ -339,7 +350,7 @@ def load_bins_sparse(fname, selection=None):
 		infile.close();
 		return_val = true;
 	"""
-	read_success = weave.inline(code, ['fname', 'bin_data', 'sel_sorted', 'N_files_sel'], headers=['<iostream>', '<fstream>', '<stdint.h>'], type_converters=weave.converters.blitz, compiler='gcc')
+	read_success = weave.inline(code, ['fname', 'bin_data', 'sel_sorted', 'N_files_sel', 'obj_id', 'lb'], headers=['<iostream>', '<fstream>', '<stdint.h>'], type_converters=weave.converters.blitz, compiler='gcc')
 	
 	if not read_success:
 		raise Exception('Input file %s is corrupt.' % fname)

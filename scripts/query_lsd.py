@@ -177,7 +177,17 @@ def main():
 			N_pix_in_file = 0
 		
 		# Create the output matrix
-		outarr = np.hstack((obj['mean'], obj['err'])).astype(np.float64)
+		# One row for each star, containing:
+		#     obj_id  Galactic_l  Galactic_b  m_g  m_r  m_i  m_z  m_y  sigma_g  sigma_r  sigma_i  sigma_z  sigma_y
+		outarr = np.empty(len(obj), dtype=[('obj_id','uint64'), ('l','float64'), ('b','float64'), ('mean','float64',5), ('err','float64',5)])
+		outarr['obj_id'] = obj['obj_id']
+		outarr['l'] = obj['l']
+		outarr['b'] = obj['b']
+		outarr['mean'] = obj['mean']
+		outarr['err'] = obj['err']
+		
+		#outarr = np.vstack(obj['obj_id'].astype(np.float64), obj['l'], obj['b']).astype(np.float64)
+		#outarr = np.hstack((outarr.T, obj['mean'], obj['err'])).astype(np.float64)
 		
 		# Write pixel header
 		N_stars = np.array([outarr.shape[0]], dtype=np.uint32)
@@ -195,7 +205,7 @@ def main():
 		f.write(N_stars.tostring())									# N_stars		(uint32)
 		
 		# Write magnitudes and errors
-		f.write(outarr.tostring())									# 5xmag, 5xerr	(10 x float64)
+		f.write(outarr.tostring())									# obj_id, l, b, 5xmag, 5xerr	(uint54 + 12 x float64)
 		
 		# Record number of stars saved to pixel
 		N_pix_in_file += 1

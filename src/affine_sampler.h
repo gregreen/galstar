@@ -362,26 +362,31 @@ static void calc_sqrt_A(gsl_matrix *A, const gsl_matrix * const S, gsl_vector* w
 template<class TParams, class TLogger>
 void TAffineSampler<TParams, TLogger>::update_subsample_cov() {
 	// Calcualte sub-sample covariance
-	gsl_matrix_set_zero(sub_cov);
-	TState* X_i;
-	for(unsigned int i=0; i<N; i++) {
-		X_i = &(X[sub_index[i]]);
-		for(unsigned int j=0; j<N; j++) {
-			for(unsigned int k=0; k<N; k++) {
-				gsl_matrix_set(sub_cov, j, k, gsl_matrix_get(sub_cov, j, k) + (X_i->element[j] - sub_mean[j]) * (X_i->element[k] - sub_mean[k]) / (double)N);
-			}
+	//gsl_matrix_set_zero(sub_cov);
+	//TState* X_i;
+	//for(unsigned int i=0; i<N; i++) {
+	//	X_i = &(X[sub_index[i]]);
+	//	for(unsigned int j=0; j<N; j++) {
+	//		for(unsigned int k=0; k<N; k++) {
+	//			gsl_matrix_set(sub_cov, j, k, gsl_matrix_get(sub_cov, j, k) + (X_i->element[j] - sub_mean[j]) * (X_i->element[k] - sub_mean[k]) / (double)N);
+	//		}
+	//	}
+	//}
+	
+	double tmp;
+	for(unsigned int j=0; j<N; j++) {
+		for(unsigned int k=j; k<N; k++) {
+			tmp = 0.;
+			for(unsigned int i=0; i<N; i++) { tmp += (X[sub_index[i]].element[j] - sub_mean[j]) * (X[sub_index[i]].element[k] - sub_mean[k]); }
+			tmp /= (double)(N - 1);
+			gsl_matrix_set(sub_cov, j, k, tmp);
+			if(k != j) { gsl_matrix_set(sub_cov, k, j, tmp); }
 		}
 	}
 	
-//	std::cout << "cov:" << std::endl;
 	for(unsigned int i=0; i<N; i++) {
 		gsl_matrix_set(sub_cov, i, i, gsl_matrix_get(sub_cov, i, i)*1.01);
-//		for(unsigned int j=0; j<N; j++) {
-//			std::cout << gsl_matrix_get(sub_cov, i, j) << "\t";
-//		}
-//		std::cout << std::endl;
 	}
-//	std::cout << std::endl;
 	
 	// Calculate sqrt(cov) (this means that sqrt(cov) sqrt(cov)^T = cov)
 	//calc_sqrt_A(sqrt_sub_cov, sub_cov, wv, ws, wm1, wm2); // Not needed for now, as we are drawing proposals using sub-sample of samplers.

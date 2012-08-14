@@ -18,6 +18,7 @@ include_directories(${libpeyton_INCLUDE_DIR})
 ### GSL
 find_package(GSL REQUIRED)
 include_directories(${GSL_INCLUDE_DIR})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHAVE_INLINE=1 -DGSL_RANGE_CHECK=0")
 
 ### Boost
 find_package(Boost REQUIRED COMPONENTS regex iostreams thread program_options)

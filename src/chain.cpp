@@ -321,11 +321,6 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 	//std::cout << "V = " << V << std::endl;
 	//std::cout << "total_weight = " << total_weight << std::endl << std::endl;
 	
-	// Cleanup
-	gsl_matrix_free(Sigma);
-	gsl_matrix_free(invSigma);
-	delete[] mu;
-	
 	// Return an estimate of ln(Z)
 	double lnZ = log(V) - log(sum_invL) + log(total_weight) + L_0;
 	
@@ -346,9 +341,24 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 		std::cout << "\tIndex\tDist^2:" << std::endl;
 		for(unsigned int i=0; i<10; i++) {
 			std::cout << sorted_indices[i].index << "\t\t" << sorted_indices[i].dist2 << std::endl;
+			std::cout << "  ";
+			const double *tmp_x = get_element(sorted_indices[i].index);
+			for(unsigned int k=0; k<N; k++) { std::cout << " " << tmp_x[k]; }
+			std::cout << std::endl;
 		}
+		std::cout << "mu =";
+		for(unsigned int i=0; i<N; i++) { std::cout << " " << mu[i]; }
 		std::cout << std::endl;
 	}
+	
+	//std::cout << "mu =";
+	//for(unsigned int i=0; i<N; i++) { std::cout << " " << mu[i]; }
+	//std::cout << std::endl;
+	
+	// Cleanup
+	gsl_matrix_free(Sigma);
+	gsl_matrix_free(invSigma);
+	delete[] mu;
 	
 	return lnZ;
 	//return V / sum_invL * total_weight;

@@ -27,6 +27,9 @@
 #include "chain.h"
 #include "stats.h"
 
+#ifndef GSL_RANGE_CHECK_OFF
+#define GSL_RANGE_CHECK_OFF
+#endif // GSL_RANGE_CHECK_OFF
 
 /*************************************************************************
  *   Function Prototypes

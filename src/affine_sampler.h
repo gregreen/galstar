@@ -282,7 +282,7 @@ TAffineSampler<TParams, TLogger>::TAffineSampler(pdf_t _pdf, rand_state_t _rand_
 	twopiN = pow(2.*3.14159265358979, (double)N);
 	
 	// Replacement move smoothing scale, in units of the ensemble covariance
-	set_replacement_bandwidth(0.5);
+	set_replacement_bandwidth(0.15);
 	
 	// Set the initial step scale. 2 is good for most situations.
 	set_scale(2);
@@ -434,8 +434,8 @@ void TAffineSampler<TParams, TLogger>::replacement_proposal(unsigned int j) {
 //#pragma omp critical (replacement)
 //{
 	// Choose a sampler to step from
-	unsigned int k = gsl_rng_uniform_int(r, (long unsigned int)L - 1);
-	if(k >= j) { k += 1; }
+	unsigned int k = gsl_rng_uniform_int(r, (long unsigned int)L);// - 1);
+	//if(k >= j) { k += 1; }
 	
 	// Determine step vector
 	double Z;

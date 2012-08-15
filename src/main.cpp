@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
 	bool append = false;
 	bool noprior = false;
 	unsigned int giant_flag = 0;
-	unsigned int N_steps = 2000;
+	unsigned int N_steps = 4000;
 	unsigned int N_samplers = 40;
 	double p_replacement = 0.1;
 	unsigned int N_samples = 200;

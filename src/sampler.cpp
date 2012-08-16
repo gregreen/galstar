@@ -401,7 +401,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 {
 	unsigned int size = N_samplers;		// # of chains in each affine sampler
 	unsigned int max_rounds = 1;		// After <max_rounds> rounds, the Markov chains are terminated
-	unsigned int max_attempts = 2;		// Maximum number of initial seedings to attempt
+	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
 	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
 	double nonconvergence_flag = 1.2;	// Return false if GR diagnostic is above this level at end of run
 	bool convergence;
@@ -453,15 +453,21 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		if((n+1 == max_attempts) || convergence) {
 			stats = sampler.get_stats();
 			
-			evidence = sampler.get_chain().get_ln_Z_harmonic(false, 10., 0.05, 0.1);
-			double L_norm = 0.;
-			for(unsigned int i=0; i<NBANDS; i++) {
-				if(mag.err[i] < 1.e9) {
-					L_norm += 0.918938533 + log(mag.err[i]);
+			for(unsigned int k=0; k<1; k++) {
+				//evidence = sampler.get_chain().get_ln_Z_harmonic(false, 10., 0.05, 0.1);
+				double L_norm = 0.;
+				for(unsigned int i=0; i<NBANDS; i++) {
+					if(mag.err[i] < 1.e9) {
+						L_norm += 0.918938533 + log(mag.err[i]);
+					}
 				}
+				//evidence -= 2.3 + L_norm;	// Estimating effect of Ar prior
+				//std::cout << "ln(Z) = " << evidence << std::endl << std::endl;
+				
+				evidence = sampler.get_chain().get_ln_Z_harmonic(true, 1., 1., 0.01);
+				evidence -= 2.3 + L_norm;	// Estimating effect of Ar prior
+				std::cout << "ln(Z) = " << evidence << std::endl;// << std::endl;
 			}
-			evidence -= 2.3 + L_norm;	// Estimating effect of Ar prior
-			std::cout << "ln(Z) = " << evidence << std::endl << std::endl;
 			
 			break;
 		}

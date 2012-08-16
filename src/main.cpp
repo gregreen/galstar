@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 4000;
 	unsigned int N_samplers = 40;
-	double p_replacement = 0.1;
+	double p_replacement = 0.15;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	

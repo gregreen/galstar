@@ -1,5 +1,6 @@
 
 #include "chain.h"
+#include <string.h>
 
 /*************************************************************************
  *   Chain Class Member Functions
@@ -236,7 +237,7 @@ struct TChainSort {
 //bool chainsortcomp(TChainSort a, TChainSort b) { return a.dist2 < b.dist2; }
 
 
-// Uses a variant of the harmonic mean approximation to determine the evidence.
+// Uses a variant of the bounded harmonic mean approximation to determine the evidence.
 // Essentially, the regulator chosen is an ellipsoid with radius nsigma standard deviations
 // along each principal axis. The regulator is then 1/V inside the ellipsoid and 0 without,
 // where V is the volume of the ellipsoid. In this form, the harmonic mean approximation
@@ -260,7 +261,8 @@ double TChain::get_ln_Z_harmonic(bool use_peak, double nsigma_max, double nsigma
 	// Determine the center of the prior volume to use
 	double* mu = new double[N];
 	if(use_peak) {	// Use the peak density as the center
-		density_peak(mu, nsigma_peak);
+		find_center(mu, Sigma, invSigma, &detSigma, nsigma_peak, 5);
+		//density_peak(mu, nsigma_peak);
 	} else {	// Get the mean from the stats class
 		for(unsigned int i=0; i<N; i++) { mu[i] = stats.mean(i); }
 	}
@@ -417,6 +419,96 @@ void TChain::density_peak(double* const peak, double nsigma) const {
 	delete[] width;
 	delete[] index_width;
 	delete[] mult;
+}
+
+// Find a point in space with high density.
+void TChain::find_center(double* const center, gsl_matrix *const cov, gsl_matrix *const inv_cov, double* det_cov, double dmax, unsigned int iterations) const {
+	// Check that the matrices are the correct size
+	/*assert(cov->size1 == N);
+	assert(cov->size2 == N);
+	assert(inv_cov->size1 == N);
+	assert(inv_cov->size2 == N);*/
+	
+	// Choose random point in chain as starting point
+	gsl_rng *r;
+	seed_gsl_rng(&r);
+	
+	long unsigned int index_tmp = gsl_rng_uniform_int(r, length);
+	const double *x_tmp = get_element(index_tmp);
+	for(unsigned int i=0; i<N; i++) { center[i] = x_tmp[i]; }
+	
+	//std::cout << "center #0:";
+	//for(unsigned int n=0; n<N; n++) { std::cout << " " << center[n]; }
+	//std::cout << std::endl;
+	
+	/*double *E_k = new double[N];
+	double *E_ij = new double[N*N];
+	for(unsigned int n1=0; n1<N; n1++) {
+		E_k[n1] = 0.;
+		for(unsigned int n2=0; n2<N; n2++) { E_ij[n1 + N*n2] = 0.; }
+	}*/
+	
+	// Iterate
+	double *sum = new double[N];
+	double weight;
+	for(unsigned int i=0; i<iterations; i++) {
+		// Set mean of nearby points as center
+		weight = 0.;
+		for(unsigned int n=0; n<N; n++) { sum[n] = 0.; }
+		for(unsigned int k=0; k<length; k++) {
+			x_tmp = get_element(k);
+			if(metric_dist2(inv_cov, x_tmp, center, N) < dmax*dmax) {
+				for(unsigned int n=0; n<N; n++) { sum[n] += w[k] * x_tmp[n]; }
+				weight += w[k];
+				
+				// Calculate the covariance
+				/*if(i == iterations - 1) {
+					for(unsigned int n1=0; n1<N; n1++) {
+						E_k[n1] += w[k] * x_tmp[n1];
+						for(unsigned int n2=0; n2<N; n2++) { E_ij[n1 + N*n2] += w[k] * x_tmp[n1] * x_tmp[n2]; }
+					}
+				}*/
+			}
+		}
+		//std::cout << "center #" << i+1 << ":";
+		for(unsigned int n=0; n<N; n++) { center[n] = sum[n] / (double)weight; }//std::cout << " " << center[n]; }
+		//std::cout << " (" << weight << ")" << std::endl;
+		
+		dmax *= 0.9;
+	}
+	
+	for(unsigned int n=0; n<N; n++) { std::cout << " " << center[n]; }
+	std::cout << std::endl;
+	
+	// Calculate the covariance matrix of the enclosed points
+	/*double tmp;
+	for(unsigned int i=0; i<N; i++) {
+		for(unsigned int j=i; j<N; j++) {
+			tmp = (E_ij[i + N*j] - E_k[i]*E_k[j]/(double)weight) / (double)weight;
+			gsl_matrix_set(cov, i, j, tmp);
+			if(i != j) { gsl_matrix_set(cov, j, i, tmp); }
+		}
+	}*/
+	
+	// Get the inverse of the covariance
+	/*int s;
+	gsl_permutation* p = gsl_permutation_alloc(N);
+	gsl_matrix* LU = gsl_matrix_alloc(N, N);
+	gsl_matrix_memcpy(LU, cov);
+	gsl_linalg_LU_decomp(LU, p, &s);
+	gsl_linalg_LU_invert(LU, p, inv_cov);
+	
+	// Get the determinant of the covariance
+	*det_cov = gsl_linalg_LU_det(LU, s);
+	
+	// Cleanup
+	gsl_matrix_free(LU);
+	gsl_permutation_free(p);
+	delete[] E_k;
+	delete[] E_ij;*/
+	
+	gsl_rng_free(r);
+	delete[] sum;
 }
 
 

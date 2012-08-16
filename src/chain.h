@@ -70,8 +70,9 @@ public:
 	const double* get_element(unsigned int i) const;	// Return the i-th point in the chain
 	double get_L(unsigned int i) const;			// Return the likelihood of the i-th point
 	double get_w(unsigned int i) const;			// Return the weight of the i-th point
-	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) const;	// Estimate the Bayesian Evidence of the posterior using the Harmonic Mean Approximation
+	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) const;	// Estimate the Bayesian Evidence of the posterior using the bounded Harmonic Mean Approximation
 	void density_peak(double* const peak, double nsigma) const;	// Estimate coordinate with peak density
+	void find_center(double* const center, gsl_matrix *const cov, gsl_matrix *const inv_cov, double* det_cov, double dmax=1., unsigned int iterations=5) const;	// Find a point in space with high density
 	
 	// File IO
 	bool save(std::string filename) const;				// Save the chain to file
@@ -82,6 +83,20 @@ public:
 	void operator +=(const TChain& rhs);			// Calls append
 	TChain& operator =(const TChain& rhs);		// Assignment operator
 };
+
+
+#ifndef __SEED_GSL_RNG_
+#define __SEED_GSL_RNG_
+// Seed a gsl_rng with the Unix time in nanoseconds
+inline void seed_gsl_rng(gsl_rng **r) {
+	timespec t_seed;
+	clock_gettime(CLOCK_REALTIME, &t_seed);
+	long unsigned int seed = 1e9*(long unsigned int)t_seed.tv_sec;
+	seed += t_seed.tv_nsec;
+	*r = gsl_rng_alloc(gsl_rng_taus);
+	gsl_rng_set(*r, seed);
+}
+#endif
 
 
 #endif // _CHAIN_H__

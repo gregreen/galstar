@@ -368,7 +368,7 @@ void Gelman_Rubin_diagnostic(TStats **stats_arr, unsigned int N_chains, double *
 	for(unsigned int k=0; k<N; k++) { R[k] = 1. - 1./(double)N_items_tot + B[k]/W[k]; }
 }
 
-double metric_dist2(gsl_matrix* g, const double* x_1, const double* x_2, unsigned int N) {
+double metric_dist2(const gsl_matrix* g, const double* x_1, const double* x_2, unsigned int N) {
 	double dist2 = 0.;
 	for(unsigned int i=0; i<N; i++) {
 		for(unsigned int j=0; j<N; j++) {

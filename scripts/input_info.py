@@ -85,7 +85,7 @@ def main():
 		print pix_index
 	
 	if values.nstars != None:
-		pix_index, gal_lb, N_stars = seek_to_pixel(f, values.pix_index)
+		pix_index, gal_lb, N_stars = seek_to_pixel(f, values.nstars)
 		print N_stars
 	
 	f.close()

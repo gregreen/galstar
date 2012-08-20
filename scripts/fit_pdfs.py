@@ -347,12 +347,10 @@ def gen_guess(pdfs, N_regions=15):
 def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000, maxtime=25., maxeval=10000, p0=1.e-5, ev_range=25., iterate=None):
 	# Load pdfs
 	sys.stderr.write('Loading binned pdfs...\n')
-	bounds, p = None, None
 	bounds, p = load_bins(bin_fname, sparse)
 	mask = np.logical_not(np.sum(np.sum(np.logical_not(np.isfinite(p)), axis=1), axis=1).astype(np.bool))	# Filter out images with NaN bins
 	converged_arr, ln_evidence, means, cov = load_stats(stats_fname)
 	ln_evidence_cutoff = np.max(ln_evidence) - ev_range
-	#print ln_evidence
 	mask = np.logical_and(mask, (ln_evidence > ln_evidence_cutoff))	# Filter out objects which do not appear to fit the stellar model
 	if converged:	# Filter out nonconverged images
 		mask = np.logical_and(mask, converged_arr)			# Filter out stars which did not converge
@@ -374,8 +372,6 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	sys.stderr.write('Guess: %s\n' % np.array_str(guess_Delta_Ar, max_line_width=N_regions*100, precision=8))
 	sys.stderr.write('Guess measure: %.3f\n\n' % guess_fitness)
 	guess_line_int = line_integral(guess, p)
-	#print guess_line_int
-	#print ''
 	
 	# Fit reddening profile
 	x, success, measure = None, None, None

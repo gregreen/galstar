@@ -11,6 +11,7 @@
 
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_errno.h>
 
 #include <astro/useall.h>
 
@@ -142,9 +143,9 @@ int main(int argc, char **argv) {
 	bool append = false;
 	bool noprior = false;
 	unsigned int giant_flag = 0;
-	unsigned int N_steps = 4000;
-	unsigned int N_samplers = 40;
-	double p_replacement = 0.1;
+	unsigned int N_steps = 1000;
+	unsigned int N_samplers = 100;
+	double p_replacement = 0.15;
 	double p_mixture = 0.;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
@@ -250,6 +251,8 @@ int main(int argc, char **argv) {
 	b = data.b;
 	
 	// Run sampler ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	gsl_set_error_handler_off();
 	
 	// Initialize class passed to sampling function, used to define the model and contain observed stellar magnitudes
 	MCMCParams p(l, b, *data.star.begin(), model, data);

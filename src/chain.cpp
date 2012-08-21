@@ -879,18 +879,26 @@ double invert_matrix(gsl_matrix* A, gsl_matrix* inv_A, gsl_permutation* p, gsl_m
 	if(p == NULL) { p = gsl_permutation_alloc(N); del_p = true; }
 	if(LU == NULL) { LU = gsl_matrix_alloc(N, N); del_LU = true; }
 	
-	// Invert A using LU decomposition
 	int s;
-	gsl_matrix_memcpy(LU, A);
-	gsl_linalg_LU_decomp(LU, p, &s);
-	if(inv_A == NULL) {
-		gsl_linalg_LU_invert(LU, p, A);
-	} else {
-		assert(N == inv_A->size1);
-		assert(N == inv_A->size2);
-		gsl_linalg_LU_invert(LU, p, inv_A);
+	int status = 1;
+	unsigned int count = 0;
+	while(status) {
+		if(count > 5) { std::cerr << "Error inverting matrix." << std::endl; abort(); }
+		
+		// Invert A using LU decomposition
+		gsl_matrix_memcpy(LU, A);
+		if(count != 0) { gsl_matrix_add_diagonal(LU, 0.001); std::cerr << "Added small constant" << std::endl; }	// If inversion fails the first time, add small constant to diagonal
+		gsl_linalg_LU_decomp(LU, p, &s);
+		if(inv_A == NULL) {
+			status = gsl_linalg_LU_invert(LU, p, A);
+		} else {
+			assert(N == inv_A->size1);
+			assert(N == inv_A->size2);
+			status = gsl_linalg_LU_invert(LU, p, inv_A);
+		}
+		
+		count++;
 	}
-	
 	
 	// Get the determinant of A
 	double det_A = gsl_linalg_LU_det(LU, s);
@@ -902,7 +910,7 @@ double invert_matrix(gsl_matrix* A, gsl_matrix* inv_A, gsl_permutation* p, gsl_m
 	return det_A;
 }
 
-
+// Find B s.t. B B^T = A. This is useful for generating vectors from a multivariate normal distribution.
 void sqrt_matrix(gsl_matrix* A, gsl_matrix* sqrt_A, gsl_eigen_symmv_workspace* esv, gsl_vector *eival, gsl_matrix *eivec, gsl_matrix* sqrt_eival) {
 	size_t N = A->size1;
 	assert(A->size2 == N);
@@ -921,9 +929,7 @@ void sqrt_matrix(gsl_matrix* A, gsl_matrix* sqrt_A, gsl_eigen_symmv_workspace* e
 	} else {
 		assert(sqrt_eival->size1 == N);
 		assert(sqrt_eival->size2 == N);
-		for(unsigned int i=0; i<N; i++) {
-			for(unsigned int j=0; j<N; j++) { gsl_matrix_set(sqrt_eival, i, j, 0.); }
-		}
+		gsl_matrix_set_zero(sqrt_eival);
 	}
 	
 	if(sqrt_A == NULL) {
@@ -951,4 +957,14 @@ void sqrt_matrix(gsl_matrix* A, gsl_matrix* sqrt_A, gsl_eigen_symmv_workspace* e
 	if(del_esv) { gsl_eigen_symmv_free(esv); }
 	if(del_eivec) { gsl_matrix_free(eivec); }
 	if(del_eival) { gsl_vector_free(eival); }
+}
+
+// Draw a normal varariate from a covariance matrix. The square-root of the covariance (as defined in sqrt_matrix) must be provided.
+void draw_from_cov(double* x, const gsl_matrix* sqrt_cov, unsigned int N, gsl_rng* r) {
+	double tmp;
+	for(unsigned int i=0; i<N; i++) { x[i] = 0.; }
+	for(unsigned int j=0; j<N; j++) {
+		tmp = gsl_ran_gaussian_ziggurat(r, 1.);
+		for(unsigned int i=0; i<N; i++) { x[i] += gsl_matrix_get(sqrt_cov, i, j) * tmp; }
+	}
 }

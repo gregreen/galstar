@@ -351,6 +351,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	bounds, p = load_bins(bin_fname, sparse)
 	mask = np.logical_not(np.sum(np.sum(np.logical_not(np.isfinite(p)), axis=1), axis=1).astype(np.bool))	# Filter out images with NaN bins
 	converged_arr, ln_evidence, means, cov = load_stats(stats_fname)
+	ln_evidence[~np.isfinite(ln_evidence)] = np.min(ln_evidence)
 	ln_evidence_cutoff = np.max(ln_evidence) - ev_range
 	#print ln_evidence
 	mask = np.logical_and(mask, (ln_evidence > ln_evidence_cutoff))	# Filter out objects which do not appear to fit the stellar model
@@ -358,6 +359,14 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 		mask = np.logical_and(mask, converged_arr)			# Filter out stars which did not converge
 	sys.stderr.write('# of stars filtered out: %d of %d.\n\n' % (np.sum(~mask), p.shape[0]))
 	p = smooth_bins(p[mask], smooth)
+	
+	#print 'Converged:'
+	#print converged_arr
+	#print np.sum(converged_arr)
+	
+	#print 'ln(evidence):'
+	#print ln_evidence
+	#print np.sum(ln_evidence < ln_evidence_cutoff)
 	
 	# Load in neighboring pixels from previous iteration
 	Delta_Ar_neighbor, weight_neighbor = None, None

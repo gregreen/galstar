@@ -34,6 +34,49 @@
 #define SQRTPI 1.77245385
 #endif
 
+
+// Gaussian mixture structure
+//     Stores data necessary for representing a mixture of Gaussians, along
+//     with workspaces for computing inverses.
+struct TGaussianMixture {
+	// Data
+	unsigned int ndim, nclusters;
+	double *w;
+	double *mu;
+	gsl_matrix **cov;
+	gsl_matrix **inv_cov;
+	gsl_matrix **sqrt_cov;
+	double *det_cov;
+	
+	// Workspaces
+	gsl_permutation *p;
+	gsl_matrix *LU;
+	gsl_eigen_symmv_workspace* esv;
+	gsl_vector *eival;
+	gsl_matrix *eivec;
+	gsl_matrix *sqrt_eival;
+	gsl_rng *r;
+	
+	// Constructor / Destructor
+	TGaussianMixture(unsigned int _ndim, unsigned int _nclusters);
+	~TGaussianMixture();
+	
+	// Accessors
+	gsl_matrix* get_cov(unsigned int k);
+	double get_w(unsigned int k);
+	double* get_mu(unsigned int k);
+	void draw(double *x);
+	void print();
+	
+	// Mutators
+	void invert_covariance();
+	
+	void density(const double *x, unsigned int N, double *res);
+	double density(const double *x);
+	
+	void expectation_maximization(const double *x, const double *w, unsigned int N, unsigned int iterations=10);
+};
+
 /*************************************************************************
  *   Chain Class Prototype
  *************************************************************************/
@@ -70,17 +113,27 @@ public:
 	const double* get_element(unsigned int i) const;	// Return the i-th point in the chain
 	double get_L(unsigned int i) const;			// Return the likelihood of the i-th point
 	double get_w(unsigned int i) const;			// Return the weight of the i-th point
-	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) const;	// Estimate the Bayesian Evidence of the posterior using the bounded Harmonic Mean Approximation
-	void density_peak(double* const peak, double nsigma) const;	// Estimate coordinate with peak density
-	void find_center(double* const center, gsl_matrix *const cov, gsl_matrix *const inv_cov, double* det_cov, double dmax=1., unsigned int iterations=5) const;	// Find a point in space with high density
+	
+	// Computations on chain
+	
+	// Estimate the Bayesian Evidence of the posterior using the bounded Harmonic Mean Approximation
+	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) const;
+	
+	// Estimate coordinates with peak density by binning
+	void density_peak(double* const peak, double nsigma) const;
+	
+	// Find a point in space with high density by picking a random point, drawing an ellipsoid, taking the mean coordinate within the ellipsoid, and then iterating
+	void find_center(double* const center, gsl_matrix *const cov, gsl_matrix *const inv_cov, double* det_cov, double dmax=1., unsigned int iterations=5) const;
+	
+	void fit_gaussian_mixture(TGaussianMixture *gm, unsigned int iterations=10);
 	
 	// File IO
 	bool save(std::string filename) const;				// Save the chain to file
 	bool load(std::string filename, bool reserve_extra=false);	// Load the chain from file
 	
 	// Operators
-	double* operator [](unsigned int i);		// Calls get_element
-	void operator +=(const TChain& rhs);			// Calls append
+	const double* operator [](unsigned int i);	// Calls get_element
+	void operator +=(const TChain& rhs);		// Calls append
 	TChain& operator =(const TChain& rhs);		// Assignment operator
 };
 
@@ -98,5 +151,15 @@ inline void seed_gsl_rng(gsl_rng **r) {
 }
 #endif
 
+// Sets inv_A to the inverse of A, and returns the determinant of A. If inv_A is NULL, then
+// A is inverted in place. If worspaces p and LU are provided, the function does not have to
+// allocate its own workspaces.
+double invert_matrix(gsl_matrix* A, gsl_matrix* inv_A=NULL, gsl_permutation* p=NULL, gsl_matrix* LU=NULL);
+
+// Find B s.t. B B^T = A. This is useful for generating vectors from a multivariate normal distribution.
+void sqrt_matrix(gsl_matrix* A, gsl_matrix* sqrt_A=NULL, gsl_eigen_symmv_workspace* esv=NULL, gsl_vector *eival=NULL, gsl_matrix *eivec=NULL, gsl_matrix* sqrt_eival=NULL);
+
+// Draw a normal varariate from a covariance matrix. The square-root of the covariance (as defined in sqrt_matrix) must be provided.
+void draw_from_cov(double* x, const gsl_matrix* sqrt_cov, unsigned int N, gsl_rng* r);
 
 #endif // _CHAIN_H__

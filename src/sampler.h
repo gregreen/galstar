@@ -404,7 +404,7 @@ struct MCMCParams {
 // Functions for individual star
 void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p);
 double calc_logP(const double *const x, unsigned int N, MCMCParams &p);
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, double p_replacement, unsigned int N_threads);
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, double p_replacement, double p_mixture, unsigned int N_threads);
 bool sample_affine_both(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers, unsigned int N_steps, unsigned int N_threads);
 
 // Debugging functions

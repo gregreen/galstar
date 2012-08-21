@@ -397,9 +397,8 @@ void ran_state(double *const x_0, unsigned int N, gsl_rng *r, MCMCParams &p) {
 }
 
 // N_threads	 # of parallel affine samplers to run
-bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, double p_replacement=0.1, unsigned int N_threads=4)
-{
-	unsigned int size = N_samplers;		// # of chains in each affine sampler
+bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag, TMultiBinner<4> &multibinner, TStats &stats, double &evidence, unsigned int N_samplers=100, unsigned int N_steps=15000, double p_replacement=0.1, double p_mixture=0.1, unsigned int N_threads=4) {
+	unsigned int size = N_samplers;	// # of chains in each affine sampler
 	unsigned int max_rounds = 1;		// After <max_rounds> rounds, the Markov chains are terminated
 	unsigned int max_attempts = 1;		// Maximum number of initial seedings to attempt
 	double convergence_threshold = 1.1;	// Chains ended when GR diagnostic falls below this level
@@ -422,9 +421,31 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		
 		// Burn-in
 		sampler.set_scale(5.);
-		sampler.step(N_steps/2, false, 4., 0.);
-		sampler.step(N_steps/2, false, 0, p_replacement);
+		sampler.step(N_steps/3, false, 4., 0., 0.);
+		sampler.step(N_steps/3, false, 0, p_replacement, 0.);
+		if(p_mixture > 1.e-5) {
+			bool no_steps = true;
+			while(no_steps) {
+				sampler.step(N_steps/3, true, 0, p_replacement, 0.);
+				no_steps = false;
+				for(unsigned int i=0; i<4; i++) {
+					if(sampler.get_sampler(i)->get_chain().get_total_weight() < 1.) {
+						no_steps = true;
+						break;
+					}
+				}
+			}
+			std::cout << "Fitting Gaussian mixture model..." << std::endl;
+			sampler.init_gaussian_mixture_target(4, 50);
+			std::cout << "Clusters idenfified:" << std::endl;
+			sampler.print_clusters();
+			std::cout << "Weight:";
+			for(unsigned int i=0; i<4; i++) { std::cout << " " << sampler.get_sampler(i)->get_chain().get_total_weight(); }
+			std::cout << std::endl;
+		}
+		sampler.step(N_steps/3, false, 0, p_replacement, p_mixture);
 		sampler.clear();
+		std::cout << "Burn-in complete." << std::endl;
 		
 		//std::cout << std::endl << "===================================================================" << std::endl << std::endl;
 		
@@ -434,7 +455,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		tmp_max_rounds = max_rounds;
 		while((count < tmp_max_rounds) && !convergence) {
 			sampler.set_scale(2.);
-			sampler.step(N_steps, true, 0., p_replacement);
+			sampler.step(N_steps, true, 0., p_replacement, p_mixture);
 			highest_GR = -1.;
 			for(unsigned int i=0; i<4; i++) {
 				tmp_GR = sampler.get_GR_diagnostic(i);

@@ -78,6 +78,9 @@ class TAffineSampler {
 	gsl_matrix* wm2;
 	gsl_permutation* wp;
 	
+	// Model for Gaussian mixture proposals
+	TGaussianMixture *gm_target;
+	
 	TParams& params;	// Constant model parameters
 	
 	// Information about chain
@@ -94,6 +97,7 @@ class TAffineSampler {
 	// Private member functions
 	void get_proposal(unsigned int j, double scale);		// Generate a proposal state for sampler j, with the given step scale, using the stretch algorithm (default)
 	void replacement_proposal(unsigned int j);			// Generate a proposal state for sampler j, with the given step scale, using the replacement algorithm (long-range steps)
+	void mixture_proposal(unsigned int j);				// Generate a proposal state for sampler j from a Gaussian mixture model designed to resemble the target distribution
 	void update_subsample_cov();					// Calculate the covariance of the elements defined by sub_index
 	double log_gaussian_density(const TState *const x, const TState *const y);	// Log gaussian density at (x-y) given covariance matrix of sub-sample
 	
@@ -106,11 +110,13 @@ public:
 	~TAffineSampler();
 	
 	// Mutators
-	void step(bool record_step=true, double p_replacement=0.1);	// Advance each sampler in ensemble by one step
+	void step(bool record_step=true, double p_replacement=0.1, double p_mixture=0.1);	// Advance each sampler in ensemble by one step
 	void set_scale(double a);			// Set dimensionless step scale
 	void set_replacement_bandwidth(double _h);	// Set smoothing scale to be used for replacement steps, in units of the covariance
 	void flush(bool record_steps=true);		// Clear the weights in the ensemble and record the outstanding component states
 	void clear();					// Clear the stats, acceptance information and weights
+	
+	void init_gaussian_mixture_target(unsigned int nclusters, unsigned int iterations=100);
 	
 	// Accessors
 	TLogger& get_logger() { return logger; }
@@ -124,6 +130,7 @@ public:
 	boost::uint64_t get_N_replacements_rejected() { return N_replacements_rejected; }
 	double get_ln_Z_harmonic(bool use_peak=true, double nsigma_max=1., double nsigma_peak=0.1, double chain_frac=0.1) { return chain.get_ln_Z_harmonic(use_peak, nsigma_max, nsigma_peak, chain_frac); }
 	void print_state();
+	void print_clusters() { gm_target->print(); };
 	
 private:
 	rand_state_t rand_state;	// Function which generates a random state
@@ -152,9 +159,10 @@ public:
 	~TParallelAffineSampler();
 	
 	// Mutators
-	void step(unsigned int N_steps, bool record_steps, double cycle=0, double p_replacement=0.1);		// Take the given number of steps in each affine sampler
-	void set_scale(double a) { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->set_scale(a); } };	// Set the dimensionless step size a
+	void step(unsigned int N_steps, bool record_steps, double cycle=0, double p_replacement=0.1, double p_mixture=0.1);		// Take the given number of steps in each affine sampler
+	void set_scale(double a) { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->set_scale(a); } };				// Set the dimensionless step size a
 	void set_replacement_bandwidth(double h) { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->set_replacement_bandwidth(h); } };	// Set the dimensionless step size a
+	void init_gaussian_mixture_target(unsigned int nclusters, unsigned int iterations=100) { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->init_gaussian_mixture_target(nclusters, iterations); } };
 	void clear() { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->clear(); }; stats.clear(); };
 	
 	// Accessors
@@ -168,6 +176,7 @@ public:
 	double get_scale(unsigned int index) { assert(index < N_samplers); return sampler[index]->get_scale(); }
 	void print_stats();
 	void print_state() { for(unsigned int i=0; i<N_samplers; i++) { sampler[i]->print_state(); } }
+	void print_clusters() { for(unsigned int i=0; i<N_samplers; i++) { std::cout << std::endl; sampler[i]->print_clusters(); } } 
 	TAffineSampler<TParams, TLogger>* const get_sampler(unsigned int index) { assert(index < N_samplers); return sampler[index]; }
 };
 
@@ -245,7 +254,7 @@ struct TAffineSampler<TParams, TLogger>::TState {
 // 			The logger could, for example, bin the chain, or just push back each state into a vector.
 template<class TParams, class TLogger>
 TAffineSampler<TParams, TLogger>::TAffineSampler(pdf_t _pdf, rand_state_t _rand_state, unsigned int _N, unsigned int _L, TParams& _params, TLogger& _logger, bool _use_log)
-	: pdf(_pdf), rand_state(_rand_state), params(_params), logger(_logger), N(_N), L(_L), X(NULL), Y(NULL), accept(NULL), r(NULL), use_log(_use_log), chain(_N, 1000*_L), W(NULL), sub_index(NULL), sub_mean(NULL), sub_cov(NULL), sqrt_sub_cov(NULL), inv_sub_cov(NULL), wv(NULL), ws(NULL), wm1(NULL), wm2(NULL), wp(NULL)
+	: pdf(_pdf), rand_state(_rand_state), params(_params), logger(_logger), N(_N), L(_L), X(NULL), Y(NULL), accept(NULL), r(NULL), use_log(_use_log), chain(_N, 1000*_L), W(NULL), sub_index(NULL), sub_mean(NULL), sub_cov(NULL), sqrt_sub_cov(NULL), inv_sub_cov(NULL), wv(NULL), ws(NULL), wm1(NULL), wm2(NULL), wp(NULL), gm_target(NULL)
 {
 	// Seed the random number generator
 	seed_gsl_rng(&r);
@@ -312,6 +321,7 @@ TAffineSampler<TParams, TLogger>::~TAffineSampler() {
 	gsl_matrix_free(wm1);
 	gsl_matrix_free(wm2);
 	gsl_permutation_free(wp);
+	if(gm_target != NULL) { delete gm_target; }
 }
 
 
@@ -516,26 +526,49 @@ void TAffineSampler<TParams, TLogger>::replacement_proposal(unsigned int j) {
 //}
 }
 
+template<class TParams, class TLogger>
+void TAffineSampler<TParams, TLogger>::mixture_proposal(unsigned int j) {
+	// Draw from Gaussian mixture
+	gm_target->draw(Y[j].element);
+	
+	Y[j].pi = pdf(Y[j].element, N, params);
+	Y[j].weight = 1.;
+	
+	// Determine Q(Y) / Q(X)
+	Y[j].replacement_factor = gm_target->density(X[j].element) / gm_target->density(Y[j].element);
+}
+
+template<class TParams, class TLogger>
+void TAffineSampler<TParams, TLogger>::init_gaussian_mixture_target(unsigned int nclusters, unsigned int iterations) {
+	if(gm_target != NULL) { delete gm_target; }
+	gm_target = new TGaussianMixture(N, nclusters);
+	get_chain().fit_gaussian_mixture(gm_target, iterations);
+}
+
 
 /*************************************************************************
  *   Mutators
  *************************************************************************/
 
 template<class TParams, class TLogger>
-void TAffineSampler<TParams, TLogger>::step(bool record_step, double p_replacement) {
+void TAffineSampler<TParams, TLogger>::step(bool record_step, double p_replacement, double p_mixture) {
 	double scale, alpha, p;
-	bool replacement;
+	unsigned int step_type;
 	for(unsigned int j=0; j<L; j++) {
 		// Make either a stretch or a replacement step
-		if(gsl_rng_uniform(r) < p_replacement) {
+		p = gsl_rng_uniform(r);
+		if(p < p_replacement) {
 			replacement_proposal(j);
-			replacement = true;
+			step_type = 1;
+		} else if((p < p_replacement + p_mixture) && (gm_target != NULL)) {
+			mixture_proposal(j);
+			step_type = 2;
 		} else {
 			// Determine the step scale and draw a proposal
 			scale = (sqrta - 1./sqrta) * gsl_rng_uniform(r) + 1./sqrta;
 			scale *= scale;
 			get_proposal(j, scale);
-			replacement = false;
+			step_type = 0;
 		}
 		
 		// Determine if the proposal is the maximum-likelihood point
@@ -548,11 +581,11 @@ void TAffineSampler<TParams, TLogger>::step(bool record_step, double p_replaceme
 			if(isinff(X[j].pi) && !(isinff(Y[j].pi))) {
 				alpha = 1;	// Accept the proposal if the current state has zero probability and the proposed state doesn't
 			} else {
-				if(replacement) {
+				if(step_type == 0) {
+					alpha = (double)(N - 1) * log(scale) + Y[j].pi - X[j].pi;
+				} else {
 					alpha = Y[j].pi - X[j].pi + log(Y[j].replacement_factor);
 					//std::cout << "alpha = " << alpha << std::endl;
-				} else {
-					alpha = (double)(N - 1) * log(scale) + Y[j].pi - X[j].pi;
 				}
 			}
 			// Decide whether to accept or reject
@@ -571,10 +604,10 @@ void TAffineSampler<TParams, TLogger>::step(bool record_step, double p_replaceme
 			if((X[j].pi == 0) && (Y[j].pi != 0)) {
 				alpha = 2;	// Accept the proposal if the current state has zero probability and the proposed state doesn't
 			} else {
-				if(replacement) {
-					alpha = Y[j].pi / X[j].pi * Y[j].replacement_factor;
-				} else {
+				if(step_type == 0) {
 					alpha = pow(scale, (double)(N - 1)) * Y[j].pi / X[j].pi;
+				} else {
+					alpha = Y[j].pi / X[j].pi * Y[j].replacement_factor;
 				}
 			}
 			// Decide whether to accept or reject
@@ -602,11 +635,11 @@ void TAffineSampler<TParams, TLogger>::step(bool record_step, double p_replaceme
 			}
 			X[j] = Y[j];
 			N_accepted++;
-			if(replacement) { N_replacements_accepted++; }
+			if(step_type) { N_replacements_accepted++; }
 		} else {
 			X[j].weight++;
 			N_rejected++;
-			if(replacement) { N_replacements_rejected++; }
+			if(step_type) { N_replacements_rejected++; }
 		}
 	}
 }
@@ -649,6 +682,7 @@ void TAffineSampler<TParams, TLogger>::clear() {
 	N_replacements_accepted = 0;
 	N_replacements_rejected = 0;
 }
+
 
 
 /*************************************************************************
@@ -700,7 +734,7 @@ TParallelAffineSampler<TParams, TLogger>::~TParallelAffineSampler() {
 }
 
 template<class TParams, class TLogger>
-void TParallelAffineSampler<TParams, TLogger>::step(unsigned int N_steps, bool record_steps, double cycle, double p_replacement) {
+void TParallelAffineSampler<TParams, TLogger>::step(unsigned int N_steps, bool record_steps, double cycle, double p_replacement, double p_mixture) {
 	#pragma omp parallel shared(record_steps) num_threads(N_samplers)
 	{
 		unsigned int thread_ID = omp_get_thread_num();
@@ -713,7 +747,7 @@ void TParallelAffineSampler<TParams, TLogger>::step(unsigned int N_steps, bool r
 					sampler[thread_ID]->set_scale(base_a);
 				}
 			}
-			sampler[thread_ID]->step(record_steps, p_replacement);
+			sampler[thread_ID]->step(record_steps, p_replacement, p_mixture);
 		}
 		sampler[thread_ID]->flush(record_steps);
 		#pragma omp critical (append_stats)

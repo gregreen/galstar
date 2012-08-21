@@ -144,7 +144,8 @@ int main(int argc, char **argv) {
 	unsigned int giant_flag = 0;
 	unsigned int N_steps = 4000;
 	unsigned int N_samplers = 40;
-	double p_replacement = 0.15;
+	double p_replacement = 0.1;
+	double p_mixture = 0.;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;
 	
@@ -169,6 +170,7 @@ int main(int argc, char **argv) {
 		("steps", po::value<unsigned int>(&N_steps), "Minimum # of MCMC steps per sampler")
 		("samplers", po::value<unsigned int>(&N_samplers), "# of affine samplers")
 		("preplacement", po::value<double>(&p_replacement), "Fraction of time to do replacement step.")
+		("pmixture", po::value<double>(&p_mixture), "Fraction of time to do replacement step.")
 		("samples", po::value<unsigned int>(&N_samples), "# of samples in each dimension for brute-force sampler")
 		("threads", po::value<unsigned int>(&N_threads), "# of threads to run on")
 		("nonsparse", "Write binned PDFs as full arrays (produces significantly larger output).")
@@ -269,7 +271,7 @@ int main(int argc, char **argv) {
 		bool converged;
 		double evidence;
 		if(giant_flag != 0) {
-			converged = sample_affine(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, p_replacement, N_threads);
+			converged = sample_affine(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, p_replacement, p_mixture, N_threads);
 		} else {
 			converged = sample_affine_both(model, p, *it, multibinner, stats, evidence, N_samplers, N_steps, N_threads);
 		}

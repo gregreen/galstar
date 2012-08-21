@@ -143,9 +143,9 @@ int main(int argc, char **argv) {
 	bool append = false;
 	bool noprior = false;
 	unsigned int giant_flag = 0;
-	unsigned int N_steps = 1000;
+	unsigned int N_steps = 800;
 	unsigned int N_samplers = 100;
-	double p_replacement = 0.15;
+	double p_replacement = 0.20;
 	double p_mixture = 0.;
 	unsigned int N_samples = 200;
 	unsigned int N_threads = 4;

@@ -445,7 +445,7 @@ bool sample_affine(TModel &model, MCMCParams &p, TStellarData::TMagnitudes &mag,
 		}
 		sampler.step(N_steps/3, false, 0, p_replacement, p_mixture);
 		sampler.clear();
-		std::cout << "Burn-in complete." << std::endl;
+		//std::cout << "Burn-in complete." << std::endl;
 		
 		//std::cout << std::endl << "===================================================================" << std::endl << std::endl;
 		

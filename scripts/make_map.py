@@ -343,7 +343,7 @@ def main():
 	# Set up figures and axes
 	fig, ax = [], []
 	for i in range(len(values.mu)):
-		if i % (nrows*ncol) = 0:
+		if i % (nrows*ncol) == 0:
 			fig.append(plt.figure(figsize=values.figsize, dpi=value.dpi))
 		if values.mollweide:
 			ax.append(fig[-1].add_subplot(nrows, ncol, (i+1) % (nrows*ncol), projection='mollweide'))
@@ -357,8 +357,6 @@ def main():
 	
 	# Give axes to m to plot
 	image = m.to_axes(ax, values.mu, size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, log_scale=False, diff=value.diff)
-	
-	
 	
 	fig = None
 	image = None

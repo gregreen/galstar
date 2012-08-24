@@ -369,7 +369,7 @@ def main():
 			fname_base = fname_base[:-4]
 	
 	# Finish up each figure
-	for f in fig:
+	for i,f in enumerate(fig):
 		# Add title
 		if values.diff:
 			f.suptitle(r'$\Delta A_r$', fontsize=20, y=0.95)
@@ -385,7 +385,7 @@ def main():
 		if values.plotout != None:
 			fname = '%s.' % fname_base
 			if len(fig) != 1:
-				fname += '%d.' % int(i / (nrows*ncol))
+				fname += str(i)
 			fname += fmt
 			print 'Saving %s ...' % fname
 			f.savefig(fname, dpi=values.dpi)

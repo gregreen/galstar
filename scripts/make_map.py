@@ -379,7 +379,7 @@ def main():
 		# Add colorbar
 		f.subplots_adjust(wspace=0., hspace=0., left=0.08, right=0.89, top=0.84)
 		cax = f.add_axes([0.9, 0.1, 0.03, 0.8])
-		cb = f.colorbar(image, cax=cax)
+		cb = f.colorbar(image.__copy__(), cax=cax)
 		
 		# Save plot
 		if values.plotout != None:

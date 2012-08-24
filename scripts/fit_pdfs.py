@@ -685,6 +685,8 @@ def main():
 	if values.show:
 		plt.show()
 	
+	sys.stderr.write('\n\n')
+	
 	return 0
 
 

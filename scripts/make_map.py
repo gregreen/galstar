@@ -341,17 +341,18 @@ def main():
 				ax[-1].set_xticklabels([])
 			if x != 0:
 				ax[-1].set_yticklabels([])
-		
-		# Distance label
-		x_min, x_max = ax[-1].get_xlim()
-		y_min, y_max = ax[-1].get_ylim()
-		x, y = x_min + 0.95*(x_max - x_min), y_min + 0.95*(y_max - y_min)
-		txt = ax[-1].text(x, y, r'$\mu = %.2f$' % mu, color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
-		txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='k')])
 	
 	# Give axes to m to plot
 	center_gal = (lb_bounds[0] == 0.) and (lb_bounds[1] == 360.)
 	image = m.to_axes(ax, list(values.mu), size=values.size, center_gal=center_gal, lb_bounds=lb_bounds, log_scale=False, diff=values.diff)
+	
+	# Distance label
+	for a,mu in zip(ax, values.mu):
+		x_min, x_max = a.get_xlim()
+		y_min, y_max = a.get_ylim()
+		x, y = x_min + 0.95*(x_max - x_min), y_min + 0.95*(y_max - y_min)
+		txt = a.text(x, y, r'$\mu = %.2f$' % mu, color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
+		txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='k')])
 	
 	# Determine base output filename and format
 	fname_base, fmt = None, None
@@ -379,13 +380,13 @@ def main():
 		# Add colorbar
 		f.subplots_adjust(wspace=0., hspace=0., left=0.08, right=0.89, top=0.84)
 		cax = f.add_axes([0.9, 0.1, 0.03, 0.8])
-		cb = f.colorbar(image.__copy__(), cax=cax)
+		cb = f.colorbar(image[i], cax=cax)
 		
 		# Save plot
 		if values.plotout != None:
-			fname = '%s.' % fname_base
+			fname = '%s' % fname_base
 			if len(fig) != 1:
-				fname += str(i)
+				fname += '_%d' % i
 			fname += fmt
 			print 'Saving %s ...' % fname
 			f.savefig(fname, dpi=values.dpi)

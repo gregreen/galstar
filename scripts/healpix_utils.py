@@ -584,6 +584,7 @@ class ExtinctionMap():
 			lb_bounds[1] -= 180.
 		
 		# Plot each distance to a different axis
+		image = []
 		for subax, subimg in zip(ax, img):
 			lb_bounds_internal = np.array(lb_bounds)
 			
@@ -605,9 +606,9 @@ class ExtinctionMap():
 				kwargs['interpolation'] = 'nearest'
 			kwargs['extent'] = lb_bounds_internal
 			if log_scale:
-				image = subax.imshow(np.log(subimg.T), **kwargs)
+				image.append(subax.imshow(np.log(subimg.T), **kwargs))
 			else:
-				image = subax.imshow(subimg.T, **kwargs)
+				image.append(subax.imshow(subimg.T, **kwargs))
 		
 		return image
 

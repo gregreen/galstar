@@ -36,7 +36,8 @@ import ps
 
 
 def load_SDSS_templates(fname):
-	'''Load Mario's stellar color template library from file, returning the absolute magnitudes and metallicities.'''
+	'''Load Mario's stellar color template library from file, returning
+	absolute magnitudes and metallicities.'''
 	
 	MrFeH = np.loadtxt(abspath(fname), usecols=(0,1), dtype=np.float32)
 	colors = np.loadtxt(abspath(fname), usecols=(2,3,4,5), dtype=np.float32)	# ug gr ri iz
@@ -153,8 +154,8 @@ def save_PS_lf(fname, SDSSlf, SDSSMrFeH, PSr):
 
 def main():
 	parser = argparse.ArgumentParser(prog='sdss2ps.py', description='Transform template library and luminosity function from SDSS bandpasses to PanSTARRS bandpasses.', add_help=True)
-	parser.add_argument('SDSStemp', type=str, help="Mario's SDSS template library.")
-	parser.add_argument('PStemp', type=str, help='Output filename for PanSTARRS template library.')
+	parser.add_argument('SDSScolors', type=str, help="Mario's SDSS template library.")
+	parser.add_argument('PScolors', type=str, help='Output filename for PanSTARRS template library.')
 	parser.add_argument('SDSSlf', type=str, help="Mario's SDSS luminosity function.")
 	parser.add_argument('PSlf', type=str, help='Output filename for PanSTARRS luminosity function.')
 	if 'python' in sys.argv[0]:
@@ -163,9 +164,9 @@ def main():
 		offset = 1
 	values = parser.parse_args(sys.argv[offset:])
 	
-	SDSSugriz, MrFeH = load_SDSS_templates(values.SDSStemp)
+	SDSSugriz, MrFeH = load_SDSS_templates(values.SDSScolors)
 	PSgrizy = ps.pssdsstransformall(SDSSugriz)
-	save_PS_templates(values.PStemp, PSgrizy, MrFeH)
+	save_PS_templates(values.PScolors, PSgrizy, MrFeH)
 	
 	SDSSlf = np.loadtxt(abspath(values.SDSSlf), usecols=(0,1), dtype=np.float32)
 	save_PS_lf(values.PSlf, SDSSlf, MrFeH, PSgrizy[:,1])

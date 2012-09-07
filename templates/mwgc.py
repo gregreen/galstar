@@ -24,11 +24,19 @@
 
 import numpy as np
 import pyfits
+import os
 from cStringIO import StringIO
 from numpy.lib.recfunctions import join_by
-
-import lsd, os
 from iterators import block_string_by_comments, index_by_key
+
+try:
+	import lsd
+except:
+	print 'lsd not present'
+
+import matplotlib.pyplot as plt
+import matplotlib as mplib
+from plot_sdss_photometry import density_scatter
 
 
 def gc_txt2fits(fname_base):
@@ -265,7 +273,7 @@ def great_circle_dist(tp0, tp1):
 
 def mapper(qresult, index, pos):
 	obj = lsd.colgroup.fromiter(qresult, blocks=True)
-		
+	
 	if (obj != None) and (len(obj) > 0):
 		# Find nearest cluster center to each star
 		theta_star = (90. - obj['b']) * np.pi/180.
@@ -305,8 +313,8 @@ def query_gcs(data, outfname):
 			q_bounds.append(lsd.bounds.beam(d['l'], d['b'], radius=r,
 			                                           coordsys='gal'))
 	q_bounds = lsd.bounds.make_canonical(q_bounds)
-	pos = np.array([l, b, r_gc])
-	pos[1,:] = 90. - pos[1,:]
+	pos = np.array([b, l, r_gc])
+	pos[0,:] = 90. - pos[0,:]
 	pos *= np.pi/180.
 	index = np.array(index)
 	
@@ -349,9 +357,82 @@ def query_gcs(data, outfname):
 	pyfits.writeto(outfname, out, clobber=True)
 
 
+def plot_gc(gcstars, gcdata, gcID):
+	d = gcstars[gcstars['gcID'] == gcID]
+	
+	tp_star = np.array([(90. - d['b'])*np.pi/180., d['l']*np.pi/180.]).T
+	tp_gc = np.array([(90. - gcdata['b'])*np.pi/180., gcdata['l']*np.pi/180.]).T
+	gc_dist = great_circle_dist(tp_gc, tp_star)
+	gc_idx = np.median(np.argmin(gc_dist, axis=0))
+	gcID = gcdata['ID'][gc_idx]
+	gc = gcdata[gcdata['ID'] == gcID]
+	mu = 5. * (2. + np.log10(gc['R_Sun'][0]))
+	print gcID, mu, gc['DM_V'][0]
+	
+	cut = 0.9
+	gc_dist = gc_dist[gc_idx]
+	idx = np.argsort(gc_dist)
+	d = d[idx[:int(cut*len(idx))]]
+	
+	mplib.rc('text', usetex=True)
+	fig = plt.figure(figsize=(8,8), dpi=100)
+	
+	err = 0.5
+	
+	# g-r vs M_r
+	ax = fig.add_subplot(2,2,1)
+	idx = (d['g'] > 0.) & (d['r'] > 0.)
+	idx = idx & (d['g_err'] < 10.*err) & (d['r_err'] < 10.*err)
+	density_scatter(ax, d['g'][idx] - d['r'][idx], d['r'][idx] - mu,
+	                                       nbins=(50,50), threshold=100)
+	ylim = ax.get_ylim()
+	ax.set_ylim(ylim[1], ylim[0])
+	ax.set_xlabel(r'$g - r$', fontsize=16)
+	ax.set_ylabel(r'$M_{r}$', fontsize=16)
+	
+	# g-r vs r-i
+	ax = fig.add_subplot(2,2,2)
+	idx = (d['g'] > 0.) & (d['r'] > 0.) & (d['i'] > 0.)
+	idx = idx & (d['g_err'] < err) & (d['r_err'] < err) & (d['i_err'] < err)
+	density_scatter(ax, d['g'][idx] - d['r'][idx], d['r'][idx] - d['i'][idx],
+	                                       nbins=(50,50), threshold=100)
+	ax.set_xlabel(r'$g - r$', fontsize=16)
+	ax.set_ylabel(r'$r - i$', fontsize=16)
+	
+	# r-i vs i-z
+	ax = fig.add_subplot(2,2,3)
+	idx = (d['r'] > 0.) & (d['i'] > 0.) & (d['z'] > 0.)
+	idx = idx & (d['r_err'] < err) & (d['i_err'] < err) & (d['z_err'] < err)
+	density_scatter(ax, d['r'][idx] - d['i'][idx], d['i'][idx] - d['z'][idx],
+	                                       nbins=(50,50), threshold=100)
+	ax.set_xlabel(r'$r - i', fontsize=16)
+	ax.set_ylabel(r'$i - z$', fontsize=16)
+	
+	# i-z vs z-y
+	ax = fig.add_subplot(2,2,4)
+	idx = (d['i'] > 0.) & (d['z'] > 0.) & (d['y'] > 0.)
+	idx = idx & (d['i_err'] < err) & (d['z_err'] < err) & (d['y_err'] < err)
+	density_scatter(ax, d['i'][idx] - d['z'][idx], d['z'][idx] - d['y'][idx],
+	                                       nbins=(50,50), threshold=100)
+	ax.set_xlabel(r'$i - z$', fontsize=16)
+	ax.set_ylabel(r'$z - y$', fontsize=16)
+	
+	# Source positions
+	fig = plt.figure(figsize=(8,8), dpi=100)
+	ax = fig.add_subplot(1,1,1)
+	density_scatter(ax, d['l'], d['b'], nbins=(50,50), threshold=100)
+	ax.set_xlabel(r'$\ell$', fontsize=16)
+	ax.set_ylabel(r'$b$', fontsize=16)
+
+
 def main():
-	data = gc_txt2fits('mwgc')
-	query_gcs(data, 'gcstars.fits')
+	gcdata = gc_txt2fits('mwgc')
+	gcstars = pyfits.getdata('gcstars.fits')
+	
+	#query_gcs(gcdata, 'gcstars.fits')
+	
+	plot_gc(gcstars, gcdata, 'NGC 6229')
+	plt.show()
 	
 	return 0
 

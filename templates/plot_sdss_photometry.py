@@ -34,7 +34,7 @@ import os
 import iterators
 
 
-def density_scatter(ax, x, y, nbins=(50,50), threshold=5):
+def density_scatter(ax, x, y, nbins=(50,50), threshold=5, c='b', s=1, cmap='jet'):
 	'''
 	Draw a combination density map / scatterplot to the given axes.
 	
@@ -50,10 +50,10 @@ def density_scatter(ax, x, y, nbins=(50,50), threshold=5):
 	h[h < threshold] = np.nan
 	
 	# Density plot
-	img = ax.imshow(np.log(h.T), origin='lower', cmap='jet', extent=np.array(bounds).flatten(), interpolation='none', aspect='auto')
+	img = ax.imshow(np.log(h.T), origin='lower', cmap=cmap, extent=np.array(bounds).flatten(), interpolation='none', aspect='auto')
 	
 	# Scatterplot
-	ax.scatter(x[idx], y[idx], c='b', s=1)
+	ax.scatter(x[idx], y[idx], c=c, s=s, edgecolors='none')
 	
 	return img
 

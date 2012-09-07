@@ -274,6 +274,7 @@ def mapper(qresult, index, pos):
 		tp_gc = pos[:2].T
 		d = great_circle_dist(tp_star, tp_gc)
 		min_idx = np.argmin(d, axis=1)
+		#d_min = np.min(d, axis=1)
 		
 		for gc_idx,block_idx in index_by_key(min_idx):
 			yield (gc_idx, obj[block_idx])
@@ -292,9 +293,9 @@ def query_gcs(data, outfname):
 	idx.fill(False)
 	index, l, b, r_gc = [], [], [], []
 	for i,d in enumerate(data):
-		r = d['r_h'] / 60.
+		r = 15. * d['r_h'] / 60.
 		if np.isnan(r):
-			r = d['r_c'] / 60.
+			r = 20. * d['r_c'] / 60.
 		if not np.isnan(r):
 			idx[i] = True
 			index.append(i)

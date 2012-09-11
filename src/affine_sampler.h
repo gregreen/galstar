@@ -697,7 +697,8 @@ TParallelAffineSampler<TParams, TLogger>::~TParallelAffineSampler() {
 
 template<class TParams, class TLogger>
 void TParallelAffineSampler<TParams, TLogger>::step(unsigned int N_steps, bool record_steps, double cycle, double p_replacement, double p_mixture) {
-	#pragma omp parallel shared(record_steps) num_threads(N_samplers)
+	//omp_set_num_threads(N_samplers);
+	#pragma omp parallel firstprivate(record_steps, N_steps, cycle, p_replacement, p_mixture) num_threads(N_samplers)
 	{
 		unsigned int thread_ID = omp_get_thread_num();
 		double base_a = sampler[thread_ID]->get_scale();

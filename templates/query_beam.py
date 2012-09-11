@@ -31,6 +31,7 @@ except:
 
 import os, sys, argparse
 import numpy as np
+import pyfits
 
 
 def mapper(qresult):
@@ -39,6 +40,12 @@ def mapper(qresult):
 	if (obj != None) and (len(obj) > 0):
 		yield (1, obj)
 
+def reducer(keyvalue):
+	gc_index, obj = keyvalue
+	obj = lsd.colgroup.fromiter(obj, blocks=True)
+	
+	yield (gc_index, obj)
+
 
 def main():
 	parser = argparse.ArgumentParser(prog='query_beam.py',
@@ -46,15 +53,17 @@ def main():
 	                                 add_help=True)
 	parser.add_argument('lb', type=float, nargs=2, help='Galactic l and b')
 	parser.add_argument('r', type=float, help='radius of beam (in degrees)')
-	parser.add_argument('-o', '--output', type='str', required=True,
+	parser.add_argument('-o', '--output', type=str, required=True,
 	                                 help='Output (FITS) filename.')
-	parser.add_argument('-s', '--surveys', type='str', nargs='+', default='ps1',
+	parser.add_argument('-s', '--surveys', type=str, nargs='+', default=['ps1'],
 	                    choices=('ps1','sdss'), help='Surveys to include')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
 		offset = 1
 	args = parser.parse_args(sys.argv[offset:])
+	
+	print args.surveys
 	
 	bounds = lsd.bounds.beam(args.lb[0], args.lb[1], radius=args.r, coordsys='gal')
 	bounds = lsd.bounds.make_canonical(bounds)
@@ -63,9 +72,7 @@ def main():
 	query = None
 	if len(args.surveys) == 1:
 		if args.surveys[0] == 'ps1':
-			query = """select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok, SFD.EBV(l, b) as EBV
-			from ucal_magsqv
-			where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)"""
+			query = 'select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok, SFD.EBV(l, b) as EBV from ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)'
 		elif args.surveys[0] == 'sdss':
 			print 'Querying from SDSS not implemented yet.'
 			return 0
@@ -75,17 +82,44 @@ def main():
 	query = db.query(query)
 	
 	out = []
-	for (key, obj) in query.execute([mapper], 
-	                                      group_by_static_cell=True, bounds=q_bounds):
-		#tmp = np.empty(len(obj), dtype=[('l', 'f4'), ('b', 'f4'),
-		#                                ('mean','f4'), ('err','f4'),
-		#                                ('ebv','f4'), ('nmag_ok', 'u2')])
-		#tmp['l'] = obj['l']
-		out.append(obj)
+	for (key, obj) in query.execute([mapper, reducer], 
+	                                      group_by_static_cell=True, bounds=bounds):
+		tmp = np.empty(len(obj), dtype=[('l', 'f4'), ('b', 'f4'),
+		                                ('g', 'f4'), ('g_err', 'f4'),
+		                                ('r', 'f4'), ('r_err', 'f4'),
+		                                ('i', 'f4'), ('i_err', 'f4'),
+		                                ('z', 'f4'), ('z_err', 'f4'),
+		                                ('y', 'f4'), ('y_err', 'f4'),
+						('g_nmag_ok', 'i4'),
+		                                ('r_nmag_ok', 'i4'),
+		                                ('i_nmag_ok', 'i4'),
+		                                ('z_nmag_ok', 'i4'),
+		                                ('y_nmag_ok', 'i4'),
+		                                ('EBV', 'f4')])
+		tmp['l'] = obj['l']
+		tmp['b'] = obj['b']
+		tmp['g'] = obj['mean'][:,0]
+		tmp['r'] = obj['mean'][:,1]
+		tmp['i'] = obj['mean'][:,2]
+		tmp['z'] = obj['mean'][:,3]
+		tmp['y'] = obj['mean'][:,4]
+		tmp['g_err'] = obj['err'][:,0]
+		tmp['r_err'] = obj['err'][:,1]
+		tmp['i_err'] = obj['err'][:,2]
+		tmp['z_err'] = obj['err'][:,3]
+		tmp['y_err'] = obj['err'][:,4]
+		tmp['g_nmag_ok'] = obj['nmag_ok'][:,0]
+		tmp['r_nmag_ok'] = obj['nmag_ok'][:,1]
+		tmp['i_nmag_ok'] = obj['nmag_ok'][:,2]
+		tmp['z_nmag_ok'] = obj['nmag_ok'][:,3]
+		tmp['y_nmag_ok'] = obj['nmag_ok'][:,4]
+		tmp['EBV'] = obj['EBV']
+		
+		out.append(tmp)
 	
 	out = np.hstack(out)
+	print 'max. E(B-V): %.3f' % np.max(out['EBV'])
 	pyfits.writeto(args.output, out, clobber=True)
-	
 	
 	return 0
 

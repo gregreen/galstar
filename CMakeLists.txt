@@ -16,6 +16,15 @@ find_package(OpenMP REQUIRED)
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS})
 set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS})
 
+#
+# Intel Compiler Flags
+#
+IF(NOT CMAKE_COMPILER_IS_GNUCXX)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ipo -axHOST -no-prec-div ") 
+ELSE(NOT CMAKE_COMPILER_IS_GNUCXX)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math ")
+ENDIF(NOT CMAKE_COMPILER_IS_GNUCXX)
+
 ### libpeyton
 find_package(libpeyton REQUIRED)
 include_directories(${libpeyton_INCLUDE_DIR})
@@ -35,6 +44,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 #
 set(DATADIRSUFFIX "share/${CMAKE_PROJECT_NAME}")
 set(DATADIR "${CMAKE_INSTALL_PREFIX}/${DATADIRSUFFIX}")
+#set(DATADIR "${PROJECT_SOURCE_DIR}")
 
 #
 # configure a header file to pass some of the CMake settings to the source

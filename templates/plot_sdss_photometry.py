@@ -34,14 +34,21 @@ import os
 import iterators
 
 
-def density_scatter(ax, x, y, nbins=(50,50), threshold=5, c='b', s=1, cmap='jet'):
+def density_scatter(ax, x, y, nbins=(50,50), binsize=None, threshold=5, c='b', s=1, cmap='jet'):
 	'''
 	Draw a combination density map / scatterplot to the given axes.
 	
 	Adapted from answer to stackoverflow question #10439961
 	'''
+	
 	# Make histogram of data
 	bounds = [[np.min(x)-1.e-10, np.max(x)+1.e-10], [np.min(y)-1.e-10, np.max(y)+1.e-10]]
+	if binsize != None:
+		nbins = []
+		if len(binsize) != 2:
+			raise Exception('binsize must have size 2. Size is %d.' % len(binsize))
+		for i in range(2):
+			nbins.append((bounds[i][1] - bounds[i][0])/float(binsize[i]))
 	h, loc_x, loc_y = scipy.histogram2d(x, y, range=bounds, bins=nbins)
 	pos_x, pos_y = np.digitize(x, loc_x), np.digitize(y, loc_y)
 	

@@ -191,7 +191,9 @@ def main():
 		
 		# Write pixel header
 		N_stars = np.array([outarr.shape[0]], dtype=np.uint32)
-		gal_lb = np.array([np.mean(obj['l']), np.mean(obj['b'])], dtype=np.float64)
+		tp = hp.pixelfunc.pix2ang(values.nside, pix_index) * 180. / np.pi
+		gal_lb = np.array([tp[1], 90. - tp[0]], dtype=np.float64)
+		#gal_lb = np.array([np.mean(obj['l']), np.mean(obj['b'])], dtype=np.float64)
 		if gal_lb[0] < l_min:
 			l_min = gal_lb[0]
 		if gal_lb[0] > l_max:
@@ -205,7 +207,7 @@ def main():
 		f.write(N_stars.tostring())									# N_stars		(uint32)
 		
 		# Write magnitudes and errors
-		f.write(outarr.tostring())									# obj_id, l, b, 5xmag, 5xerr	(uint54 + 12 x float64)
+		f.write(outarr.tostring())									# obj_id, l, b, 5xmag, 5xerr	(uint64 + 12 x float64)
 		
 		# Record number of stars saved to pixel
 		N_pix_in_file += 1

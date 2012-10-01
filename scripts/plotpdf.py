@@ -178,7 +178,7 @@ def main():
 	if values.converged:
 		idx = idx & converged
 	if values.evidence != None:
-		idx = idx & (evidence >= np.max(ln_evidence) - values.evidence)
+		idx = idx & (ln_evidence >= np.max(ln_evidence) - values.evidence)
 	#print idx
 	#print np.sum(np.sum(pdf, axis=1), axis=1)[0]
 	#print pdf[0][pdf[0] > 0.]

@@ -551,7 +551,7 @@ def plot_gc(gcstars, gcdata, gcID, cut=5.0, err=0.5, modelfn='../data/PScolors.d
 	
 	# Correct observed magnitudes for extinction
 	A_coeff = np.array([3.172, 2.271, 1.682, 1.322, 1.087])
-	EBV = gc['EBV']
+	EBV = gc['EBV'] + 0.15
 	m_g = d['g'] - A_coeff[0] * EBV
 	m_r = d['r'] - A_coeff[1] * EBV
 	m_i = d['i'] - A_coeff[2] * EBV
@@ -793,9 +793,9 @@ def main():
 	             'NGC 6093',
 	             'NGC 6341',
 	             'NGC 6171']
-	#gcID = MessierGC[28]
-	#plot_gc(gcstars, gcdata, gcID, cut=3., err=0.05, modelfn='../data/PScolors_Doug.dat')
-	#plt.show()
+	gcID = MessierGC[2]
+	plot_gc(gcstars, gcdata, gcID, cut=1., err=0.05, modelfn='../data/PScolors.dat')
+	plt.show()
 	
 	# Generate input files from selected globular clusters
 	cut = [1., 2., 2., 2., 4., 5., 4., 3., 6., 5., 3.]
@@ -803,7 +803,7 @@ def main():
 	
 	output_data = []
 	
-	for i,c in zip(index, cut):
+	'''for i,c in zip(index, cut):
 		gcID = MessierGC[i]
 		
 		d = gcstars[gcstars['gcID'] == gcID]
@@ -820,7 +820,7 @@ def main():
 		
 		output_data.append(d[idx])
 	
-	gen_input(output_data, 'GCs.in')
+	gen_input(output_data, 'GCs.in')'''
 	
 	return 0
 

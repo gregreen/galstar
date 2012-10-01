@@ -101,6 +101,7 @@ def main():
 	parser.add_argument('-y', '--ymax', type=float, default=None, help='Upper bound on y in plots.')
 	parser.add_argument('-p', '--params', type=str, nargs=2, default=('DM','Ar'), help='Name of x- and y-axes, respectively (default: DM Ar). Choices are (DM, Ar, Mr, FeH).')
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Show only converged stars.')
+	parser.add_argument('-ev', '--evidence', type=float, default=None, help='Filter out stars which have evidence X below max. evidence.')
 	parser.add_argument('-stk', '--stack', action='store_true', help='Stack stellar pdfs.')
 	parser.add_argument('--nomarks', action='store_true', help='Do not show evidence or convergence flag.')
 	parser.add_argument('-fig', '--figsize', type=float, nargs=2, default=(8.5, 11.), help='Figure width and height in inches.')
@@ -176,6 +177,8 @@ def main():
 	idx = (np.sum(np.sum(pdf, axis=1), axis=1) != 0.)
 	if values.converged:
 		idx = idx & converged
+	if values.evidence != None:
+		idx = idx & (evidence >= np.max(ln_evidence) - values.evidence)
 	#print idx
 	#print np.sum(np.sum(pdf, axis=1), axis=1)[0]
 	#print pdf[0][pdf[0] > 0.]
@@ -209,7 +212,8 @@ def main():
 		pdf.shape = (1, w, h)
 		fig = plot_surfs(pdf, bounds, clip, [1,1], values.figsize, plotfn, labels)
 	else:
-		for i in range(values.startend[0], np.min([N_stars, values.startend[1]]), np.prod(values.rowcol)):
+		for i in range(values.startend[0],np.min([N_stars, values.startend[1]]),
+		                                        np.prod(values.rowcol)):
 			imax = np.min([i+6, converged.size, values.startend[1]])
 			print 'Plotting pdfs %d through %d of %d ...' % (i+1, imax, N_stars)
 			
@@ -217,16 +221,22 @@ def main():
 			if np.min([N_stars, values.startend[1]]) - values.startend[0] <= np.prod(values.rowcol):
 				plotfn = '%s.png' % (values.plotfn)
 			else:
-				plotfn = '%s_%d.png' % (values.plotfn, (i-values.startend[0])/np.prod(values.rowcol))
+				plotfn = '%s_%d.png' % (values.plotfn,
+				                       (i-values.startend[0])/np.prod(values.rowcol))
 			
 			true_params = None
 			if values.testfn != None:
 				true_params = (param_true[0][i:imax], param_true[1][i:imax])
 			
 			if values.nomarks:
-				fig = plot_surfs(pdf[i:imax], bounds, clip, values.rowcol, values.figsize, plotfn, labels, true_params=true_params)
+				fig = plot_surfs(pdf[i:imax], bounds, clip,
+				                 values.rowcol, values.figsize,
+				                 plotfn, labels, true_params=true_params)
 			else:
-				fig = plot_surfs(pdf[i:imax], bounds, clip, values.rowcol, values.figsize, plotfn, labels, converged[i:imax], ln_evidence[i:imax], true_params)
+				fig = plot_surfs(pdf[i:imax], bounds, clip,
+				                 values.rowcol, values.figsize,
+				                 plotfn, labels, converged[i:imax],
+				                 ln_evidence[i:imax], true_params)
 			
 			if not values.show:
 				plt.close(fig)

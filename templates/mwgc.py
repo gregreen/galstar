@@ -709,7 +709,7 @@ def gen_input(data, fname):
 	f = open(fname, 'wb')
 	f.write(np.array(len(data), dtype=np.uint32).tostring())
 	
-	for d in data:
+	for i,d in enumerate(data):
 		# Filter data based on number of detections
 		count = np.zeros(len(d), dtype='i4')
 		for b in ['g', 'r', 'i', 'z', 'y']:
@@ -745,7 +745,7 @@ def gen_input(data, fname):
 		# Write pixel header
 		N_stars = np.array([outarr.shape[0]], dtype=np.uint32)
 		gal_lb = np.array([np.mean(outarr['l']), np.mean(outarr['b'])], dtype=np.float64)
-		f.write(np.array([0], dtype=np.uint32).tostring())	# Pixel index	(uint32)
+		f.write(np.array([i], dtype=np.uint32).tostring())	# Pixel index	(uint32)
 		f.write(gal_lb.tostring())							# (l, b)		(2 x float64)
 		f.write(N_stars.tostring())							# N_stars		(uint32)
 		
@@ -793,9 +793,9 @@ def main():
 	             'NGC 6093',
 	             'NGC 6341',
 	             'NGC 6171']
-	gcID = MessierGC[28]
-	plot_gc(gcstars, gcdata, gcID, cut=3., err=0.05, modelfn='../data/PScolors_Doug.dat')
-	plt.show()
+	#gcID = MessierGC[28]
+	#plot_gc(gcstars, gcdata, gcID, cut=3., err=0.05, modelfn='../data/PScolors_Doug.dat')
+	#plt.show()
 	
 	# Generate input files from selected globular clusters
 	cut = [1., 2., 2., 2., 4., 5., 4., 3., 6., 5., 3.]

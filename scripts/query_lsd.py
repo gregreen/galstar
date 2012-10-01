@@ -124,11 +124,11 @@ def main():
 	query = None
 	if values.sdss:
 		if values.maxAr == None:
-			query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from sdss, ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2) & (type == 6)"
+			query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from sdss, ucal_magsqw where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2) & (type == 6)"
 		else:
-			query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from sdss, ucal_magsqv(matchedto=sdss,nmax=1,dmax=5) where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2) & (type == 6) & (rExt <= %.4f)" % values.maxAr
+			query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from sdss, ucal_magsqw(matchedto=sdss,nmax=1,dmax=5) where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2) & (type == 6) & (rExt <= %.4f)" % values.maxAr
 	else:
-		query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from ucal_magsqv where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)"
+		query = "select obj_id, equgal(ra, dec) as (l, b), mean, err, mean_ap, nmag_ok from ucal_magsqw where (numpy.sum(nmag_ok > 0, axis=1) >= 4) & (nmag_ok[:,0] > 0) & (numpy.sum(mean - mean_ap < 0.1, axis=1) >= 2)"
 	query = db.query(query)
 	
 	# Determine the base output filename (without the '.in' extension)

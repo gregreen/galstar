@@ -230,7 +230,7 @@ def main():
 		ax_histy.set_xticklabels([])
 		ax_histy.set_yticklabels([])
 		
-		#fig.savefig('%s.png' % gcID, dpi=200)
+		fig.savefig('%s.png' % gcID, dpi=200)
 		#plt.show()
 	
 	#print Delta_DM

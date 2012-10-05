@@ -29,7 +29,7 @@ from matplotlib.patches import Rectangle
 import numpy as np
 from scipy.integrate import quad, Inf
 from math import pi, sqrt, log, exp, sin, cos
-from os.path import abspath
+from os.path import abspath, expanduser
 
 from astroutils import parse_RA, parse_DEC, parse_dhms, equatorial2galactic, rad2deg, deg2rad
 
@@ -48,7 +48,7 @@ class TGalacticModel:
 	                   L2=3261., H2=743., fh=0.0051, qh=0.70, nh=-2.62,
 	                   nh_outer=-3.8, Rbr=27.8, rho_0=0.0058, H_mu=500.,
 	                   Delta_mu=0.55, mu_FeH_inf=-0.82,
-	                   LF_fname='/home/greg/projects/galstar/data/PSMrLF.dat'):
+	                   LF_fname=expanduser('~/projects/galstar/data/PSMrLF.dat')):
 		self.R0, self.Z0 = R0, Z0
 		self.L1, self.H1 = L1, H1
 		self.f, self.L2, self.H2 = f, L2, H2

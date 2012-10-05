@@ -522,7 +522,8 @@ def query_gcs(data, outfname):
 	pyfits.writeto(outfname, out, clobber=True)
 
 
-def plot_gc(gcstars, gcdata, gcID, cut=5.0, err=0.5, modelfn='../data/PScolors.dat'):
+def plot_gc(gcstars, gcdata, gcID, cut=5.0, err=0.5,
+            modelfn='../data/PScolors.dat', DM=None, Ar=None):
 	d = gcstars[gcstars['gcID'] == gcID]
 	gc = gcdata[gcdata['ID'] == gcID]
 	
@@ -545,13 +546,19 @@ def plot_gc(gcstars, gcdata, gcID, cut=5.0, err=0.5, modelfn='../data/PScolors.d
 	print 'Cluster ID: %s' % gcID
 	print 'Radius = %.2f deg' % gc_rad
 	print '# of stars = %d' % len(d)
+	print '(l, b): %.2f, %.2f' % (gc['l'], gc['b'])
 	print 'DM = %.2f' % mu
 	print '[Fe/H] = %.2f' % gc['FeH'] 
 	print 'E(B-V) = %.2f' % gc['EBV']
+	print 'A_r = %.2f' % (gc['EBV'] * 2.271)
 	
 	# Correct observed magnitudes for extinction
 	A_coeff = np.array([3.172, 2.271, 1.682, 1.322, 1.087])
 	EBV = gc['EBV'] + 0.15
+	if DM != None:
+		mu = DM
+	if Ar != None:
+		EBV = Ar / A_coeff[1]
 	m_g = d['g'] - A_coeff[0] * EBV
 	m_r = d['r'] - A_coeff[1] * EBV
 	m_i = d['i'] - A_coeff[2] * EBV
@@ -567,7 +574,7 @@ def plot_gc(gcstars, gcdata, gcID, cut=5.0, err=0.5, modelfn='../data/PScolors.d
 	FeH.fill(gc['FeH'])
 	model_color = []
 	for i in range(3):
-		model_color.append(model.color(Mr, FeH + 0.5*(i-1.)))
+		model_color.append(model.color(Mr, FeH + 1.*(i-1.)))
 	
 	mplib.rc('text', usetex=True)
 	
@@ -756,7 +763,7 @@ def gen_input(data, fname):
 
 
 def main():
-	gcdata = gc_txt2fits('mwgc')
+	gcdata = pyfits.getdata('mwgc.fits')
 	gcstars = pyfits.getdata('gcstars.fits')
 	
 	#query_gcs(gcdata, 'gcstars.fits')
@@ -793,8 +800,9 @@ def main():
 	             'NGC 6093',
 	             'NGC 6341',
 	             'NGC 6171']
-	gcID = MessierGC[2]
-	plot_gc(gcstars, gcdata, gcID, cut=1., err=0.05, modelfn='../data/PScolors.dat')
+	gcID = MessierGC[23]
+	plot_gc(gcstars, gcdata, gcID, cut=3., err=5.,
+	        modelfn='../data/PScolors.dat', DM=15.688, Ar=0.072)
 	plt.show()
 	
 	# Generate input files from selected globular clusters

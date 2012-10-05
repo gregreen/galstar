@@ -117,14 +117,8 @@ class TGalacticModel:
 		else:
 			return self.rho_thin(r,z) + self.rho_thick(r,z) + self.rho_halo(r,z)'''
 	
-	def dn_dDM(self, DM, cos_l, sin_l, cos_b, sin_b, radius=1.,
-	                 component=None, correct=False, m_max=23.):
-		tmp = (self.rho(DM, cos_l, sin_l, cos_b, sin_b, component)
-		               * dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius))
-		if correct:
-			return tmp * self.dn_dDM_corr(DM, m_max)
-		else:
-			return tmp
+	def dn_dDM(self, DM, cos_l, sin_l, cos_b, sin_b, radius=1., component=None):
+		return self.rho(DM, cos_l, sin_l, cos_b, sin_b, component) * dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius)
 	
 	def dn_dDM_corr(self, DM, m_max=23.):
 		Mr_max = m_max - DM
@@ -220,29 +214,13 @@ def plot_Galactic_slice(Rmax, Zmax, component=None, log_scale=True):
 
 
 def main():
-	parser = argparse.ArgumentParser(prog='plot_prior.py',
-	            description='Plot galstar priors along a line of sight',
-	            add_help=True)
-	parser.add_argument('RA',
-	                    type=str, help='Right Ascension (hh:mm:ss) or degrees')
-	parser.add_argument('DEC',
-	                    type=str, help='Declination (deg:mm:ss) or degrees')
-	parser.add_argument('Radius',
-	                    type=str,
-	                    nargs='?',
-	                    default="'1d'",
-	                    help='Radius (hh:mm:ss) or degrees')
-	parser.add_argument('--lb',
-	                    action='store_true',
-	                    help='Interpret RA and DEC as Galactic l and b, respectively')
-	parser.add_argument('--correct',
-	                    action='store_true',
-	                    help='Correct for Malmquist bias.')
+	parser = argparse.ArgumentParser(prog='plot_prior.py', description='Plot galstar priors along a line of sight', add_help=True)
+	parser.add_argument('RA', type=str, help='Right Ascension (hh:mm:ss) or degrees')
+	parser.add_argument('DEC', type=str, help='Declination (deg:mm:ss) or degrees')
+	parser.add_argument('Radius', type=str, nargs='?', default="'1d'", help='Radius (hh:mm:ss) or degrees')
+	parser.add_argument('--lb', action='store_true', help='Interpret RA and DEC as Galactic l and b, respectively')
 	#parser.add_argument('--density', action='store_true', help='Plot stellar number density rather than p(mu)')
-	parser.add_argument('--output',
-	                    type=str,
-	                    default=None,
-	                    help='Save output to file (default: open window with output)')
+	parser.add_argument('--output', type=str, default=None, help='Save output to file (default: open window with output)')
 	if sys.argv[0] == 'python':
 		offset = 2
 	else:
@@ -293,14 +271,10 @@ def main():
 	cos_l, sin_l, cos_b, sin_b = cos(l), sin(l), cos(b), sin(b)
 	
 	# Determine total number of stars along line of sight
-	f_disk = lambda x: model.dn_dDM(x, cos_l, sin_l, cos_b, sin_b,
-	                                radius, component='disk',
-	                                correct=values.correct)
+	f_disk = lambda x: model.dn_dDM(x, cos_l, sin_l, cos_b, sin_b, radius, component='disk')
 	N_disk = quad(f_disk, 0.01, 20., epsrel=1.e-5)[0]
 	print '# of stars in disk: %d' % int(N_disk)
-	f_halo = lambda x: model.dn_dDM(x, cos_l, sin_l, cos_b, sin_b,
-	                                radius, component='halo',
-	                                correct=values.correct)
+	f_halo = lambda x: model.dn_dDM(x, cos_l, sin_l, cos_b, sin_b, radius, component='halo')
 	N_halo = quad(f_halo, 0.01, 40., epsrel=1.e-5)[0]
 	print '# of stars in halo: %d' % int(N_halo)
 	
@@ -311,18 +285,10 @@ def main():
 	for i,DM in enumerate(DM_range):
 		rho_halo[i] = model.rho(DM, cos_l, sin_l, cos_b, sin_b, component='halo')
 		rho_disk[i] = model.rho(DM, cos_l, sin_l, cos_b, sin_b, component='disk')
-		dn_dDM_halo[i] = 1./(N_halo+N_disk) * model.dn_dDM(DM,
-		                                          cos_l, sin_l,
-		                                          cos_b, sin_b,
-		                                          radius, component='halo',
-		                                          correct=values.correct)
-		dn_dDM_disk[i] = 1./(N_halo+N_disk) * model.dn_dDM(DM,
-		                                          cos_l, sin_l,
-		                                          cos_b, sin_b,
-		                                          radius, component='disk',
-		                                          correct=values.correct)
-	rho = rho_disk + rho_halo
-	dn_dDM = dn_dDM_halo + dn_dDM_disk
+		dn_dDM_halo[i] = model.dn_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius, component='halo')/(N_halo + N_disk)
+		dn_dDM_disk[i] = model.dn_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius, component='disk')/(N_halo + N_disk)
+	rho = rho_disk+rho_halo
+	dn_dDM = dn_dDM_halo+dn_dDM_disk
 	
 	# Plot dn/dDM
 	y_min = min(dn_dDM_disk.min(), dn_dDM_halo.min())
@@ -346,7 +312,7 @@ def main():
 	ax[1].fill_between(DM_range, y_min, rho_halo, alpha=0.4, facecolor='b')
 	ax[1].set_title(r'$\mathrm{Density}$', fontsize=20)
 	ax[1].set_xlabel(r'$\mu$', fontsize=20)
-	ax[1].set_ylabel(r'$n (\mu)$', fontsize=18)
+	ax[1].set_ylabel(r'$\rho (\mu)$', fontsize=18)
 	ax[1].set_yscale('log')
 	y_min = max(dn_dDM_disk.min(), dn_dDM_halo.min())
 	y_max = ax[1].get_ylim()[1]

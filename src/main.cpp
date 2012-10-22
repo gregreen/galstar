@@ -90,6 +90,22 @@ bool generate_test_photometry(string test_fn, TModel &model, TStellarData &data,
 	
 	unsigned int count = 0;
 	
+	/*
+	string err_fn_base = DATADIR "/PSgrizy.";
+	char bandpass[5] = {'g','r','i','z','y'};
+	TLinearInterp **err_interp = new TLinearInterp*[5];
+	for(unsigned int i=0; i<5; i++) {
+		err_interp[i] = new TLinearInterp();
+		stringstream fname;
+		fname << err_fn_base << bandpass[i] << ".photoerr.txt";
+		while(getline(f, line)) {
+			if(!line.size()) { continue; }		// empty line
+			if(line[0] == '#') { continue; }	// comment
+			
+		}
+	}
+	*/
+	
 	while(getline(f, line)) {
 		if(!line.size()) { continue; }		// empty line
 		if(line[0] == '#') { continue; }	// comment

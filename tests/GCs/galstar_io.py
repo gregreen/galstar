@@ -370,6 +370,8 @@ def load_stacked_bins_sparse(fname, p0=-1., selection=None, verbose=False):
 	Input:
 		fname - filename of binned data
 		selection - indices of stars to load. If None, all stars are loaded.
+		p0 - minimum probability density for individual stellar surfaces
+		verbose - function is more verbose
 	
 	Output:
 		bounds[4] = [x_min, x_max, y_min, y_max]

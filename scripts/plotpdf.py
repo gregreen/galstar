@@ -71,7 +71,7 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), figsize=(8.5, 11.), fname=None
 		for i in xrange(N_plots):
 			xmax, ymax = grid[i].get_xlim()[1], grid[i].get_ylim()[1]
 			x, y = 0.95*xmax, 0.95*ymax
-			grid[i].text(x, y, '%.2g' % ln_evidence[i], color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
+			grid[i].text(x, y, r'$%.2g$' % ln_evidence[i], color='white', fontsize=14, horizontalalignment='right', verticalalignment='top')
 	
 	# Mark true stellar parameters
 	if true_params != None:

@@ -801,7 +801,7 @@ def main():
 	             'NGC 6341',
 	             'NGC 6171']
 	gcID = MessierGC[23]
-	plot_gc(gcstars, gcdata, gcID, cut=3., err=5.,
+	plot_gc(gcstars, gcdata, gcID, cut=3., err=0.05,
 	        modelfn='../data/PScolors.dat', DM=15.688, Ar=0.072)
 	plt.show()
 	

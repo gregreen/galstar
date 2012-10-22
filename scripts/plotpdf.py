@@ -150,10 +150,23 @@ def main():
 	N_stars = 0
 	for i,(sf,bf) in enumerate(zip(values.statsfn, values.binfn)):
 		conv, ln_ev, mean, cov = load_stats(sf)
-		bounds, p = load_bins(bf, True)
-		converged.append(conv)
+		
+		# Determine # of stars to load from this file
+		idx = np.ones(len(conv), dtype=np.bool)
+		if values.converged:
+			idx = idx & conv
+		if values.evidence != None:
+			idx = idx & (ln_ev >= np.max(ln_ev) - values.evidence)
+		idx = np.where(idx)
+		N_load = values.startend[1] - values.startend[0] - N_stars
+		if N_load > len(idx):
+			N_load = len(idx)
+		idx = idx[:N_load]
+		
+		bounds, p = load_bins(bf, True, selection=idx)
+		converged.append(conv[idx])
 		pdf.append(p)
-		ln_evidence.append(ln_ev)
+		ln_evidence.append(ln_ev[idx])
 		if values.testfn != None:
 			tmp_param = [None, None, None, None]
 			lb, tmp_param[0], tmp_param[1], tmp_param[2], tmp_param[3] = load_true(values.testfn[i])
@@ -163,8 +176,8 @@ def main():
 					if values.params[i].lower() == l:
 						param_true[i].append(tmp_param[k])
 						break
-		N_stars += conv.size
-		if N_stars >= values.startend[1]:
+		N_stars += idx.size
+		if N_stars >= values.startend[1] - values.startend[0]:
 			break
 	pdf = np.vstack(pdf)
 	converged = np.hstack(converged)

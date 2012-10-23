@@ -199,6 +199,8 @@ def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000., Delta_y_neighb
 	#print log_Delta_y[1:]
 	#print ''
 	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
+	if np.sum(Delta_y) >= pdfs.shape[2]:
+		measure += 1.e10
 	
 	# Tie this pixel to neighbors
 	if Delta_y_neighbor != None:

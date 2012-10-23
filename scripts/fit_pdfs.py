@@ -199,8 +199,14 @@ def nlopt_measure(Delta_y, grad, pdfs, p0=1.e-5, regulator=1000., Delta_y_neighb
 	#print log_Delta_y[1:]
 	#print ''
 	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
-	if np.sum(Delta_y) >= pdfs.shape[2]:
-		measure += 1.e10
+	
+	# Add a barrier to jumping to very high Ar
+	max_y = np.sum(Delta_y)
+	height = pdfs.shape[2]
+	measure += 1. / (1. - np.tanh((max_y-height)/(0.05*height)) + 1.e-10)
+	
+	#if np.sum(Delta_y) >= pdfs.shape[2]:
+	#	measure += 1.e10
 	
 	# Tie this pixel to neighbors
 	if Delta_y_neighbor != None:

@@ -285,8 +285,34 @@ def calc_Z_harmonic(chain, weight, pi_chain, nsigma=2.):
 	return V * (total_weight / tmp) * sum(weight)/total_weight
 
 
+def ln_p(X, params):
+	tmp = X - 10.
+	return -0.5*np.dot(tmp,tmp)
+
+def rand_state():
+	return np.random.normal(loc=0., scale=10., size=20)
 
 def main():
+	sampler = AffineSampler(rand_state, ln_p, None, a=2., L=150)
+	
+	for i in xrange(1000):
+		sampler.step()
+	
+	sampler.reset_chain()
+	for i in xrange(1000):
+		sampler.step()
+	
+	mean = sampler.get_mean()
+	cov = sampler.get_cov()
+	
+	print 'Acceptance rate: %.3f %%' % (100.*sampler.get_acceptance())
+	print ''
+	print 'Mean:'
+	print mean
+	print ''
+	print 'Covariance:'
+	print cov
+	print ''
 	
 	return 0
 

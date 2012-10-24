@@ -44,6 +44,81 @@ from galstar_io import *
 from galstarutils import get_objects
 import healpix_utils as hputils
 
+from affinesampler import TMCMC
+
+
+
+#
+# MCMC SAMPLER
+#
+
+class TMCMCguess:
+	def __init__(self, Delta_Ar, scale=0.2):
+		self.Delta_Ar = np.array(Delta_Ar)
+		self.ndim = self.eDelta_Ar.size
+		self.scale = scale / float(self.ndim)
+	
+	def __call__(self, n):
+		diff = np.random.normal(scale=self.scale, size=(n,self.ndim))
+		Delta_tmp = np.repeat(self.Delta_Ar, n)
+		Delta_tmp.shape = (self.ndim, n)
+		Delta_tmp = Delta_tmp.T + diff
+		idx = (Delta_tmp < 0.)
+		Delta_tmp[idx] = 0.
+		return Delta_tmp
+
+class Tlnp:
+	def __init__(self, pdfs, p0=1.e-5, regulator=1000.):
+		self.pdfs = pdfs
+		self.p0 = p0
+		self.regulator = regulator
+	
+	def __call__(self, Delta_y):
+		# Calculate line integral for each star
+		measure = line_integral(Delta_y, self.pdfs)
+		
+		# Soften line integrals, so that they do not drop below p0
+		measure += self.p0 * np.exp(-measure/self.p0)
+		
+		# Multiply line integrals
+		measure = -np.sum(np.log(measure))
+		
+		# Disfavor larger values of ln(Delta_y) slightly
+		measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*self.regulator*self.regulator)
+		
+		# Add a barrier to jumping to very high Ar
+		max_y = np.sum(Delta_y)
+		height = self.pdfs.shape[2]
+		measure += np.exp((max_y-0.90*height)/(0.005*height))
+		
+		return measure
+
+def sample_MCMC(pdfs, guess, N_steps=1000, p0=1.e-5, regulator=1000.):
+	f_lnp = Tlnp(pdfs, p0, regulator)
+	f_rand_state = TMCMCguess(guess, scale=0.2)
+	cov = np.diag([0.05 for i in guess.size])
+	size = 150
+	
+	sampler = TMCMC(f_lnp, f_rand_state, cov, size)
+	sampler.set_p_method(stretch=1.)
+	sampler.standard_run(N_steps)
+	
+	print ''
+	print 'Determining statistics ...'
+	mean = sampler.get_mean()
+	cov = sampler.get_cov()
+	
+	print 'Acceptance rate: %.3f %%' % (100.*sampler.get_acceptance())
+	print ''
+	print 'Mean:'
+	print mean
+	print ''
+	print 'Covariance:'
+	print cov
+	print ''
+	
+	return mean, cov
+
 
 
 #
@@ -126,6 +201,11 @@ def chi_leastsq(log_Delta_y, pdfs=None, p0=1.e-5, regulator=10000.):
 	#measure += np.sum((log_Delta_y[1:]-bias)*(log_Delta_y[1:]-bias)) / (2.*regulator*regulator)
 	measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*regulator*regulator)
 	
+	# Add a barrier to jumping to very high Ar
+	max_y = np.sum(Delta_y)
+	height = pdfs.shape[2]
+	measure += np.exp((max_y-0.90*height)/(0.005*height))
+	
 	return np.sqrt(measure)
 
 
@@ -153,6 +233,11 @@ def anneal_measure(log_Delta_y, pdfs, p0=1.e-5, regulator=1000.):
 	measure = line_integral(Delta_y, pdfs)	# Begin with line integral through each stellar pdf
 	measure += p0 * np.exp(-measure/p0)		# Soften around zero (measure -> positive const. below scale p0)
 	measure = -np.sum(np.log(measure))		# Sum logarithms of line integrals
+	
+	# Add a barrier to jumping to very high Ar
+	max_y = np.sum(Delta_y)
+	height = pdfs.shape[2]
+	measure += np.exp((max_y-0.90*height)/(0.005*height))
 	
 	# Disfavor larger values of ln(Delta_y) slightly
 	#bias = 0.
@@ -425,7 +510,11 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	sys.stderr.write('Extreme outliers: %d of %d\n' % (N_outliers, line_int.size))
 	sys.stderr.write('Outliers (below softening limit): %d of %d\n\n' % (N_softened, line_int.size))
 	
-	return bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess_Delta_Ar, Delta_Ar_mean
+	sys.stderr.write('Begining MCMC ...\n')
+	Delta_Ar_MCMC, cov_MCMC = sample_MCMC(p, x, 1000, p0, regulator)
+	
+	return (bounds, p, line_int, guess_line_int, measure, success,
+	        Delta_Ar, guess_Delta_Ar, Delta_Ar_mean, Delta_Ar_MCMC, cov_MCMC)
 
 
 
@@ -671,7 +760,13 @@ def main():
 	tstart = time()
 	
 	# Fit the line of sight
-	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean = fit_los(values.binfn, values.statsfn, values.N, sparse=(not values.nonsparse), converged=values.converged, method=values.method, smooth=values.smooth, regulator=values.regulator, dwell=values.dwell, maxtime=values.maxtime, maxeval=values.maxeval, p0=values.floor, ev_range=values.evidence_range, iterate=values.iterate)
+	tmp = fit_los(values.binfn, values.statsfn, values.N,
+	              sparse=(not values.nonsparse), converged=values.converged,
+	              method=values.method, smooth=values.smooth, regulator=values.regulator,
+	              dwell=values.dwell, maxtime=values.maxtime, maxeval=values.maxeval,
+	              p0=values.floor, ev_range=values.evidence_range, iterate=values.iterate)
+	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean, Delta_Ar_MCMC, cov_MCMC = tmp
+	
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
 	

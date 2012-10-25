@@ -151,12 +151,14 @@ def healmap_rasterize(m, nside, nest=True, lb_bounds=[0., 360., -90., 90.], size
 	if center_gal:
 		phi[phi >= 360.] -= 360.
 		shift = int(np.round(xsize/2. - np.unravel_index(np.argmin(np.abs(phi)), img.shape)[0]))
-		#print 'Rolling by %d pixels (%.2f%% of xsize)' % (shift, 100.*float(shift)/xsize)
+		print 'Rolling by %d pixels (%.2f%% of xsize)' % (shift, 100.*float(shift)/xsize)
 		if type(m) == list:
+			print 'Rolling list...'
 			for i,subimg in enumerate(img):
 				img[i] = np.roll(subimg, shift, axis=0)
 		elif len(m.shape) == 2:
-			img = np.roll(img, shift, axis=1)
+			print 'Rolling...'
+			#img = np.roll(img, shift, axis=1)
 		else:
 			img = np.roll(img, shift, axis=0)
 	
@@ -579,9 +581,9 @@ class ExtinctionMap():
 			print "Ignoring option 'extent'."
 		kwargs['origin'] = 'lower'
 		
-		if center_gal:
-			lb_bounds[0] -= 180.
-			lb_bounds[1] -= 180.
+		#if center_gal:
+		#	lb_bounds[0] -= 180.
+		#	lb_bounds[1] -= 180.
 		
 		# Plot each distance to a different axis
 		image = []

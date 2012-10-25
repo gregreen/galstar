@@ -157,7 +157,7 @@ def main():
 			idx = idx & conv
 		if values.evidence != None:
 			idx = idx & (ln_ev >= np.max(ln_ev) - values.evidence)
-		idx = np.where(idx)
+		idx = np.where(idx)[0]
 		N_load = values.startend[1] - values.startend[0] - N_stars
 		if N_load > len(idx):
 			N_load = len(idx)

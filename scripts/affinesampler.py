@@ -184,7 +184,7 @@ class TMCMC:
 		# Update state
 		self.X[j] = self.Y[j]
 		self.lnp_X[j] = self.lnp_Y[j]
-		self.weight_X[j] = 0
+		self.weight_X[j] = 1
 		self.weight_X[~j] += 1
 		
 		# Update diagnostics
@@ -487,13 +487,15 @@ class TMCMC:
 			self.step()
 		
 		print 'Burn-in phase #3: Mixing further ...'
-		self.update_MH_cov(scale=MH_scale)
+		if self.p_stretch < 1.:
+			self.update_MH_cov(scale=MH_scale)
 		self.set_affine_scale(affine_scale)
 		for i in xrange(int(N_steps*0.3)):
 			self.step()
 		
 		print 'Main phase ...'
-		self.update_MH_cov(scale=MH_scale)
+		if self.p_stretch < 1.:
+			self.update_MH_cov(scale=MH_scale)
 		self.clear()
 		for i in xrange(int(N_steps*0.5)):
 			self.step()

@@ -55,7 +55,7 @@ from affinesampler import TMCMC
 class TMCMCguess:
 	def __init__(self, Delta_Ar, scale=0.2):
 		self.Delta_Ar = np.array(Delta_Ar)
-		self.ndim = self.eDelta_Ar.size
+		self.ndim = self.Delta_Ar.size
 		self.scale = scale / float(self.ndim)
 	
 	def __call__(self, n):
@@ -73,34 +73,41 @@ class Tlnp:
 		self.p0 = p0
 		self.regulator = regulator
 	
-	def __call__(self, Delta_y):
-		# Calculate line integral for each star
-		measure = line_integral(Delta_y, self.pdfs)
+	def __call__(self, x, *args, **kwargs):
+		ret = np.empty(x.shape[0])
+		for i,Delta_y in enumerate(x):
+			# Extinction must be monotonically increasing
+			if(np.any(Delta_y < 0.)):
+				ret[i] = -np.inf
+			else:
+				# Calculate line integral for each star
+				measure = line_integral(Delta_y, self.pdfs)
+				
+				# Soften line integrals, so that they do not drop below p0
+				measure += self.p0 * np.exp(-measure/self.p0)
+				
+				# Multiply line integrals
+				measure = -np.sum(np.log(measure))
+				
+				# Disfavor larger values of ln(Delta_y) slightly
+				measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*self.regulator*self.regulator)
+				
+				# Add a barrier to jumping to very high Ar
+				max_y = np.sum(Delta_y)
+				height = self.pdfs.shape[2]
+				ret[i] = -measure - np.exp((max_y-0.90*height)/(0.005*height))
 		
-		# Soften line integrals, so that they do not drop below p0
-		measure += self.p0 * np.exp(-measure/self.p0)
-		
-		# Multiply line integrals
-		measure = -np.sum(np.log(measure))
-		
-		# Disfavor larger values of ln(Delta_y) slightly
-		measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*self.regulator*self.regulator)
-		
-		# Add a barrier to jumping to very high Ar
-		max_y = np.sum(Delta_y)
-		height = self.pdfs.shape[2]
-		measure += np.exp((max_y-0.90*height)/(0.005*height))
-		
-		return measure
+		return ret
 
 def sample_MCMC(pdfs, guess, N_steps=1000, p0=1.e-5, regulator=1000.):
 	f_lnp = Tlnp(pdfs, p0, regulator)
-	f_rand_state = TMCMCguess(guess, scale=0.2)
-	cov = np.diag([0.05 for i in guess.size])
-	size = 150
+	f_rand_state = TMCMCguess(guess, scale=200.)
+	cov = np.diag([0.05 for i in xrange(guess.size)])
+	size = 250
 	
 	sampler = TMCMC(f_lnp, f_rand_state, cov, size)
 	sampler.set_p_method(stretch=1.)
+	sampler.set_affine_scale(scale=1.5)
 	sampler.standard_run(N_steps)
 	
 	print ''
@@ -108,14 +115,46 @@ def sample_MCMC(pdfs, guess, N_steps=1000, p0=1.e-5, regulator=1000.):
 	mean = sampler.get_mean()
 	cov = sampler.get_cov()
 	
+	for i in xrange(mean.size):
+		print '%.2f +- %.2f' % (mean[i], np.sqrt(cov[i,i]))
+	
 	print 'Acceptance rate: %.3f %%' % (100.*sampler.get_acceptance())
+	#print ''
+	#print 'Mean:'
+	#print mean
+	#print ''
+	#print 'Covariance:'
+	#print cov
+	#print ''
+	
+	chain, weight = sampler.get_chain()
+	weight = weight.astype('f8')
+	chain = np.cumsum(chain, axis=1)
+	for i in xrange(50):
+		print weight[i], chain[i][-5:]
+	mean = np.einsum('n,ni->i', weight, chain) / np.sum(weight)
+	Delta = chain - mean
+	cov = np.einsum('n,ni,nj->ij', weight, Delta, Delta) / np.sum(weight)
+	
 	print ''
-	print 'Mean:'
-	print mean
+	for i in xrange(50):
+		print weight[-i], chain[-i][-5:]
 	print ''
-	print 'Covariance:'
-	print cov
 	print ''
+	idx = np.argsort(weight)
+	for i in idx[-50:]:
+		print weight[i], chain[i][-5:]
+	print ''
+	
+	print np.max(weight)
+	print np.mean(weight)
+	print np.std(chain, axis=0)
+	
+	print ''
+	for i in xrange(mean.size):
+		print '%.2f +- %.2f' % (mean[i], np.sqrt(cov[i,i]))
+	print ''
+	#print cov
 	
 	return mean, cov
 

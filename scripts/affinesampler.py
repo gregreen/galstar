@@ -286,6 +286,32 @@ class TMCMC:
 		self.lnp = np.hstack(self.lnp)
 		return self.lnp
 	
+	def get_transformed_stats(self, f, *args, **kwargs):
+		'''
+		Returns the mean and covariance of a transformed chain.
+		
+		Inputs:
+		    f         Transformation to apply to chain. Must take the
+		              entire chain in the form chain[n,dim] and output
+		              an array of the same dimensions.
+		    
+		    *args     Arguments to pass to f, other than the chain.
+		    
+		    **kwargs  Keyword arguments to pass to f.
+		
+		Outputs:
+		    mean  Mean of the transformed chain.
+		    
+		    cov   Covariance matrix of the transformed chain.
+		'''
+		self.chain = np.vstack(self.chain)
+		self.weight = np.hstack(self.weight)
+		chain_transf = f(self.chain, *args, **kwargs)
+		mean = np.einsum('n,ni->i', self.weight, chain_transf) / np.sum(self.weight)
+		Delta = chain_transf - mean
+		cov = np.einsum('n,ni,nj->ij', self.weight, Delta, Delta) / np.sum(self.weight)
+		return mean, cov
+	
 	def find_connected_point(self, nsigma=1., iterations=4, verbose=False):
 		'''
 		Returns a coordinate where the chain has high density. First,

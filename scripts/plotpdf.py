@@ -32,6 +32,7 @@ import numpy as np
 import matplotlib as mplib
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
+from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 
 
 # Plot the given probability surfaces (p) to a single figure, saving if given a filename
@@ -57,6 +58,13 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), figsize=(8.5, 11.), fname=None
 		for ax in grid.axes_column[0]:
 			ax.set_ylabel(r'$%s$' % labels[1], fontsize=16)
 	
+	# Set tick marks
+	for ax in grid:
+		ax.xaxis.set_major_locator(MaxNLocator(nbins=5))
+		ax.xaxis.set_minor_locator(AutoMinorLocator())
+		ax.yaxis.set_major_locator(MaxNLocator(nbins=4))
+		ax.yaxis.set_minor_locator(AutoMinorLocator())
+	
 	# Mark whether each star converged
 	if converged != None:
 		for i in xrange(N_plots):
@@ -76,7 +84,7 @@ def plot_surfs(p, bounds, clip=None, shape=(3,2), figsize=(8.5, 11.), fname=None
 	# Mark true stellar parameters
 	if true_params != None:
 		for i in xrange(N_plots):
-			grid[i].scatter(true_params[0][i], true_params[1][i], c='g', s=25)
+			grid[i].scatter(true_params[0][i], true_params[1][i], c='c', s=25)
 	
 	fig.subplots_adjust(bottom=0.15)
 	
@@ -134,9 +142,9 @@ def main():
 	# Set matplotlib style attributes
 	mplib.rc('text', usetex=True)
 	mplib.rc('xtick.major', size=6)
-	mplib.rc('xtick.minor', size=4)
+	mplib.rc('xtick.minor', size=2)
 	mplib.rc('ytick.major', size=6)
-	mplib.rc('ytick.minor', size=4)
+	mplib.rc('ytick.minor', size=2)
 	mplib.rc('xtick', direction='out')
 	mplib.rc('ytick', direction='out')
 	mplib.rc('axes', grid=False)

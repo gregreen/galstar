@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
 	string solar_pos = "8000 25";
 	string par_thin = "2150 245";
 	string par_thick = "0.13 3261 743";
-	string par_halo = "0.0051 0.70 -2.62 27.8 -3.8";
+	string par_halo = "0.0051 0.70 -2.62 27.8 -3.8 500";
 	// TODO: Add in option to set metallicity parameters
 	vector<string> infile_str;
 	uint32_t pix_index;
@@ -242,9 +242,10 @@ int main(int argc, char **argv) {
 	PARSE(solar_pos,  model.R0 >> model.Z0);
 	PARSE(par_thin,   model.L1 >> model.H1);
 	PARSE(par_thick,  model.f  >> model.L2 >> model.H2);
-	PARSE(par_halo,   model.fh >> model.qh  >> model.nh >> model.R_br2 >> model.nh_outer);
-	model.fh_outer = model.fh * pow(1000.*model.R_br2/model.R0, model.nh-model.nh_outer);
-	model.R_br2 = sqr(1000.*model.R_br2);
+	PARSE(par_halo,   model.fh >> model.qh  >> model.nh >> model.R_br2 >> model.nh_outer >> model.R_epsilon2);
+	model.R_br2 = sqr(1000. * model.R_br2);
+	model.R_epsilon2 = sqr(model.R_epsilon2);
+	model.fh_outer = model.fh * pow(sqrt(model.R_br2)/model.R0, model.nh-model.nh_outer);
 	#undef PARSE
 	
 	cerr << "# Galactic structure: " << model.R0 << " " << model.Z0 << " | " << model.L1 << " " << model.H1 << " | " << model.f << " " << model.L2 << " " << model.H2 << " | " << model.fh << " " << model.qh << " " << model.nh << "\n";

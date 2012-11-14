@@ -122,6 +122,7 @@ struct TModel
 	double     H1, L1;			// Thin disk
 	double f,  H2, L2;			// Galactic structure (thin and thick disk)
 	double fh,  qh,  nh, R_br2, nh_outer;	// Galactic structure (power-law halo)
+	double R_epsilon2;			// Halo smoothing length about the Galactic center
 	double fh_outer;
 	TLF lf;							// luminosity function
 	TSED* seds;						// Stellar SEDs

@@ -186,7 +186,7 @@ inline void TModel::computeCartesianPositions(double &X, double &Y, double &Z, d
 }
 
 inline double TModel::rho_halo(double R, double Z) const {
-	double r_eff2 = R*R + sqr(Z/qh);
+	double r_eff2 = R*R + sqr(Z/qh) + R_epsilon2;
 	if(r_eff2 <= R_br2) {
 		return fh*pow(r_eff2/(R0*R0), nh/2.);
 	} else {

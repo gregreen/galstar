@@ -87,27 +87,28 @@ class Tlnp:
 				measure += self.p0 * np.exp(-measure/self.p0)
 				
 				# Multiply line integrals
-				measure = -np.sum(np.log(measure))
+				measure = np.sum(np.log(measure))
 				
-				# Disfavor larger values of ln(Delta_y) slightly
-				measure += np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*self.regulator*self.regulator)
+				# Disfavor larger values of Delta_y slightly
+				measure -= np.sum(Delta_y[1:]*Delta_y[1:]) / (2.*self.regulator*self.regulator)
 				
 				# Add a barrier to jumping to very high Ar
 				max_y = np.sum(Delta_y)
 				height = self.pdfs.shape[2]
-				ret[i] = -measure - np.exp((max_y-0.90*height)/(0.005*height))
+				ret[i] = measure - np.exp((max_y-0.90*height)/(0.005*height))
 		
 		return ret
 
-def sample_MCMC(pdfs, guess, N_steps=1000, p0=1.e-5, regulator=1000.):
+def sample_MCMC(pdfs, guess, bounds, N_steps=1000, p0=1.e-5, regulator=1000.):
+	scale = 1.0 * float(pdfs.shape[2]) / (bounds[3] - bounds[2])
 	f_lnp = Tlnp(pdfs, p0, regulator)
-	f_rand_state = TMCMCguess(guess, scale=200.)
+	f_rand_state = TMCMCguess(guess, scale=scale)
 	cov = np.diag([0.05 for i in xrange(guess.size)])
-	size = 250
+	size = 25 * guess.size
 	
 	sampler = TMCMC(f_lnp, f_rand_state, cov, size)
 	sampler.set_p_method(stretch=1.)
-	sampler.set_affine_scale(scale=1.5)
+	sampler.set_affine_scale(scale=1.8)
 	sampler.standard_run(N_steps)
 	
 	print ''
@@ -117,6 +118,13 @@ def sample_MCMC(pdfs, guess, N_steps=1000, p0=1.e-5, regulator=1000.):
 	
 	for i in xrange(mean.size):
 		print '%.2f +- %.2f' % (mean[i], np.sqrt(cov[i,i]))
+	
+	transf_mean, transf_cov = sampler.get_transformed_stats(np.cumsum, axis=1)
+	#print transf_mean
+	print transf_cov
+	
+	#for i in xrange(transf_mean.size):
+	#	print '%.3f +- %.3f' % (transf_mean[i]/100., np.sqrt(transf_cov[i,i])/100.)
 	
 	print 'Acceptance rate: %.3f %%' % (100.*sampler.get_acceptance())
 	#print ''
@@ -130,33 +138,67 @@ def sample_MCMC(pdfs, guess, N_steps=1000, p0=1.e-5, regulator=1000.):
 	chain, weight = sampler.get_chain()
 	weight = weight.astype('f8')
 	chain = np.cumsum(chain, axis=1)
-	for i in xrange(50):
-		print weight[i], chain[i][-5:]
+	#for i in xrange(50):
+	#	print weight[i], chain[i][-5:]
 	mean = np.einsum('n,ni->i', weight, chain) / np.sum(weight)
-	Delta = chain - mean
-	cov = np.einsum('n,ni,nj->ij', weight, Delta, Delta) / np.sum(weight)
+	E_ij_e = np.einsum('a,ai,aj->ij', weight, chain, chain) / np.sum(weight)
+	print '\nnan?'
+	print np.outer(mean,mean)
+	print E_ij_e
+	print ''
+	cov_einsum = E_ij_e - np.outer(mean,mean)
+	#Delta = chain - mean
+	#cov_einsum = np.einsum('n,ni,nj->ij', weight, Delta, Delta) / np.sum(weight)
+	#print ''
+	#for i in xrange(50):
+	#	print weight[i+500]
+	#	print Delta[i+500]
+	#	print ''
 	
-	print ''
-	for i in xrange(50):
-		print weight[-i], chain[-i][-5:]
-	print ''
-	print ''
-	idx = np.argsort(weight)
-	for i in idx[-50:]:
-		print weight[i], chain[i][-5:]
-	print ''
+	E_k = np.zeros(chain.shape[1], dtype='f8')
+	E_ij = np.zeros((chain.shape[1], chain.shape[1]), dtype='f8')
+	sum_w = 0.
+	for w,c in zip(weight, chain):
+		sum_w += float(w)
+		E_k += float(w)*c
+		E_ij += float(w)*np.outer(c,c)
+	E_k /= sum_w
+	E_ij /= sum_w
+	cov_tmp = E_ij - np.outer(E_k, E_k)
 	
-	print np.max(weight)
-	print np.mean(weight)
-	print np.std(chain, axis=0)
+	print sum_w, np.sum(weight)
+	print E_ij - E_ij_e
 	
-	print ''
-	for i in xrange(mean.size):
-		print '%.2f +- %.2f' % (mean[i], np.sqrt(cov[i,i]))
-	print ''
+	for i in xrange(chain.shape[1]):
+		print ''
+		print '%.3f +- %.3f' % (transf_mean[i], np.sqrt(transf_cov[i,i]))
+		print '%.3f +- %.3f' % (E_k[i], np.sqrt(cov_tmp[i,i]))
+		print '%.3f +- %.3f' % (mean[i], np.sqrt(cov_einsum[i,i]))
+	
+	#cov = np.einsum('n,ni,nj->ij', weight, Delta, Delta) / np.sum(weight)
+	
+	#print ''
+	#for i in xrange(50):
+	#	print weight[-i], chain[-i][-5:]
+	#print ''
+	#print ''
+	#idx = np.argsort(weight)
+	#for i in idx[-50:]:
+	#	print weight[i], chain[i][-5:]
+	#print ''
+	
+	#print np.max(weight)
+	#print np.mean(weight)
+	#print np.std(chain, axis=0)
+	
+	#print ''
+	#for i in xrange(mean.size):
+	#	print '%.2f +- %.2f' % (mean[i], np.sqrt(cov[i,i]))
+	#print ''
 	#print cov
 	
-	return mean, cov
+	transf_cov = cov_tmp
+	return transf_mean, transf_cov
 
 
 
@@ -478,7 +520,7 @@ def gen_guess(pdfs, N_regions=15):
 
 
 # Fit line-of-sight reddening profile, given the binned pdfs in <bin_fname> and stats in <stats_fname>
-def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=10000., dwell=1000, maxtime=25., maxeval=10000, p0=1.e-5, ev_range=25., iterate=None):
+def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, method='anneal', smooth=(1,1), regulator=5., dwell=1000, maxtime=25., maxeval=10000, p0=1.e-5, ev_range=25., iterate=None, nsteps=1000):
 	# Load pdfs
 	sys.stderr.write('Loading binned pdfs...\n')
 	bounds, p = load_bins(bin_fname, sparse)
@@ -491,6 +533,8 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 		mask = np.logical_and(mask, converged_arr)			# Filter out stars which did not converge
 	sys.stderr.write('# of stars filtered out: %d of %d.\n\n' % (np.sum(~mask), p.shape[0]))
 	p = smooth_bins(p[mask], smooth)
+	
+	regulator *= float(p.shape[2]) / (bounds[3] - bounds[2])
 	
 	#print 'Converged:'
 	#print converged_arr
@@ -550,10 +594,13 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 	sys.stderr.write('Outliers (below softening limit): %d of %d\n\n' % (N_softened, line_int.size))
 	
 	sys.stderr.write('Begining MCMC ...\n')
-	Delta_Ar_MCMC, cov_MCMC = sample_MCMC(p, x, 1000, p0, regulator)
+	Ar, Ar_cov = sample_MCMC(p, x, bounds, nsteps, p0, regulator)
+	Ar_scale = (bounds[3] - bounds[2]) / float(p.shape[2])
+	Ar = Ar * Ar_scale + bounds[2]
+	Ar_cov *= Ar_scale**2.
 	
 	return (bounds, p, line_int, guess_line_int, measure, success,
-	        Delta_Ar, guess_Delta_Ar, Delta_Ar_mean, Delta_Ar_MCMC, cov_MCMC)
+	        Delta_Ar, guess_Delta_Ar, Delta_Ar_mean, Ar, Ar_cov)
 
 
 
@@ -563,7 +610,7 @@ def fit_los(bin_fname, stats_fname, N_regions, sparse=True, converged=False, met
 #
 
 # Overplot reddening profile on stacked pdfs
-def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
+def plot_profile(bounds, p, Delta_Ar, Ar, Ar_cov, plot_fn=None, overplot=None):
 	# Set matplotlib style attributes
 	mplib.rc('text',usetex=True)
 	mplib.rc('xtick.major', size=6)
@@ -587,7 +634,11 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	
 	# Plot stacked pdfs
 	img = img.T
-	img /= np.max(img, axis=0)
+	norm = np.max(img, axis=0)
+	idx = (norm > 0.)
+	img /= norm
+	img[:,~idx] = 0.
+	#img /= np.max(img, axis=0)
 	#p0 = np.mean(img[img > 0])
 	#img += p0 * np.exp(-img / p0)
 	#img = np.log(img)
@@ -598,10 +649,13 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 	# Overplot locations of stars from galfast
 	if overplot != None:
 		# Load the true positions of the stars to overlplot
-		ra_dec, mags, errs, params = get_objects(abspath(overplot))
-		x = params[:,0]
-		y = params[:,1]
-		ax.plot(x, y, 'g.', linestyle='None', markersize=2, alpha=0.3)
+		#ra_dec, mags, errs, params = get_objects(abspath(overplot))
+		#x = params[:,0]
+		#y = params[:,1]
+		lb, DM_true, Ar_true, Mr_true, FeH_true = load_true(overplot)
+		ax.plot(DM_true, Ar_true, 'b.', linestyle='None', markersize=5, alpha=0.4)
+	
+	ax.set_color_cycle(['#009e73', '#d679a7'])
 	
 	# Plot the line-of-sight reddening profile
 	if type(Delta_Ar) is not list:
@@ -614,6 +668,12 @@ def plot_profile(bounds, p, Delta_Ar, plot_fn=None, overplot=None):
 		for i in xrange(1, N_regions+1):
 			Ar_anchors[i] = Ar_anchors[i-1] + Delta_Ar[n][i]
 		ax.plot(mu_anchors, Ar_anchors)
+	
+	# Plot the MCMC reddening profile with errors
+	mu_anchors = np.linspace(bounds[0], bounds[1], Ar.size)
+	Ar_err = np.sqrt(np.diag(Ar_cov))
+	ax.errorbar(mu_anchors, Ar, yerr=Ar_err,
+                    fmt='o', ms=4, mfc='c', mec='c', ecolor='c')
 	
 	# Set axis limits and labels
 	y_max = min([bounds[3], max_Ar])
@@ -770,11 +830,12 @@ def main():
 	parser = argparse.ArgumentParser(prog='fit_pdfs.py', description='Fit line-of-sight reddening law from probability density functions of individual stars.', add_help=True)
 	parser.add_argument('binfn', type=str, help='File containing binned probability density functions for each star along l.o.s. (also accepts gzipped files)')
 	parser.add_argument('statsfn', type=str, help='File containing summary statistics for each star.')
+	parser.add_argument('-test', '--testfn', type=str, help='File containing true parameter values (same format as passed to galstar for testing)')
 	parser.add_argument('-N', '--N', type=int, default=20, help='# of piecewise-linear regions in DM-Ar relation (default: 20)')
 	parser.add_argument('-mtd', '--method', type=str, choices=('anneal', 'leastsq', 'brute', 'nlopt CRS', 'nlopt MLSL'), default='nlopt CRS', help='Optimization method (default: nlopt CRS)')
 	parser.add_argument('-cnv', '--converged', action='store_true', help='Filter out unconverged stars.')
 	parser.add_argument('-sm', '--smooth', type=float, nargs=2, default=(2,2), help='Std. dev. of smoothing kernel (in pixels) for individual pdfs (default: 2 2).')
-	parser.add_argument('-reg', '--regulator', type=float, default=1000., help='Width of support of prior on Delta_Ar (default: 1000).')
+	parser.add_argument('-reg', '--regulator', type=float, default=5., help='Width of support of prior on Delta_Ar (default: 5).')
 	parser.add_argument('-o', '--outfn', type=str, nargs=2, default=None, help='Output filename for reddening profile and healpix pixel number.')
 	parser.add_argument('-po', '--plotfn', type=str, default=None, help='Filename for plot of result.')
 	parser.add_argument('-sh', '--show', action='store_true', help='Show plot of result.')
@@ -787,6 +848,7 @@ def main():
 	parser.add_argument('-nsp', '--nonsparse', action='store_true', help='Binned pdfs are not stored in sparse format.')
 	parser.add_argument('-pltind', '--plot_individual', type=int, nargs=2, default=None, help='Plot individual pdfs with reddening profile.')
 	parser.add_argument('-it', '--iterate', type=str, nargs=2, default=None, help='Tie pixel to neighbors in given reddening map. The healpix index of this pixel must be provided as the second argument.')
+	parser.add_argument('-nsteps', '--nsteps', type=int, default=1000, help='# of MCMC steps to take per sampler (250 samplers)')
 	#parser.add_argument('-v', '--verbose', action='store_true', help='Print information on fit.')
 	if 'python' in sys.argv[0]:
 		offset = 2
@@ -803,8 +865,9 @@ def main():
 	              sparse=(not values.nonsparse), converged=values.converged,
 	              method=values.method, smooth=values.smooth, regulator=values.regulator,
 	              dwell=values.dwell, maxtime=values.maxtime, maxeval=values.maxeval,
-	              p0=values.floor, ev_range=values.evidence_range, iterate=values.iterate)
-	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean, Delta_Ar_MCMC, cov_MCMC = tmp
+	              p0=values.floor, ev_range=values.evidence_range, iterate=values.iterate,
+	              nsteps=values.nsteps)
+	bounds, p, line_int, guess_line_int, measure, success, Delta_Ar, guess, Delta_Ar_mean, Ar_MCMC, cov_MCMC = tmp
 	
 	duration = time() - tstart
 	sys.stderr.write('Time elapsed: %.1f s\n' % duration)
@@ -823,9 +886,10 @@ def main():
 	
 	# Plot the reddening profile on top of the stacked stellar probability densities
 	if values.plotfn != None:
-			sys.stderr.write('Plotting profile to %s ...\n' % values.plotfn)
+		sys.stderr.write('Plotting profile to %s ...\n' % values.plotfn)
 	if (values.plotfn != None) or values.show:
-		plot_profile(bounds, p, [guess, Delta_Ar, Delta_Ar_mean], values.plotfn, values.overplot)
+		#plot_profile(bounds, p, [guess, Delta_Ar, Delta_Ar_mean], Ar_MCMC, cov_MCMC, values.plotfn, values.testfn)
+		plot_profile(bounds, p, [Delta_Ar], Ar_MCMC, cov_MCMC, values.plotfn, values.testfn)
 	if values.show:
 		plt.show()
 	

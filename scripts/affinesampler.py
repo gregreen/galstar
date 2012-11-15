@@ -307,9 +307,11 @@ class TMCMC:
 		self.chain = np.vstack(self.chain)
 		self.weight = np.hstack(self.weight)
 		chain_transf = f(self.chain, *args, **kwargs)
-		mean = np.einsum('n,ni->i', self.weight, chain_transf) / np.sum(self.weight)
+		w = self.weight.astype('f8')
+		mean = np.einsum('n,ni->i', w, chain_transf) / np.sum(w)
 		Delta = chain_transf - mean
-		cov = np.einsum('n,ni,nj->ij', self.weight, Delta, Delta) / np.sum(self.weight)
+		print 'Delta shape:', Delta.shape
+		cov = np.einsum('n,ni,nj->ij', w, Delta, Delta) / np.sum(w)
 		return mean, cov
 	
 	def find_connected_point(self, nsigma=1., iterations=4, verbose=False):

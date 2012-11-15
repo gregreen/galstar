@@ -28,6 +28,7 @@ import matplotlib as mplib
 
 from scipy.interpolate import interp2d, RectBivariateSpline
 import scipy.ndimage.interpolation as interp
+import scipy.stats
 
 import argparse, sys
 from os.path import abspath
@@ -63,6 +64,21 @@ def P_star(bounds, p, truth):
 		P_ret[i] = less / (gtr + less)
 	
 	return P_ret
+
+
+def binom_confidence(nbins, ntrials, confidence):
+	q = 0.5 * (1. - confidence)
+	
+	qlower = 1. - q**(1./nbins)
+	qupper = q**(1./nbins)
+	
+	rv = scipy.stats.binom(ntrials, float(nbins)/float(ntrials))
+	
+	P = rv.cdf(np.arange(nbins+1))
+	lower = np.where(P >= qlower)[0][0]
+	upper = np.where(P < qupper)[0][-1] + 1
+	
+	return lower, upper
 
 
 def main():
@@ -144,7 +160,7 @@ def main():
 		rect_histy = [main_left+main_width+buffer_right, main_bottom, histy_width, main_height]
 		
 		# Set up the figure with a density plot and two histograms
-		fig = plt.figure(figsize=(4,3), dpi=200)
+		fig = plt.figure(figsize=(4,3), dpi=150)
 		ax_density = fig.add_axes(rect_main)
 		ax_histx = fig.add_axes(rect_histx)
 		ax_histy = fig.add_axes(rect_histy)
@@ -173,7 +189,7 @@ def main():
 		ax_histy.set_xticklabels([])
 		ax_histy.set_yticklabels([])
 		
-		fig.savefig(stack_fname, dpi=200)
+		fig.savefig(stack_fname, dpi=300)
 	
 	# Percentile statistics
 	if values.pct_out != None:
@@ -181,15 +197,16 @@ def main():
 		
 		P_indiv = P_star(bounds, p, truth)
 		
+		
 		fig = plt.figure(figsize=(4,3), dpi=200)
 		ax = fig.add_subplot(1,1,1)
 		ax.hist(P_indiv)
 		ax.set_xlim(0., 1.)
 		ax.set_xlabel(r'$\% \mathrm{ile}$', fontsize=16)
 		ax.set_ylabel(r'$\mathrm{\# \ of \ stars}$', fontsize=16)
-		fig.subplots_adjust(left=0.16, bottom=0.18)
+		fig.subplots_adjust(left=0.18, bottom=0.18)
 		
-		fig.savefig(pct_fname, dpi=200)
+		fig.savefig(pct_fname, dpi=300)
 	
 	plt.show()
 	

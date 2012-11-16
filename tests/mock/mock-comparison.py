@@ -123,6 +123,31 @@ def main():
 	mplib.rc('ytick', direction='out')
 	mplib.rc('axes', grid=False)
 	
+	# Percentile statistics
+	if values.pct_out != None:
+		pct_fname = abspath(values.pct_out)
+		
+		P_indiv = P_star(bounds, p, truth)
+		print P_indiv
+		
+		fig = plt.figure(figsize=(4,3), dpi=200)
+		ax = fig.add_subplot(1,1,1)
+		
+		ax.hist(P_indiv, alpha=0.6)
+		
+		lower, upper = binom_confidence(10, p.shape[0], 0.95)
+		ax.fill_between([0., 1.], [lower, lower], [upper, upper], facecolor='g', alpha=0.2)
+		
+		lower, upper = binom_confidence(10, p.shape[0], 0.50)
+		ax.fill_between([0., 1.], [lower, lower], [upper, upper], facecolor='g', alpha=0.2)
+		
+		ax.set_xlim(0., 1.)
+		ax.set_xlabel(r'$\% \mathrm{ile}$', fontsize=16)
+		ax.set_ylabel(r'$\mathrm{\# \ of \ stars}$', fontsize=16)
+		fig.subplots_adjust(left=0.18, bottom=0.18)
+		
+		fig.savefig(pct_fname, dpi=300)
+	
 	# Shifted and stacked pdfs
 	if values.stack_out != None:
 		stack_fname = abspath(values.stack_out)
@@ -188,32 +213,6 @@ def main():
 		ax_histy.set_yticklabels([])
 		
 		fig.savefig(stack_fname, dpi=300)
-	
-	# Percentile statistics
-	if values.pct_out != None:
-		pct_fname = abspath(values.pct_out)
-		
-		P_indiv = P_star(bounds, p, truth)
-		
-		fig = plt.figure(figsize=(4,3), dpi=200)
-		ax = fig.add_subplot(1,1,1)
-		
-		ax.hist(P_indiv, alpha=0.6)
-		#ax.plot([0., 1.], [lower, lower], 'g:', alpha=0.1)
-		#ax.plot([0., 1.], [upper, upper], 'g:', alpha=0.1)
-		
-		lower, upper = binom_confidence(10, p.shape[0], 0.95)
-		ax.fill_between([0., 1.], [lower, lower], [upper, upper], facecolor='g', alpha=0.2)
-		
-		lower, upper = binom_confidence(10, p.shape[0], 0.50)
-		ax.fill_between([0., 1.], [lower, lower], [upper, upper], facecolor='g', alpha=0.2)
-		
-		ax.set_xlim(0., 1.)
-		ax.set_xlabel(r'$\% \mathrm{ile}$', fontsize=16)
-		ax.set_ylabel(r'$\mathrm{\# \ of \ stars}$', fontsize=16)
-		fig.subplots_adjust(left=0.18, bottom=0.18)
-		
-		fig.savefig(pct_fname, dpi=300)
 	
 	plt.show()
 	

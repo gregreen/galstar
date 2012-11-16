@@ -68,14 +68,13 @@ def P_star(bounds, p, truth):
 
 def binom_confidence(nbins, ntrials, confidence):
 	q = 0.5 * (1. - confidence)
-	qlower = 1. - q**(1./nbins)
-	qupper = (1. - q)**(1./nbins)
+	qprime = (1. - q)**(1./nbins)
 	
 	rv = scipy.stats.binom(ntrials, 1./float(nbins))
 	P = rv.cdf(np.arange(ntrials+1))
 	
-	lower = np.where(P >= qlower)[0][0]
-	upper = np.where(P < qupper)[0][-1] + 1
+	lower = np.where((1. - P) >= qprime)[0][-1]
+	upper = np.where(P < qprime)[0][-1] + 1
 	
 	return lower, upper
 
@@ -196,14 +195,18 @@ def main():
 		
 		P_indiv = P_star(bounds, p, truth)
 		
-		lower, upper = binom_confidence(10, p.shape[0], 0.95)
-		
 		fig = plt.figure(figsize=(4,3), dpi=200)
 		ax = fig.add_subplot(1,1,1)
 		
-		ax.hist(P_indiv)
-		ax.plot([0., 1.], [lower, lower], 'g--')
-		ax.plot([0., 1.], [upper, upper], 'g--')
+		ax.hist(P_indiv, alpha=0.6)
+		#ax.plot([0., 1.], [lower, lower], 'g:', alpha=0.1)
+		#ax.plot([0., 1.], [upper, upper], 'g:', alpha=0.1)
+		
+		lower, upper = binom_confidence(10, p.shape[0], 0.95)
+		ax.fill_between([0., 1.], [lower, lower], [upper, upper], facecolor='g', alpha=0.2)
+		
+		lower, upper = binom_confidence(10, p.shape[0], 0.50)
+		ax.fill_between([0., 1.], [lower, lower], [upper, upper], facecolor='g', alpha=0.2)
 		
 		ax.set_xlim(0., 1.)
 		ax.set_xlabel(r'$\% \mathrm{ile}$', fontsize=16)

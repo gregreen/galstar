@@ -67,7 +67,8 @@ def main():
 	parser.add_argument('infile', type=str, help='galstar input file.')
 	parser.add_argument('--npix', action='store_true', help='Print # of pixels in the given input file.')
 	parser.add_argument('--pix_index', type=int, help='Print healpix index of the specified pixel.')
-	parser.add_argument('--nstars', type=int, help='Print # of stars in the specified pixel.') 
+	parser.add_argument('--nstars', type=int, help='Print # of stars in the specified pixel.')
+	parser.add_argument('-i', '--index', type=int, help='Print (pixel index, # of stars, lb) in the specified pixel.')
 	if 'python' in sys.argv[0]:
 		offset = 2
 	else:
@@ -87,6 +88,10 @@ def main():
 	if values.nstars != None:
 		pix_index, gal_lb, N_stars = seek_to_pixel(f, values.nstars)
 		print N_stars
+	
+	if values.index != None:
+		pix_index, gal_lb, N_stars = seek_to_pixel(f, values.index)
+		print pix_index, N_stars, gal_lb
 	
 	f.close()
 	

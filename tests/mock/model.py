@@ -31,7 +31,7 @@ from matplotlib.ticker import MultipleLocator, MaxNLocator
 from matplotlib.patches import Rectangle
 import numpy as np
 from scipy.integrate import quad, Inf
-from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
+from scipy.interpolate import interp1d, InterpolatedUnivariateSpline, RectBivariateSpline
 #from math import pi, sqrt, log, exp, sin, cos
 from os.path import abspath, expanduser
 
@@ -167,7 +167,6 @@ class TGalacticModel:
 		#return quad(func, DM_min, DM_max, epsrel=1.e-5)[0] / quad(normfunc, DM_min, DM_max, epsrel=1.e-5)[0]
 
 
-
 def dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius=1.):
 	return (np.pi*radius**2.) * (1000.*2.30258509/5.) * np.exp(3.*2.30258509/5. * DM)
 
@@ -175,6 +174,169 @@ def dV_dDM(DM, cos_l, sin_l, cos_b, sin_b, radius=1.):
 def Gaussian(x, mu=0., sigma=1.):
 	Delta = (x-mu)/sigma
 	return np.exp(-Delta*Delta/2.) / 2.50662827 / sigma
+
+
+class TStellarModel:
+	'''
+	Loads the given stellar model, and provides access to interpolated
+	colors on (Mr, FeH) grid.
+	'''
+	
+	def __init__(self, template_fname):
+		self.load_templates(template_fname)
+	
+	def load_templates(self, template_fname):
+		'''
+		Load in stellar template colors from an ASCII file. The colors
+		should be stored in the following format:
+		
+		#
+		# Arbitrary comments
+		#
+		# Mr    FeH   gr     ri     iz     zy
+		# 
+		-1.00 -2.50 0.5132 0.2444 0.1875 0.0298
+		-0.99 -2.50 0.5128 0.2442 0.1873 0.0297
+		...
+		
+		or something similar. A key point is that there be a row
+		in the comments that lists the names of the colors. The code
+		identifies this row by the presence of both 'Mr' and 'FeH' in
+		the row, as above. The file must be whitespace-delimited, and
+		any whitespace will do (note that the whitespace is not required
+		to be regular).
+		'''
+		
+		f = open(os.path.abspath(template_fname), 'r')
+		row = []
+		self.color_name = ['gr', 'ri', 'iz', 'zy']
+		for l in f:
+			line = l.rstrip().lstrip()
+			if len(line) == 0:	# Empty line
+				continue
+			if line[0] == '#':	# Comment
+				if ('Mr' in line) and ('FeH' in line):
+					try:
+						self.color_name = line.split()[3:]
+					except:
+						pass
+				continue
+			data = line.split()
+			if len(data) < 6:
+				print 'Error reading in stellar templates.'
+				print 'The following line does not have the correct number of entries (6 expected):'
+				print line
+				return 0
+			row.append([float(s) for s in data])
+		f.close()
+		template = np.array(row, dtype=np.float64)
+		
+		# Organize data into record array
+		dtype = [('Mr','f4'), ('FeH','f4')]
+		for c in self.color_name:
+			dtype.append((c, 'f4'))
+		self.data = np.empty(len(template), dtype=dtype)
+		
+		self.data['Mr'] = template[:,0]
+		self.data['FeH'] = template[:,1]
+		for i,c in enumerate(self.color_name):
+			self.data[c] = template[:,i+2]
+		
+		self.MrFeH_bounds = [[np.min(self.data['Mr']), np.max(self.data['Mr'])],
+		                     [np.min(self.data['FeH']), np.max(self.data['FeH'])]]
+		
+		# Produce interpolating class with data
+		self.Mr_coords = np.unique(self.data['Mr'])
+		self.FeH_coords = np.unique(self.data['FeH'])
+		
+		self.interp = {}
+		for c in self.color_name:
+			tmp = self.data[c][:]
+			tmp.shape = (len(self.FeH_coords), len(self.Mr_coords))
+			self.interp[c] = scipy.interpolate.RectBivariateSpline(
+			                                      self.Mr_coords,
+			                                      self.FeH_coords,
+			                                      tmp.T,
+			                                      kx=3,
+			                                      ky=3,
+			                                      s=0)
+	
+	def color(self, Mr, FeH, name=None):
+		'''
+		Return the colors, evaluated at the given points in
+		(Mr, FeH)-space.
+		
+		Inputs:
+		    Mr    float or array of floats
+		    FeH   float or array of floats
+		    name  string, or list of strings, with names of colors to
+		          return. By default, all colors are returned.
+		
+		Output:
+		    color  numpy record array of colors
+		'''
+		
+		if name == None:
+			name = self.get_color_names()
+		elif type(name) == str:
+			name = [name]
+		
+		if type(Mr) == float:
+			Mr = np.array([Mr])
+		elif type(Mr) == list:
+			Mr = np.array(Mr)
+		if type(FeH) == float:
+			FeH = np.array([FeH])
+		elif type(FeH) == list:
+			FeH = np.array(FeH)
+		
+		dtype = []
+		for c in name:
+			if c not in self.color_name:
+				raise ValueError('No such color in model: %s' % c)
+			dtype.append((c, 'f4'))
+		ret_color = np.empty(Mr.size, dtype=dtype)
+		
+		for c in name:
+			ret_color[c] = self.interp[c].ev(Mr, FeH)
+		
+		return ret_color
+	
+	def absmags(self, Mr, FeH):
+		'''
+		Return the absolute magnitude in each bandpass corresponding to
+		(Mr, FeH).
+		
+		Inputs:
+		    Mr   r-band absolute magnitude of the star(s) (float or numpy array)
+		    FeH  Metallicity of the star(s) (float or numpy array)
+		
+		Output:
+		    M    Absolute magnitude in each band for each star (numpy record array)
+		'''
+		
+		c = self.color(Mr, FeH)
+		
+		dtype = [('g','f8'), ('r','f8'), ('i','f8'), ('z','f8'), ('y','f8')]
+		M = np.empty(c.shape, dtype=dtype)
+		
+		M['r'] = Mr
+		M['g'] = c['gr'] + Mr
+		M['i'] = Mr - c['ri']
+		M['z'] = M['i'] - c['iz']
+		M['y'] = M['z'] - c['zy']
+		
+		return M
+	
+	def get_color_names(self):
+		'''
+		Return the names of the colors in the templates.
+		
+		Ex.: For PS1 colors, this would return
+		     ['gr', 'ri', 'iz', 'zy']
+		'''
+		
+		return self.color_name
 
 
 def main():

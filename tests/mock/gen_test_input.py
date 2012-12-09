@@ -30,7 +30,7 @@ from scipy.integrate import quad
 import matplotlib.pyplot as plt
 import matplotlib as mplib
 
-from model import TGalacticModel
+from model import TGalacticModel, TStellarModel
 
 
 class TSample1D:
@@ -64,6 +64,27 @@ class TSample1D:
 	def get_x(self, P):
 		return self.x(P)
 
+def mock_mags(stellarmodel, mu, Ar, Mr, FeH, mag_limit=(23., 23., 23., 23., 23.)):
+	# Apparent magnitudes
+	m = mu + stellarmodel.absmags(Mr, FeH)
+	err = np.empty(m.size, m.dtype)
+	
+	# Apply extinction and add in errors
+	bands = ['g','r','i','z','y']
+	Ab = np.array([3.172, 2.271, 1.682, 1.322, 1.087])
+	for b,A,lim in zip(bands,Ab,mag_limit)
+		m[b] += Ar * A / Ab[1]
+		
+		err[b] = 0.02 + 0.1 * np.exp(m[b] - lim - 1.5)
+		m[b] += sigma * np.random.normal(size=mu.size)
+		
+		idx = (m[b] > lim)
+		m[b][idx] = np.nan
+	
+	return m
+
+def observed(mags):
+	pass
 
 def draw_from_model(l, b, N, Ar=0.5, r_max=23., Ar_of_mu=None):
 	dtype = [('DM', 'f8'), ('Ar', 'f8'), ('Mr', 'f8'), ('FeH', 'f8')]

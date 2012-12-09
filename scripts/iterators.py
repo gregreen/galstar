@@ -3,6 +3,9 @@
 #
 #       iterators.py
 #       
+#       Iterators for common data-processing tasks.
+#       
+#       
 #       Copyright 2012 Greg <greg@greg-G53JW>
 #       
 #       This program is free software; you can redistribute it and/or modify
